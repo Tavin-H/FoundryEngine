@@ -6,4 +6,5 @@ edition = "2024"
 [dependencies]
 winit = "0.30"
 ash = "0.38"
+nalgebra-glm = "0.19"
 raw-window-handle = "0.6" 

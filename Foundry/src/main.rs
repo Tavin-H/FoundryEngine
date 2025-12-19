@@ -8,10 +8,19 @@
 //                                             __/ |                 __/ |
 //                                            |___/                 |___/
 //==========================================================================================
+
+//Basic config
+#![allow(unused)]
+
+//Imports
 use winit::application::ApplicationHandler;
 use winit::event::WindowEvent;
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
-use winit::window::{Window, WindowId};
+use winit::window::{Window, WindowAttributes, WindowId};
+
+use nalgebra_glm as glm;
+
+//Setup winit boilerplate
 #[derive(Default)]
 struct App {
     window: Option<Window>,
@@ -19,11 +28,8 @@ struct App {
 
 impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        self.window = Some(
-            event_loop
-                .create_window(Window::default_attributes())
-                .unwrap(),
-        );
+        let window_attributes = Window::default_attributes().with_title("Foundry Engine");
+        self.window = Some(event_loop.create_window(window_attributes).unwrap());
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, id: WindowId, event: WindowEvent) {
@@ -40,10 +46,30 @@ impl ApplicationHandler for App {
     }
 }
 
-fn main() {
-    let event_loop = EventLoop::new().unwrap();
-    event_loop.set_control_flow(ControlFlow::Poll);
+struct HelloTriangleApp;
 
-    let mut app = App::default();
-    event_loop.run_app(&mut app);
+impl HelloTriangleApp {
+    fn run(&mut self) {
+        HelloTriangleApp::init_window();
+        HelloTriangleApp::init_vulkan();
+        HelloTriangleApp::main_loop();
+        HelloTriangleApp::cleanup();
+    }
+    fn init_vulkan() {}
+    fn main_loop() {}
+    fn cleanup() {}
+    fn init_window() {
+        let event_loop = EventLoop::new().unwrap();
+        event_loop.set_control_flow(ControlFlow::Poll);
+
+        let mut app = App::default();
+        event_loop.run_app(&mut app);
+    }
+}
+
+fn main() {
+    //Vulkan Setup
+    let mut app: HelloTriangleApp = HelloTriangleApp;
+
+    app.run();
 }
