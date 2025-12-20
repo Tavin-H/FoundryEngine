@@ -14,6 +14,10 @@
 
 use std::fs::read;
 
+//use ash::vk::{
+//    InstanceCreateFlags, KHR_PORTABILITY_ENUMERATION_SPEC_VERSION, KhrPortabilityEnumerationFn,
+//    PrimitiveTopology,
+//};
 //Imports
 use winit::application::ApplicationHandler;
 use winit::dpi::LogicalSize;
@@ -21,7 +25,7 @@ use winit::event::WindowEvent;
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::window::{Window, WindowAttributes, WindowId};
 
-use ash::{Entry, Instance, vk};
+use ash::{self, Entry, Instance, vk};
 use nalgebra_glm as glm;
 use std::ffi::CString;
 
@@ -54,6 +58,7 @@ impl ApplicationHandler for App {
     }
 }
 
+//Change to entry::linked() if having problems
 fn create_instance() -> Option<ash::Instance> {
     let entry = unsafe { Entry::load().ok()? };
     let engine_name: CString = CString::new("No Engine").unwrap();
@@ -68,8 +73,48 @@ fn create_instance() -> Option<ash::Instance> {
         enabled_layer_count: 0,
         ..Default::default()
     };
-    let instance = unsafe { entry.create_instance(&create_info, None).ok()? };
-    return Some(instance);
+    unsafe {
+        match entry.create_instance(&create_info, None) {
+            Ok(instance) => {
+                print!("yipee");
+                return Some(instance);
+            }
+            Err(result) => {
+                if (std::env::consts::OS == "macos"
+                    && result == vk::Result::ERROR_INCOMPATIBLE_DRIVER)
+                {
+                    println!("MoltenVK not setup");
+                    //Make a MoltenVK port for mac
+                    let instance_flags: vk::InstanceCreateFlags =
+                        vk::InstanceCreateFlags::ENUMERATE_PORTABILITY_KHR;
+                    let mut mac_extension_names = Vec::new();
+                    mac_extension_names.push(vk::KHR_PORTABILITY_ENUMERATION_NAME.as_ptr());
+                    //extension_names.push(vk::KhrGetPhysicalDeviceProperties2Fn::name().as_ptr());
+                    let mac_create_info = vk::InstanceCreateInfo {
+                        p_application_info: &app_info,
+                        enabled_layer_count: 0,
+                        flags: instance_flags,
+                        pp_enabled_extension_names: mac_extension_names.as_ptr(),
+                        enabled_extension_count: 1,
+                        ..Default::default()
+                    };
+                    match entry.create_instance(&mac_create_info, None) {
+                        Ok(instance) => {
+                            println!("Success");
+                            return Some(instance);
+                        }
+                        Err(result) => {
+                            println!("{:?}", result);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    println!("Failure: No vk instance created");
+    return None;
+    //let instance = unsafe { entry.create_instance(&create_info, None).ok()? };
+    //return Some(instance);
 }
 
 struct HelloTriangleApp;
