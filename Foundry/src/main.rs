@@ -14,6 +14,7 @@
 
 //Imports
 use winit::application::ApplicationHandler;
+use winit::dpi::LogicalSize;
 use winit::event::WindowEvent;
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::window::{Window, WindowAttributes, WindowId};
@@ -21,15 +22,18 @@ use winit::window::{Window, WindowAttributes, WindowId};
 use nalgebra_glm as glm;
 
 //Setup winit boilerplate
-#[derive(Default)]
+#[derive(Default, Debug)]
 struct App {
     window: Option<Window>,
+    size: winit::dpi::LogicalSize<f64>,
 }
 
 impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        let window_attributes = Window::default_attributes().with_title("Foundry Engine");
-        self.window = Some(event_loop.create_window(window_attributes).unwrap());
+        let window_attributes = Window::default_attributes()
+            .with_title("Foundry Engine")
+            .with_inner_size(self.size);
+        self.window = Some(event_loop.create_window(window_attributes).unwrap())
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, id: WindowId, event: WindowEvent) {
@@ -49,8 +53,8 @@ impl ApplicationHandler for App {
 struct HelloTriangleApp;
 
 impl HelloTriangleApp {
-    fn run(&mut self) {
-        HelloTriangleApp::init_window();
+    fn run(&mut self, window_width: f64, window_height: f64) {
+        HelloTriangleApp::init_window(window_width, window_height);
         HelloTriangleApp::init_vulkan();
         HelloTriangleApp::main_loop();
         HelloTriangleApp::cleanup();
@@ -58,11 +62,13 @@ impl HelloTriangleApp {
     fn init_vulkan() {}
     fn main_loop() {}
     fn cleanup() {}
-    fn init_window() {
+    fn init_window(window_width: f64, window_height: f64) {
         let event_loop = EventLoop::new().unwrap();
         event_loop.set_control_flow(ControlFlow::Poll);
 
         let mut app = App::default();
+        app.size = winit::dpi::LogicalSize::new(window_width, window_height);
+        //let mut app = App { window: new_window };
         event_loop.run_app(&mut app);
     }
 }
@@ -71,5 +77,5 @@ fn main() {
     //Vulkan Setup
     let mut app: HelloTriangleApp = HelloTriangleApp;
 
-    app.run();
+    app.run(400.0, 300.0);
 }
