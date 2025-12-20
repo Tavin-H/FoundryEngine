@@ -12,6 +12,8 @@
 //Basic config
 #![allow(unused)]
 
+use std::fs::read;
+
 //Imports
 use winit::application::ApplicationHandler;
 use winit::dpi::LogicalSize;
@@ -19,7 +21,9 @@ use winit::event::WindowEvent;
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::window::{Window, WindowAttributes, WindowId};
 
+use ash::{Entry, Instance, vk};
 use nalgebra_glm as glm;
+use std::ffi::CString;
 
 //Setup winit boilerplate
 #[derive(Default, Debug)]
@@ -50,6 +54,24 @@ impl ApplicationHandler for App {
     }
 }
 
+fn create_instance() -> Option<ash::Instance> {
+    let entry = unsafe { Entry::load().ok()? };
+    let engine_name: CString = CString::new("No Engine").unwrap();
+    let app_info = vk::ApplicationInfo {
+        api_version: vk::make_api_version(0, 1, 0, 0),
+        p_engine_name: engine_name.as_ptr(),
+
+        ..Default::default()
+    };
+    let create_info = vk::InstanceCreateInfo {
+        p_application_info: &app_info,
+        enabled_layer_count: 0,
+        ..Default::default()
+    };
+    let instance = unsafe { entry.create_instance(&create_info, None).ok()? };
+    return Some(instance);
+}
+
 struct HelloTriangleApp;
 
 impl HelloTriangleApp {
@@ -59,7 +81,9 @@ impl HelloTriangleApp {
         HelloTriangleApp::main_loop();
         HelloTriangleApp::cleanup();
     }
-    fn init_vulkan() {}
+    fn init_vulkan() {
+        create_instance();
+    }
     fn main_loop() {}
     fn cleanup() {}
     fn init_window(window_width: f64, window_height: f64) {
@@ -76,6 +100,5 @@ impl HelloTriangleApp {
 fn main() {
     //Vulkan Setup
     let mut app: HelloTriangleApp = HelloTriangleApp;
-
     app.run(400.0, 300.0);
 }
