@@ -30,13 +30,14 @@ use nalgebra_glm as glm;
 use std::ffi::CString;
 
 //Setup winit boilerplate
-#[derive(Default, Debug)]
-struct App {
+#[derive(Default)]
+struct WinitApp {
     window: Option<Window>,
     size: winit::dpi::LogicalSize<f64>,
+    instance: Option<ash::Instance>,
 }
 
-impl ApplicationHandler for App {
+impl ApplicationHandler for HelloTriangleApp {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         let window_attributes = Window::default_attributes()
             .with_title("Foundry Engine")
@@ -49,6 +50,8 @@ impl ApplicationHandler for App {
             WindowEvent::CloseRequested => {
                 println!("The close button was pressed; stopping");
                 event_loop.exit();
+                //Cleanup here
+                //HelloTriangleApp::cleanup(&self);
             }
             WindowEvent::RedrawRequested => {
                 self.window.as_ref().unwrap().request_redraw();
@@ -59,8 +62,8 @@ impl ApplicationHandler for App {
 }
 
 //Change to entry::linked() if having problems
-fn create_instance() -> Option<ash::Instance> {
-    let entry = unsafe { Entry::load().ok()? };
+fn create_instance(entry: ash::Entry) -> Option<ash::Instance> {
+    //let entry = unsafe { Entry::load().ok()? };
     let engine_name: CString = CString::new("No Engine").unwrap();
     let app_info = vk::ApplicationInfo {
         api_version: vk::make_api_version(0, 1, 0, 0),
@@ -100,50 +103,79 @@ fn create_instance() -> Option<ash::Instance> {
                     };
                     match entry.create_instance(&mac_create_info, None) {
                         Ok(instance) => {
-                            println!("Success");
+                            println!("Successfully created mac port");
                             return Some(instance);
                         }
                         Err(result) => {
-                            println!("{:?}", result);
+                            panic!("{:?}", result);
                         }
                     }
                 }
             }
         }
     }
-    println!("Failure: No vk instance created");
+    panic!("Failure: No vk instance created");
     return None;
     //let instance = unsafe { entry.create_instance(&create_info, None).ok()? };
     //return Some(instance);
 }
 
-struct HelloTriangleApp;
+#[derive(Default)]
+struct HelloTriangleApp {
+    window: Option<Window>,
+    size: winit::dpi::LogicalSize<f64>,
+    instance: Option<ash::Instance>,
+}
 
 impl HelloTriangleApp {
     fn run(&mut self, window_width: f64, window_height: f64) {
-        HelloTriangleApp::init_window(window_width, window_height);
-        HelloTriangleApp::init_vulkan();
+        let entry = unsafe { Entry::load().ok() };
+        let Some(entry) = entry else {
+            panic!("no entry created");
+        };
+        HelloTriangleApp::init_vulkan(self, entry);
+        HelloTriangleApp::init_window(self, window_width, window_height);
         HelloTriangleApp::main_loop();
-        HelloTriangleApp::cleanup();
+        HelloTriangleApp::cleanup(&self);
     }
-    fn init_vulkan() {
-        create_instance();
+    fn init_vulkan(&mut self, entry: ash::Entry) {
+        let instance_result: Option<Instance> = create_instance(entry);
+        unsafe {
+            self.instance = instance_result;
+        }
     }
     fn main_loop() {}
-    fn cleanup() {}
-    fn init_window(window_width: f64, window_height: f64) {
+    fn cleanup(&self) {
+        //Called in WindowEvent::CloseRequested in ApplicationHandler
+        let Some(instance) = &self.instance else {
+            println!("Instance does not exist");
+            return;
+        };
+        unsafe {
+            println!("Destroying instance");
+            instance.destroy_instance(None);
+            println!("Destroyed instance Successfully");
+        }
+    }
+    fn init_window(&mut self, window_width: f64, window_height: f64) {
         let event_loop = EventLoop::new().unwrap();
         event_loop.set_control_flow(ControlFlow::Poll);
-
-        let mut app = App::default();
-        app.size = winit::dpi::LogicalSize::new(window_width, window_height);
-        //let mut app = App { window: new_window };
-        event_loop.run_app(&mut app);
+        /*
+        let mut app = WinitApp {
+            ..WinitApp::default()
+        };
+        */
+        self.size = winit::dpi::LogicalSize::new(window_width, window_height);
+        //app.size = winit::dpi::LogicalSize::new(window_width, window_height);
+        event_loop.run_app(self);
     }
 }
 
 fn main() {
     //Vulkan Setup
-    let mut app: HelloTriangleApp = HelloTriangleApp;
+    let mut app: HelloTriangleApp = HelloTriangleApp {
+        instance: None,
+        ..Default::default()
+    };
     app.run(400.0, 300.0);
 }
