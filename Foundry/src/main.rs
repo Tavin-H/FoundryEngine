@@ -14,10 +14,6 @@
 
 use std::fs::read;
 
-//use ash::vk::{
-//    InstanceCreateFlags, KHR_PORTABILITY_ENUMERATION_SPEC_VERSION, KhrPortabilityEnumerationFn,
-//    PrimitiveTopology,
-//};
 //Imports
 use winit::application::ApplicationHandler;
 use winit::dpi::LogicalSize;
@@ -50,8 +46,6 @@ impl ApplicationHandler for HelloTriangleApp {
             WindowEvent::CloseRequested => {
                 println!("The close button was pressed; stopping");
                 event_loop.exit();
-                //Cleanup here
-                //HelloTriangleApp::cleanup(&self);
             }
             WindowEvent::RedrawRequested => {
                 self.window.as_ref().unwrap().request_redraw();
@@ -63,7 +57,6 @@ impl ApplicationHandler for HelloTriangleApp {
 
 //Change to entry::linked() if having problems
 fn create_instance(entry: &Option<ash::Entry>) -> Option<ash::Instance> {
-    //let entry = unsafe { Entry::load().ok()? };
     let Some(entry) = entry else {
         panic!("Sent invalid entry to create_instance");
     };
@@ -83,20 +76,20 @@ fn create_instance(entry: &Option<ash::Entry>) -> Option<ash::Instance> {
     unsafe {
         match entry.create_instance(&create_info, None) {
             Ok(instance) => {
-                print!("yipee");
+                print!("Created Vulkan Instance");
                 return Some(instance);
             }
             Err(result) => {
+                //Check if there is a driver issue on mac (likely need to port MoltenVK)
                 if (std::env::consts::OS == "macos"
                     && result == vk::Result::ERROR_INCOMPATIBLE_DRIVER)
                 {
-                    println!("MoltenVK not setup");
+                    println!("Error: Incompatible driver, making a port");
                     //Make a MoltenVK port for mac
                     let instance_flags: vk::InstanceCreateFlags =
                         vk::InstanceCreateFlags::ENUMERATE_PORTABILITY_KHR;
                     let mut mac_extension_names = Vec::new();
                     mac_extension_names.push(vk::KHR_PORTABILITY_ENUMERATION_NAME.as_ptr());
-                    //extension_names.push(vk::KhrGetPhysicalDeviceProperties2Fn::name().as_ptr());
                     let mac_create_info = vk::InstanceCreateInfo {
                         p_application_info: &app_info,
                         enabled_layer_count: 0,
@@ -120,10 +113,10 @@ fn create_instance(entry: &Option<ash::Entry>) -> Option<ash::Instance> {
     }
     panic!("Failure: No vk instance created");
     return None;
-    //let instance = unsafe { entry.create_instance(&create_info, None).ok()? };
-    //return Some(instance);
 }
 
+//Vulkan app struct that ties everything together (winit, vulkan, and game engine stuff in the
+//future)
 #[derive(Default)]
 struct HelloTriangleApp {
     window: Option<Window>,
@@ -140,7 +133,14 @@ struct VulkanContext {
 
 impl HelloTriangleApp {
     fn run(&mut self, window_width: f64, window_height: f64) {
-        //self.entry = unsafe { Entry::load().ok() };
+        HelloTriangleApp::init_vulkan(self);
+        HelloTriangleApp::init_window(self, window_width, window_height);
+        HelloTriangleApp::main_loop();
+        HelloTriangleApp::cleanup(&self);
+        println!("Shutdown complete");
+    }
+
+    fn init_vulkan(&mut self) {
         unsafe {
             match Entry::load() {
                 Err(result) => {
@@ -151,13 +151,6 @@ impl HelloTriangleApp {
                 }
             }
         }
-        HelloTriangleApp::init_vulkan(self);
-        HelloTriangleApp::init_window(self, window_width, window_height);
-        HelloTriangleApp::main_loop();
-        HelloTriangleApp::cleanup(&self);
-        println!("shutdown complete");
-    }
-    fn init_vulkan(&mut self) {
         let instance_result: Option<Instance> = create_instance(&self.vulkan_context.entry);
         unsafe {
             self.vulkan_context.instance = instance_result;
@@ -165,13 +158,12 @@ impl HelloTriangleApp {
     }
     fn main_loop() {}
     fn cleanup(&self) {
-        //Called in WindowEvent::CloseRequested in ApplicationHandler
         let Some(instance) = &self.vulkan_context.instance else {
             println!("Instance does not exist");
             return;
         };
         unsafe {
-            println!("Destroying instance");
+            println!("Destroying instance...");
             instance.destroy_instance(None);
             println!("Destroyed instance Successfully");
         }
@@ -179,13 +171,7 @@ impl HelloTriangleApp {
     fn init_window(&mut self, window_width: f64, window_height: f64) {
         let event_loop = EventLoop::new().unwrap();
         event_loop.set_control_flow(ControlFlow::Poll);
-        /*
-        let mut app = WinitApp {
-            ..WinitApp::default()
-        };
-        */
         self.size = winit::dpi::LogicalSize::new(window_width, window_height);
-        //app.size = winit::dpi::LogicalSize::new(window_width, window_height);
         event_loop.run_app(self);
     }
 }
