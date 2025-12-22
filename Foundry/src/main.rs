@@ -128,11 +128,16 @@ fn create_instance(entry: &Option<ash::Entry>) -> Option<ash::Instance> {
 struct HelloTriangleApp {
     window: Option<Window>,
     size: winit::dpi::LogicalSize<f64>,
+    vulkan_context: VulkanContext,
+}
+
+//Holds all vulkan objects in a single struct to controll lifetimes more precisely
+#[derive(Default)]
+struct VulkanContext {
     instance: Option<ash::Instance>,
     entry: Option<ash::Entry>,
 }
 
-struct VulkanContext {}
 impl HelloTriangleApp {
     fn run(&mut self, window_width: f64, window_height: f64) {
         //self.entry = unsafe { Entry::load().ok() };
@@ -142,7 +147,7 @@ impl HelloTriangleApp {
                     panic!("Failed to load an entry");
                 }
                 Ok(entry) => {
-                    self.entry = Some(entry);
+                    self.vulkan_context.entry = Some(entry);
                 }
             }
         }
@@ -153,15 +158,15 @@ impl HelloTriangleApp {
         println!("shutdown complete");
     }
     fn init_vulkan(&mut self) {
-        let instance_result: Option<Instance> = create_instance(&self.entry);
+        let instance_result: Option<Instance> = create_instance(&self.vulkan_context.entry);
         unsafe {
-            self.instance = instance_result;
+            self.vulkan_context.instance = instance_result;
         }
     }
     fn main_loop() {}
     fn cleanup(&self) {
         //Called in WindowEvent::CloseRequested in ApplicationHandler
-        let Some(instance) = &self.instance else {
+        let Some(instance) = &self.vulkan_context.instance else {
             println!("Instance does not exist");
             return;
         };
@@ -188,7 +193,6 @@ impl HelloTriangleApp {
 fn main() {
     //Vulkan Setup
     let mut app: HelloTriangleApp = HelloTriangleApp {
-        instance: None,
         ..Default::default()
     };
     app.run(400.0, 300.0);
