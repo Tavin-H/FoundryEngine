@@ -62,8 +62,12 @@ impl ApplicationHandler for HelloTriangleApp {
 }
 
 //Change to entry::linked() if having problems
-fn create_instance(entry: ash::Entry) -> Option<ash::Instance> {
+fn create_instance(entry: &Option<ash::Entry>) -> Option<ash::Instance> {
     //let entry = unsafe { Entry::load().ok()? };
+    let Some(entry) = entry else {
+        panic!("Sent invalid entry to create_instance");
+    };
+
     let engine_name: CString = CString::new("No Engine").unwrap();
     let app_info = vk::ApplicationInfo {
         api_version: vk::make_api_version(0, 1, 0, 0),
@@ -125,21 +129,31 @@ struct HelloTriangleApp {
     window: Option<Window>,
     size: winit::dpi::LogicalSize<f64>,
     instance: Option<ash::Instance>,
+    entry: Option<ash::Entry>,
 }
 
+struct VulkanContext {}
 impl HelloTriangleApp {
     fn run(&mut self, window_width: f64, window_height: f64) {
-        let entry = unsafe { Entry::load().ok() };
-        let Some(entry) = entry else {
-            panic!("no entry created");
-        };
-        HelloTriangleApp::init_vulkan(self, entry);
+        //self.entry = unsafe { Entry::load().ok() };
+        unsafe {
+            match Entry::load() {
+                Err(result) => {
+                    panic!("Failed to load an entry");
+                }
+                Ok(entry) => {
+                    self.entry = Some(entry);
+                }
+            }
+        }
+        HelloTriangleApp::init_vulkan(self);
         HelloTriangleApp::init_window(self, window_width, window_height);
         HelloTriangleApp::main_loop();
         HelloTriangleApp::cleanup(&self);
+        println!("shutdown complete");
     }
-    fn init_vulkan(&mut self, entry: ash::Entry) {
-        let instance_result: Option<Instance> = create_instance(entry);
+    fn init_vulkan(&mut self) {
+        let instance_result: Option<Instance> = create_instance(&self.entry);
         unsafe {
             self.instance = instance_result;
         }
