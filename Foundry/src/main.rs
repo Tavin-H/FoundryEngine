@@ -55,6 +55,7 @@ impl ApplicationHandler for HelloTriangleApp {
     }
 }
 
+//----------------Helper funtions-----------------
 //Change to entry::linked() if having problems
 fn create_instance(entry: &Option<ash::Entry>) -> Option<ash::Instance> {
     let Some(entry) = entry else {
@@ -134,6 +135,7 @@ struct VulkanContext {
 impl HelloTriangleApp {
     fn run(&mut self, window_width: f64, window_height: f64) {
         HelloTriangleApp::init_vulkan(self);
+        HelloTriangleApp::setup_validation_layers(self);
         HelloTriangleApp::init_window(self, window_width, window_height);
         HelloTriangleApp::main_loop();
         HelloTriangleApp::cleanup(&self);
@@ -173,6 +175,28 @@ impl HelloTriangleApp {
         event_loop.set_control_flow(ControlFlow::Poll);
         self.size = winit::dpi::LogicalSize::new(window_width, window_height);
         event_loop.run_app(self);
+    }
+
+    //Not working yet!---------------------------
+    fn setup_validation_layers(&mut self) {
+        //--------
+        if cfg!(debug_assertions) {
+            println!("In debug mode");
+        } else {
+            println!("not in debug");
+            return;
+        }
+        let Some(entry) = &self.vulkan_context.entry else {
+            panic!("Entry is invalid when seting in setup_validation_layers");
+        };
+        match unsafe { entry.enumerate_instance_layer_properties() } {
+            Ok(layer_properties_vec) => {
+                println!("found layers {:?}", layer_properties_vec.len());
+            }
+            Err(e) => {
+                panic!("{:?}", e);
+            }
+        }
     }
 }
 
