@@ -4,3 +4,12 @@ Using vulkan for cross platform compatibility. Not using wgpu because of the abs
 
 Day 3,
 I've decided that to build a good habit of programming, I'm going to make at least one commit a day to this project. Kind of like a duolingo style approach.
+
+Day 4,
+Setting up validation layers with enumerate_instance_layer_properties() came up with 0 layers found. Found fix by setting up environment variables like so.
+in ~/.zshrc add the following lines
+export VULKAN_SDK="$HOME/VulkanSDK/1.4.335.1/macOS"
+export PATH="$VULKAN_SDK/bin:$PATH"
+export VK_LAYER_PATH="$VULKAN_SDK/share/vulkan/explicit_layer.d"
+
+This came up from inconsitencies between default vulkan and MoltenVK for macOS.
