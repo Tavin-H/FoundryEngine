@@ -11,8 +11,7 @@
 
 //Basic config
 #![allow(unused)]
-
-use std::fs::read;
+const VALIDATION_LAYERS: &[&str] = &["VK_LAYER_KHRONOS_validation"];
 
 //Imports
 use winit::application::ApplicationHandler;
@@ -23,7 +22,7 @@ use winit::window::{Window, WindowAttributes, WindowId};
 
 use ash::{self, Entry, Instance, vk};
 use nalgebra_glm as glm;
-use std::ffi::CString;
+use std::ffi::{CStr, CString};
 
 //Setup winit boilerplate
 #[derive(Default)]
@@ -44,7 +43,6 @@ impl ApplicationHandler for HelloTriangleApp {
     fn window_event(&mut self, event_loop: &ActiveEventLoop, id: WindowId, event: WindowEvent) {
         match event {
             WindowEvent::CloseRequested => {
-                println!("The close button was pressed; stopping");
                 event_loop.exit();
             }
             WindowEvent::RedrawRequested => {
@@ -124,18 +122,18 @@ struct HelloTriangleApp {
     size: winit::dpi::LogicalSize<f64>,
     vulkan_context: VulkanContext,
 }
-
 //Holds all vulkan objects in a single struct to controll lifetimes more precisely
 #[derive(Default)]
 struct VulkanContext {
     instance: Option<ash::Instance>,
     entry: Option<ash::Entry>,
+    validation_layers_enabaled: bool,
 }
 
 impl HelloTriangleApp {
     fn run(&mut self, window_width: f64, window_height: f64) {
         HelloTriangleApp::init_vulkan(self);
-        HelloTriangleApp::setup_validation_layers(self);
+        //HelloTriangleApp::setup_validation_layers(self);
         HelloTriangleApp::init_window(self, window_width, window_height);
         HelloTriangleApp::main_loop();
         HelloTriangleApp::cleanup(&self);
@@ -153,6 +151,9 @@ impl HelloTriangleApp {
                 }
             }
         }
+        if (!self.check_validation_layers()) {
+            panic!("uh oh");
+        }
         let instance_result: Option<Instance> = create_instance(&self.vulkan_context.entry);
         unsafe {
             self.vulkan_context.instance = instance_result;
@@ -165,7 +166,6 @@ impl HelloTriangleApp {
             return;
         };
         unsafe {
-            println!("Destroying instance...");
             instance.destroy_instance(None);
             println!("Destroyed instance Successfully");
         }
@@ -178,20 +178,37 @@ impl HelloTriangleApp {
     }
 
     //Not working yet!---------------------------
-    fn setup_validation_layers(&mut self) {
-        //--------
-        if cfg!(debug_assertions) {
-            println!("In debug mode");
-        } else {
-            println!("not in debug");
-            return;
+    fn check_validation_layers(&mut self) -> bool {
+        if !cfg!(debug_assertions) {
+            return true;
         }
         let Some(entry) = &self.vulkan_context.entry else {
             panic!("Entry is invalid when seting in setup_validation_layers");
         };
         match unsafe { entry.enumerate_instance_layer_properties() } {
-            Ok(layer_properties_vec) => {
-                println!("found layers {:?}", layer_properties_vec.len());
+            Ok(available_layers) => {
+                //println!("found layers {:?}", layer_properties_vec.len());
+                for wanted_layer in VALIDATION_LAYERS {
+                    let mut layer_found = false;
+                    for available_layer in &available_layers {
+                        unsafe {
+                            let available_layer_name =
+                                CStr::from_ptr(available_layer.layer_name.as_ptr());
+                            let string_converstion_result = available_layer_name.to_str();
+                            let Ok(a_layer_name) = string_converstion_result else {
+                                panic!("invalid string converstion");
+                            };
+                            if wanted_layer == &a_layer_name {
+                                layer_found = true;
+                            }
+                        };
+                    }
+                    if (!layer_found) {
+                        println!("Couldn't find layer {:?}", wanted_layer);
+                        return false;
+                    }
+                }
+                return true;
             }
             Err(e) => {
                 panic!("{:?}", e);
