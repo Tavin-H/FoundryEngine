@@ -12,6 +12,7 @@
 //Basic config
 #![allow(unused)]
 const VALIDATION_LAYERS: &[&str] = &["VK_LAYER_KHRONOS_validation"];
+//const VALIDATION_LAYERS: &[&str] = &[];
 
 //Imports
 use winit::application::ApplicationHandler;
@@ -55,8 +56,8 @@ impl ApplicationHandler for HelloTriangleApp {
 
 //----------------Helper funtions-----------------
 //Change to entry::linked() if having problems
-fn create_instance(entry: &Option<ash::Entry>) -> Option<ash::Instance> {
-    let Some(entry) = entry else {
+fn create_instance(context: &mut VulkanContext) -> Option<ash::Instance> {
+    let Some(entry) = &context.entry else {
         panic!("Sent invalid entry to create_instance");
     };
 
@@ -67,9 +68,31 @@ fn create_instance(entry: &Option<ash::Entry>) -> Option<ash::Instance> {
 
         ..Default::default()
     };
+    let mut layer_count: u32 = 0;
+    let mut enabled_layer_names: Vec<*const i8> = Vec::new();
+
+    let validation = vec![
+        CString::new("VK_LAYER_KHRONOS_validation")
+            .unwrap()
+            .as_ptr(),
+    ];
+    if cfg!(debug_assertions) {
+        //Save Cstrings in vulkan_context and make a list of pointers to those
+        layer_count = VALIDATION_LAYERS.len() as u32;
+        for item in VALIDATION_LAYERS.iter() {
+            println!("{:?}", item);
+            context
+                .validation_layer_names
+                .push(CString::new(*item).expect("ih on"));
+        }
+        for item in context.validation_layer_names.iter() {
+            enabled_layer_names.push(item.as_ptr());
+        }
+    }
     let create_info = vk::InstanceCreateInfo {
         p_application_info: &app_info,
-        enabled_layer_count: 0,
+        enabled_layer_count: layer_count,
+        pp_enabled_layer_names: enabled_layer_names.as_ptr(),
         ..Default::default()
     };
     unsafe {
@@ -91,7 +114,8 @@ fn create_instance(entry: &Option<ash::Entry>) -> Option<ash::Instance> {
                     mac_extension_names.push(vk::KHR_PORTABILITY_ENUMERATION_NAME.as_ptr());
                     let mac_create_info = vk::InstanceCreateInfo {
                         p_application_info: &app_info,
-                        enabled_layer_count: 0,
+                        enabled_layer_count: layer_count,
+                        pp_enabled_layer_names: enabled_layer_names.as_ptr(),
                         flags: instance_flags,
                         pp_enabled_extension_names: mac_extension_names.as_ptr(),
                         enabled_extension_count: 1,
@@ -128,6 +152,7 @@ struct VulkanContext {
     instance: Option<ash::Instance>,
     entry: Option<ash::Entry>,
     validation_layers_enabaled: bool,
+    validation_layer_names: Vec<CString>,
 }
 
 impl HelloTriangleApp {
@@ -154,7 +179,8 @@ impl HelloTriangleApp {
         if (!self.check_validation_layers()) {
             panic!("uh oh");
         }
-        let instance_result: Option<Instance> = create_instance(&self.vulkan_context.entry);
+
+        let instance_result: Option<Instance> = create_instance(&mut self.vulkan_context);
         unsafe {
             self.vulkan_context.instance = instance_result;
         }
