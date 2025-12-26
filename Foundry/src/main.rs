@@ -12,7 +12,6 @@
 //Basic config
 #![allow(unused)]
 const VALIDATION_LAYERS: &[&str] = &["VK_LAYER_KHRONOS_validation"];
-//const VALIDATION_LAYERS: &[&str] = &[];
 
 //Imports
 use winit::application::ApplicationHandler;
@@ -76,6 +75,7 @@ fn create_instance(context: &mut VulkanContext) -> Option<ash::Instance> {
             .unwrap()
             .as_ptr(),
     ];
+
     if cfg!(debug_assertions) {
         //Save Cstrings in vulkan_context and make a list of pointers to those
         layer_count = VALIDATION_LAYERS.len() as u32;
@@ -89,7 +89,7 @@ fn create_instance(context: &mut VulkanContext) -> Option<ash::Instance> {
             enabled_layer_names.push(item.as_ptr());
         }
     }
-    let create_info = vk::InstanceCreateInfo {
+    let mut create_info = vk::InstanceCreateInfo {
         p_application_info: &app_info,
         enabled_layer_count: layer_count,
         pp_enabled_layer_names: enabled_layer_names.as_ptr(),
@@ -112,16 +112,12 @@ fn create_instance(context: &mut VulkanContext) -> Option<ash::Instance> {
                         vk::InstanceCreateFlags::ENUMERATE_PORTABILITY_KHR;
                     let mut mac_extension_names = Vec::new();
                     mac_extension_names.push(vk::KHR_PORTABILITY_ENUMERATION_NAME.as_ptr());
-                    let mac_create_info = vk::InstanceCreateInfo {
-                        p_application_info: &app_info,
-                        enabled_layer_count: layer_count,
-                        pp_enabled_layer_names: enabled_layer_names.as_ptr(),
-                        flags: instance_flags,
-                        pp_enabled_extension_names: mac_extension_names.as_ptr(),
-                        enabled_extension_count: 1,
-                        ..Default::default()
-                    };
-                    match entry.create_instance(&mac_create_info, None) {
+                    create_info.pp_enabled_layer_names = enabled_layer_names.as_ptr();
+                    create_info.pp_enabled_extension_names = mac_extension_names.as_ptr();
+                    create_info.enabled_extension_count = 1;
+                    create_info.flags = instance_flags;
+
+                    match entry.create_instance(&create_info, None) {
                         Ok(instance) => {
                             println!("Successfully created mac port");
                             return Some(instance);
