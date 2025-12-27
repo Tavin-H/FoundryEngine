@@ -13,6 +13,7 @@
 #![allow(unused)]
 const VALIDATION_LAYERS: &[&str] = &["VK_LAYER_KHRONOS_validation"];
 
+use ash::vk::PFN_vkEnumeratePhysicalDevices;
 //Imports
 use winit::application::ApplicationHandler;
 use winit::dpi::LogicalSize;
@@ -154,7 +155,7 @@ struct VulkanContext {
 impl HelloTriangleApp {
     fn run(&mut self, window_width: f64, window_height: f64) {
         HelloTriangleApp::init_vulkan(self);
-        //HelloTriangleApp::setup_validation_layers(self);
+        HelloTriangleApp::pick_physical_device(self);
         HelloTriangleApp::init_window(self, window_width, window_height);
         HelloTriangleApp::main_loop();
         HelloTriangleApp::cleanup(&self);
@@ -199,7 +200,6 @@ impl HelloTriangleApp {
         event_loop.run_app(self);
     }
 
-    //Not working yet!---------------------------
     fn check_validation_layers(&mut self) -> bool {
         if !cfg!(debug_assertions) {
             return true;
@@ -234,6 +234,25 @@ impl HelloTriangleApp {
             }
             Err(e) => {
                 panic!("{:?}", e);
+            }
+        }
+    }
+
+    fn pick_physical_device(&mut self) -> vk::PhysicalDevice {
+        //physical_device: vk::PhysicalDevice;
+        let Some(instance) = &self.vulkan_context.instance else {
+            panic!("invalid instance when getting physical devices");
+        };
+        unsafe {
+            match instance.enumerate_physical_devices() {
+                Ok(physical_device_list) => {
+                    println!("{:?}", physical_device_list.len());
+                    println!("Yay");
+                    return physical_device_list[0];
+                }
+                Err(e) => {
+                    panic!("{:?}", e);
+                }
             }
         }
     }
