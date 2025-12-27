@@ -13,6 +13,7 @@
 #![allow(unused)]
 const VALIDATION_LAYERS: &[&str] = &["VK_LAYER_KHRONOS_validation"];
 
+use ash::khr::get_physical_device_properties2;
 use ash::vk::PFN_vkEnumeratePhysicalDevices;
 //Imports
 use winit::application::ApplicationHandler;
@@ -24,6 +25,7 @@ use winit::window::{Window, WindowAttributes, WindowId};
 use ash::{self, Entry, Instance, vk};
 use nalgebra_glm as glm;
 use std::ffi::{CStr, CString};
+use std::hash::Hash;
 
 //Setup winit boilerplate
 #[derive(Default)]
@@ -133,6 +135,17 @@ fn create_instance(context: &mut VulkanContext) -> Option<ash::Instance> {
     }
     panic!("Failure: No vk instance created");
     return None;
+}
+
+fn is_device_stable(instance: &ash::Instance, device: &vk::PhysicalDevice) -> bool {
+    unsafe {
+        let properties = instance.get_physical_device_properties(*device);
+        let features = instance.get_physical_device_features(*device);
+        let name = unsafe { CStr::from_ptr(properties.device_name.as_ptr()) }.to_str();
+        println!("device found: {:?}", name);
+        return (properties.device_type == vk::PhysicalDeviceType::DISCRETE_GPU)
+            && features.geometry_shader != 0;
+    };
 }
 
 //Vulkan app struct that ties everything together (winit, vulkan, and game engine stuff in the
@@ -246,8 +259,22 @@ impl HelloTriangleApp {
         unsafe {
             match instance.enumerate_physical_devices() {
                 Ok(physical_device_list) => {
-                    println!("{:?}", physical_device_list.len());
-                    println!("Yay");
+                    if (physical_device_list.len() == 0) {
+                        panic!("found no physical devices");
+                    }
+                    let Some(instance) = &self.vulkan_context.instance else {
+                        panic!("No instance in pick_physical_device()");
+                    };
+                    let mut physical_device: vk::PhysicalDevice = vk::PhysicalDevice::null();
+                    for device in physical_device_list.iter() {
+                        if (is_device_stable(&instance, device)) {
+                            physical_device = *device;
+                        }
+                    }
+                    if (physical_device == vk::PhysicalDevice::null()) {
+                        panic!("No stable devices found");
+                    }
+
                     return physical_device_list[0];
                 }
                 Err(e) => {
