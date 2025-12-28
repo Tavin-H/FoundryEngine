@@ -275,7 +275,6 @@ impl HelloTriangleApp {
                     let mut physical_device: vk::PhysicalDevice = vk::PhysicalDevice::null();
                     for device in physical_device_list.iter() {
                         if (is_device_stable(&instance, device)) {
-                            println!("yay");
                             physical_device = *device;
                             break;
                         }
@@ -307,9 +306,12 @@ impl HelloTriangleApp {
         unsafe {
             let queue_families: Vec<vk::QueueFamilyProperties> =
                 instance.get_physical_device_queue_family_properties(device);
-            println!("{:?}", queue_families);
+            let mut i = 0;
             for family in queue_families.iter() {
-                println!("{:?}", family.queue_flags);
+                if (family.queue_flags.contains(vk::QueueFlags::GRAPHICS)) {
+                    self.vulkan_context.family_indicies.graphics_family = i as u32;
+                }
+                i += 1;
             }
         }
         return indices;
