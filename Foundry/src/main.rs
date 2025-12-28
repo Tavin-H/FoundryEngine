@@ -142,9 +142,7 @@ fn is_device_stable(instance: &ash::Instance, device: &vk::PhysicalDevice) -> bo
         let properties = instance.get_physical_device_properties(*device);
         let features = instance.get_physical_device_features(*device);
         let name = unsafe { CStr::from_ptr(properties.device_name.as_ptr()) }.to_str();
-        println!("device found: {:?}", name);
-        return (properties.device_type == vk::PhysicalDeviceType::DISCRETE_GPU)
-            && features.geometry_shader != 0;
+        return (properties.device_type == vk::PhysicalDeviceType::DISCRETE_GPU);
     };
 }
 
@@ -163,12 +161,21 @@ struct VulkanContext {
     entry: Option<ash::Entry>,
     validation_layers_enabaled: bool,
     validation_layer_names: Vec<CString>,
+    physical_device: Option<vk::PhysicalDevice>,
+    family_indicies: QueueFamilyIndices,
+}
+
+#[derive(Default)]
+struct QueueFamilyIndices {
+    graphics_family: u32,
 }
 
 impl HelloTriangleApp {
     fn run(&mut self, window_width: f64, window_height: f64) {
         HelloTriangleApp::init_vulkan(self);
         HelloTriangleApp::pick_physical_device(self);
+
+        HelloTriangleApp::find_queue_families(self);
         HelloTriangleApp::init_window(self, window_width, window_height);
         HelloTriangleApp::main_loop();
         HelloTriangleApp::cleanup(&self);
@@ -268,13 +275,16 @@ impl HelloTriangleApp {
                     let mut physical_device: vk::PhysicalDevice = vk::PhysicalDevice::null();
                     for device in physical_device_list.iter() {
                         if (is_device_stable(&instance, device)) {
+                            println!("yay");
                             physical_device = *device;
+                            break;
                         }
                     }
                     if (physical_device == vk::PhysicalDevice::null()) {
                         panic!("No stable devices found");
                     }
 
+                    self.vulkan_context.physical_device = Some(physical_device);
                     return physical_device_list[0];
                 }
                 Err(e) => {
@@ -282,6 +292,27 @@ impl HelloTriangleApp {
                 }
             }
         }
+    }
+
+    fn find_queue_families(&mut self) -> QueueFamilyIndices {
+        let Some(device) = self.vulkan_context.physical_device else {
+            panic!("No physical_device when finding families");
+        };
+        let Some(instance) = &self.vulkan_context.instance else {
+            panic!("No instance when finding families");
+        };
+        let mut indices = QueueFamilyIndices {
+            ..Default::default()
+        };
+        unsafe {
+            let queue_families: Vec<vk::QueueFamilyProperties> =
+                instance.get_physical_device_queue_family_properties(device);
+            println!("{:?}", queue_families);
+            for family in queue_families.iter() {
+                println!("{:?}", family.queue_flags);
+            }
+        }
+        return indices;
     }
 }
 
