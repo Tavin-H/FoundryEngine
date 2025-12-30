@@ -13,6 +13,8 @@
 #![allow(unused)]
 const VALIDATION_LAYERS: &[&str] = &["VK_LAYER_KHRONOS_validation"];
 
+const FIRST_PRIORITY: f32 = 1.0;
+
 use ash::khr::get_physical_device_properties2;
 use ash::vk::PFN_vkEnumeratePhysicalDevices;
 //Imports
@@ -174,8 +176,8 @@ impl HelloTriangleApp {
     fn run(&mut self, window_width: f64, window_height: f64) {
         HelloTriangleApp::init_vulkan(self);
         HelloTriangleApp::pick_physical_device(self);
-
         HelloTriangleApp::find_queue_families(self);
+        HelloTriangleApp::create_logical_device(self);
         HelloTriangleApp::init_window(self, window_width, window_height);
         HelloTriangleApp::main_loop();
         HelloTriangleApp::cleanup(&self);
@@ -315,6 +317,51 @@ impl HelloTriangleApp {
             }
         }
         return indices;
+    }
+
+    fn create_logical_device(&mut self) {
+        let queue_create_info = vk::DeviceQueueCreateInfo {
+            queue_count: 1,
+            queue_family_index: self.vulkan_context.family_indicies.graphics_family,
+            p_queue_priorities: &FIRST_PRIORITY,
+            ..Default::default()
+        };
+        let device_features: vk::PhysicalDeviceFeatures = vk::PhysicalDeviceFeatures {
+            ..Default::default()
+        };
+        let mut create_info: vk::DeviceCreateInfo = vk::DeviceCreateInfo {
+            p_queue_create_infos: &queue_create_info,
+            queue_create_info_count: 1,
+            p_enabled_features: &device_features,
+            ..Default::default()
+        };
+        let mut enabled_layer_names: Vec<*const i8> = Vec::new();
+        for item in self.vulkan_context.validation_layer_names.iter() {
+            enabled_layer_names.push(item.as_ptr());
+        }
+        if self.vulkan_context.validation_layers_enabaled {
+            create_info.enabled_layer_count =
+                self.vulkan_context.validation_layer_names.len() as u32;
+            create_info.pp_enabled_layer_names = enabled_layer_names.as_ptr();
+        } else {
+            create_info.enabled_layer_count = 0;
+        }
+        let Some(instance) = &self.vulkan_context.instance else {
+            panic!("No instance when creating logical device");
+        };
+        let Some(physical_device) = self.vulkan_context.physical_device else {
+            panic!("No physical_device when creating logical device");
+        };
+        unsafe {
+            match instance.create_device(physical_device, &create_info, None) {
+                Ok(logical_device) => {
+                    println!("yay! device");
+                }
+                Err(e) => {
+                    panic!("{:?}", e);
+                }
+            }
+        }
     }
 }
 
