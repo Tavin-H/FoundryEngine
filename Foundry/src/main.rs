@@ -164,6 +164,7 @@ struct VulkanContext {
     validation_layers_enabaled: bool,
     validation_layer_names: Vec<CString>,
     physical_device: Option<vk::PhysicalDevice>,
+    logical_device: Option<ash::Device>,
     family_indicies: QueueFamilyIndices,
 }
 
@@ -210,7 +211,11 @@ impl HelloTriangleApp {
             println!("Instance does not exist");
             return;
         };
+        let Some(logical_device) = &self.vulkan_context.logical_device else {
+            panic!("No logical device when cleaning up");
+        };
         unsafe {
+            logical_device.destroy_device(None);
             instance.destroy_instance(None);
             println!("Destroyed instance Successfully");
         }
@@ -319,6 +324,7 @@ impl HelloTriangleApp {
         return indices;
     }
 
+    #[allow(deprecated)]
     fn create_logical_device(&mut self) {
         let queue_create_info = vk::DeviceQueueCreateInfo {
             queue_count: 1,
@@ -355,7 +361,8 @@ impl HelloTriangleApp {
         unsafe {
             match instance.create_device(physical_device, &create_info, None) {
                 Ok(logical_device) => {
-                    println!("yay! device");
+                    println!("yay!");
+                    self.vulkan_context.logical_device = Some(logical_device);
                 }
                 Err(e) => {
                     panic!("{:?}", e);
