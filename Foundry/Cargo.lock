@@ -9,6 +9,7 @@ dependencies = [
  "ash",
  "nalgebra-glm",
  "raw-window-handle",
+ "vulkan-headers",
  "winit",
 ]
 
@@ -1298,6 +1299,12 @@ name = "version_check"
 version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
+
+[[package]]
+name = "vulkan-headers"
+version = "0.1.2+1.4.337"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7f6258df8ae61aeae05bb88ea82e6fb505f39e2dc76c1164afd2ee6d61e8cfc5"
 
 [[package]]
 name = "walkdir"

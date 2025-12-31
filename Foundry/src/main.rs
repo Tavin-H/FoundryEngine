@@ -117,9 +117,10 @@ fn create_instance(context: &mut VulkanContext) -> Option<ash::Instance> {
                         vk::InstanceCreateFlags::ENUMERATE_PORTABILITY_KHR;
                     let mut mac_extension_names = Vec::new();
                     mac_extension_names.push(vk::KHR_PORTABILITY_ENUMERATION_NAME.as_ptr());
+                    mac_extension_names.push(vk::KHR_GET_PHYSICAL_DEVICE_PROPERTIES2_NAME.as_ptr());
                     create_info.pp_enabled_layer_names = enabled_layer_names.as_ptr();
                     create_info.pp_enabled_extension_names = mac_extension_names.as_ptr();
-                    create_info.enabled_extension_count = 1;
+                    create_info.enabled_extension_count = 2;
                     create_info.flags = instance_flags;
 
                     match entry.create_instance(&create_info, None) {
@@ -335,10 +336,18 @@ impl HelloTriangleApp {
         let device_features: vk::PhysicalDeviceFeatures = vk::PhysicalDeviceFeatures {
             ..Default::default()
         };
+        let mut device_extensions: Vec<*const i8> = Vec::new();
+        //Port to MoltenVK if needed
+        if (std::env::consts::OS == "macos") {
+            device_extensions.push(vk::KHR_PORTABILITY_SUBSET_NAME.as_ptr());
+        }
+
         let mut create_info: vk::DeviceCreateInfo = vk::DeviceCreateInfo {
             p_queue_create_infos: &queue_create_info,
             queue_create_info_count: 1,
             p_enabled_features: &device_features,
+            pp_enabled_extension_names: device_extensions.as_ptr(),
+            enabled_extension_count: 1,
             ..Default::default()
         };
         let mut enabled_layer_names: Vec<*const i8> = Vec::new();
