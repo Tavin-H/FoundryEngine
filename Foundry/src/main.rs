@@ -167,6 +167,7 @@ struct VulkanContext {
     physical_device: Option<vk::PhysicalDevice>,
     logical_device: Option<ash::Device>,
     family_indicies: QueueFamilyIndices,
+    graphics_queue: Option<vk::Queue>,
 }
 
 #[derive(Default)]
@@ -180,6 +181,7 @@ impl HelloTriangleApp {
         HelloTriangleApp::pick_physical_device(self);
         HelloTriangleApp::find_queue_families(self);
         HelloTriangleApp::create_logical_device(self);
+        HelloTriangleApp::retrieve_queue_handles(self);
         HelloTriangleApp::init_window(self, window_width, window_height);
         HelloTriangleApp::main_loop();
         HelloTriangleApp::cleanup(&self);
@@ -337,6 +339,7 @@ impl HelloTriangleApp {
             ..Default::default()
         };
         let mut device_extensions: Vec<*const i8> = Vec::new();
+
         //Port to MoltenVK if needed
         if (std::env::consts::OS == "macos") {
             device_extensions.push(vk::KHR_PORTABILITY_SUBSET_NAME.as_ptr());
@@ -378,6 +381,16 @@ impl HelloTriangleApp {
                 }
             }
         }
+    }
+    fn retrieve_queue_handles(&mut self) {
+        let Some(device) = &self.vulkan_context.logical_device else {
+            panic!("No physical_device when calling retrieve_queue_handles");
+        };
+        let indices = &self.vulkan_context.family_indicies;
+        unsafe {
+            let device_queue: vk::Queue = device.get_device_queue(indices.graphics_family, 0);
+            self.vulkan_context.graphics_queue = Some(device_queue);
+        };
     }
 }
 
