@@ -17,6 +17,9 @@ const FIRST_PRIORITY: f32 = 1.0;
 
 use ash::khr::get_physical_device_properties2;
 use ash::vk::PFN_vkEnumeratePhysicalDevices;
+use ash_window;
+#[allow(deprecated)]
+use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 //Imports
 use winit::application::ApplicationHandler;
 use winit::dpi::LogicalSize;
@@ -168,6 +171,7 @@ struct VulkanContext {
     logical_device: Option<ash::Device>,
     family_indicies: QueueFamilyIndices,
     graphics_queue: Option<vk::Queue>,
+    surface: Option<vk::SurfaceKHR>,
 }
 
 #[derive(Default)]
@@ -392,6 +396,39 @@ impl HelloTriangleApp {
             self.vulkan_context.graphics_queue = Some(device_queue);
         };
     }
+
+    #[allow(deprecated)]
+    fn create_surface(&mut self) {
+        let Some(instance) = &self.vulkan_context.instance else {
+            panic!("No instance when calling create_surface");
+        };
+        let Some(entry) = &self.vulkan_context.entry else {
+            panic!("No entry when calling create_surface");
+        };
+        let Some(window) = &self.window else {
+            panic!("No window when calling create_surface");
+        };
+        let display_handle = window
+            .raw_display_handle()
+            .expect("failed to get display_handle");
+        let window_handle = window
+            .raw_window_handle()
+            .expect("failed to get window_handle");
+        if (std::env::consts::OS == "macos") {
+            //Mac implementation
+            let surface: vk::SurfaceKHR = unsafe {
+                ash_window::create_surface(&entry, &instance, display_handle, window_handle, None)
+                    .expect("Failed to create an ash surface")
+            };
+            self.vulkan_context.surface = Some(surface);
+            println!("Created SurfaceKHR Successfully!");
+        } else {
+            panic!(
+                "No implementation for creating a window for {:?}",
+                std::env::consts::OS
+            );
+        }
+    }
 }
 
 fn main() {
@@ -399,5 +436,5 @@ fn main() {
     let mut app: HelloTriangleApp = HelloTriangleApp {
         ..Default::default()
     };
-    app.run(400.0, 300.0);
+    app.run(800.0, 600.0);
 }
