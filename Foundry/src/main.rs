@@ -181,14 +181,10 @@ struct QueueFamilyIndices {
 
 impl HelloTriangleApp {
     fn run(&mut self, window_width: f64, window_height: f64) {
-        HelloTriangleApp::init_vulkan(self);
-        HelloTriangleApp::pick_physical_device(self);
-        HelloTriangleApp::find_queue_families(self);
-        HelloTriangleApp::create_logical_device(self);
-        HelloTriangleApp::retrieve_queue_handles(self);
-        HelloTriangleApp::init_window(self, window_width, window_height);
-        HelloTriangleApp::main_loop();
-        HelloTriangleApp::cleanup(&self);
+        self.init_vulkan();
+        self.init_window(window_width, window_height);
+        self.main_loop();
+        self.cleanup();
         println!("Shutdown complete");
     }
 
@@ -211,8 +207,12 @@ impl HelloTriangleApp {
         unsafe {
             self.vulkan_context.instance = instance_result;
         }
+        self.pick_physical_device();
+        self.find_queue_families();
+        self.create_logical_device();
+        self.retrieve_queue_handles();
     }
-    fn main_loop() {}
+    fn main_loop(&self) {}
     fn cleanup(&self) {
         let Some(instance) = &self.vulkan_context.instance else {
             println!("Instance does not exist");
