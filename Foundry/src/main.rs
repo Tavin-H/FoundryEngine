@@ -46,7 +46,7 @@ impl ApplicationHandler for HelloTriangleApp {
             .with_title("Foundry Engine")
             .with_inner_size(self.size);
         self.window = Some(event_loop.create_window(window_attributes).unwrap());
-        self.init_vulkan();
+        self.create_surface();
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, id: WindowId, event: WindowEvent) {
@@ -79,14 +79,20 @@ fn create_instance(context: &mut VulkanContext) -> Option<ash::Instance> {
     let mut layer_count: u32 = 0;
     let mut enabled_layer_names: Vec<*const i8> = Vec::new();
 
+    let validation = vec![
+        CString::new("VK_LAYER_KHRONOS_validation")
+            .unwrap()
+            .as_ptr(),
+    ];
+
     if cfg!(debug_assertions) {
         //Save Cstrings in vulkan_context and make a list of pointers to those
         layer_count = VALIDATION_LAYERS.len() as u32;
         for item in VALIDATION_LAYERS.iter() {
-            context.validation_layer_names.push(
-                CString::new(*item)
-                    .expect("Cannot convert validation layer to CString in create_instance"),
-            );
+            println!("{:?}", item);
+            context
+                .validation_layer_names
+                .push(CString::new(*item).expect("ih on"));
         }
         for item in context.validation_layer_names.iter() {
             enabled_layer_names.push(item.as_ptr());
@@ -177,7 +183,9 @@ struct QueueFamilyIndices {
 
 impl HelloTriangleApp {
     fn run(&mut self, window_width: f64, window_height: f64) {
+        self.init_vulkan();
         self.init_window(window_width, window_height);
+        self.main_loop();
         self.cleanup();
         println!("Shutdown complete");
     }
@@ -202,7 +210,6 @@ impl HelloTriangleApp {
             self.vulkan_context.instance = instance_result;
         }
         self.pick_physical_device();
-        self.create_surface();
         self.find_queue_families();
         self.create_logical_device();
         self.retrieve_queue_handles();
@@ -312,8 +319,8 @@ impl HelloTriangleApp {
         let Some(entry) = &self.vulkan_context.entry else {
             panic!("No entry when calling find_queue_families");
         };
-        let Some(surface) = &self.vulkan_context.surface else {
-            panic!("No surface when calling find_queue_families");
+        let Some(surface) = self.vulkan_context.surface else {
+            panic!("No surface when calling pick_physical_device");
         };
         let mut indices = QueueFamilyIndices {
             ..Default::default()
@@ -327,9 +334,12 @@ impl HelloTriangleApp {
                 if (family.queue_flags.contains(vk::QueueFlags::GRAPHICS)) {
                     self.vulkan_context.family_indicies.graphics_family = i as u32;
                 }
-                let present_support =
-                    surface_instance.get_physical_device_surface_support(device, i, *surface);
-                println!("YAYYY");
+                let present_support = surface_instance
+                    .get_physical_device_surface_support(device, i, surface)
+                    .expect("Failed to check surface support");
+                if (present_support) {
+                    self.vulkan_context.family_indicies.present_family = i as u32;
+                }
                 i += 1;
             }
         }
@@ -421,11 +431,12 @@ impl HelloTriangleApp {
             .expect("failed to get window_handle");
         if (std::env::consts::OS == "macos") {
             //Mac implementation
-            let surface: vk::SurfaceKHR = unsafe {
+            println!("Crashes when creating surface");
+            let surface: Result<vk::SurfaceKHR, ash::vk::Result> = unsafe {
                 ash_window::create_surface(&entry, &instance, display_handle, window_handle, None)
-                    .expect("Failed to create an ash surface")
             };
-            self.vulkan_context.surface = Some(surface);
+
+            self.vulkan_context.surface = surface.ok();
             println!("Created SurfaceKHR Successfully!");
         } else {
             panic!(
