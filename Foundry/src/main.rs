@@ -27,6 +27,7 @@ use winit::event::WindowEvent;
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::window::{Window, WindowAttributes, WindowId};
 
+use ash::ext::metal_surface;
 use ash::{self, Entry, Instance, vk};
 use nalgebra_glm as glm;
 use std::ffi::{CStr, CString};
@@ -46,7 +47,6 @@ impl ApplicationHandler for HelloTriangleApp {
             .with_title("Foundry Engine")
             .with_inner_size(self.size);
         self.window = Some(event_loop.create_window(window_attributes).unwrap());
-        self.create_surface();
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, id: WindowId, event: WindowEvent) {
@@ -159,6 +159,7 @@ fn is_device_stable(instance: &ash::Instance, device: &vk::PhysicalDevice) -> bo
 struct HelloTriangleApp {
     window: Option<Window>,
     size: winit::dpi::LogicalSize<f64>,
+    event_loop: Option<EventLoop<()>>,
     vulkan_context: VulkanContext,
 }
 //Holds all vulkan objects in a single struct to controll lifetimes more precisely
@@ -183,11 +184,21 @@ struct QueueFamilyIndices {
 
 impl HelloTriangleApp {
     fn run(&mut self, window_width: f64, window_height: f64) {
+        let event_loop = self.load_window_early();
         self.init_vulkan();
-        self.init_window(window_width, window_height);
+        self.init_window(event_loop, window_width, window_height);
         self.main_loop();
         self.cleanup();
         println!("Shutdown complete");
+    }
+
+    fn load_window_early(&mut self) -> EventLoop<()> {
+        let window_attributes = Window::default_attributes()
+            .with_title("Foundry Engine")
+            .with_inner_size(self.size);
+        let event_loop = EventLoop::new().unwrap();
+        self.window = Some(event_loop.create_window(window_attributes).unwrap());
+        event_loop
     }
 
     fn init_vulkan(&mut self) {
@@ -210,6 +221,7 @@ impl HelloTriangleApp {
             self.vulkan_context.instance = instance_result;
         }
         self.pick_physical_device();
+        //self.create_surface();
         self.find_queue_families();
         self.create_logical_device();
         self.retrieve_queue_handles();
@@ -229,8 +241,7 @@ impl HelloTriangleApp {
             println!("Destroyed instance Successfully");
         }
     }
-    fn init_window(&mut self, window_width: f64, window_height: f64) {
-        let event_loop = EventLoop::new().unwrap();
+    fn init_window(&mut self, event_loop: EventLoop<()>, window_width: f64, window_height: f64) {
         event_loop.set_control_flow(ControlFlow::Poll);
         self.size = winit::dpi::LogicalSize::new(window_width, window_height);
         event_loop.run_app(self);
