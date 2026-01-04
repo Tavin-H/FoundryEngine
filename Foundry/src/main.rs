@@ -27,7 +27,6 @@ use winit::event::WindowEvent;
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::window::{Window, WindowAttributes, WindowId};
 
-use ash::ext::metal_surface;
 use ash::{self, Entry, Instance, vk};
 use nalgebra_glm as glm;
 use std::ffi::{CStr, CString};
@@ -122,9 +121,12 @@ fn create_instance(context: &mut VulkanContext) -> Option<ash::Instance> {
                     let mut mac_extension_names = Vec::new();
                     mac_extension_names.push(vk::KHR_PORTABILITY_ENUMERATION_NAME.as_ptr());
                     mac_extension_names.push(vk::KHR_GET_PHYSICAL_DEVICE_PROPERTIES2_NAME.as_ptr());
+                    mac_extension_names.push(ash::khr::surface::NAME.as_ptr());
+                    mac_extension_names.push(ash::ext::metal_surface::NAME.as_ptr());
+                    //MAKE SURE TO INCREASE COUNT
                     create_info.pp_enabled_layer_names = enabled_layer_names.as_ptr();
                     create_info.pp_enabled_extension_names = mac_extension_names.as_ptr();
-                    create_info.enabled_extension_count = 2;
+                    create_info.enabled_extension_count = 4;
                     create_info.flags = instance_flags;
 
                     match entry.create_instance(&create_info, None) {
@@ -221,7 +223,7 @@ impl HelloTriangleApp {
             self.vulkan_context.instance = instance_result;
         }
         self.pick_physical_device();
-        //self.create_surface();
+        self.create_surface();
         self.find_queue_families();
         self.create_logical_device();
         self.retrieve_queue_handles();
@@ -442,12 +444,25 @@ impl HelloTriangleApp {
             .expect("failed to get window_handle");
         if (std::env::consts::OS == "macos") {
             //Mac implementation
-            println!("Crashes when creating surface");
-            let surface: Result<vk::SurfaceKHR, ash::vk::Result> = unsafe {
-                ash_window::create_surface(&entry, &instance, display_handle, window_handle, None)
-            };
+            /*
+                        let surface: Result<vk::SurfaceKHR, ash::vk::Result> = unsafe {
+                            ash_window::create_surface(&entry, &instance, display_handle, window_handle, None)
+                        };
+            */
+            let metal_surface_loader = ash::ext::metal_surface::Instance::new(entry, instance);
+            unsafe {
+                let create_info = vk::MetalSurfaceCreateInfoEXT {
+                    ..Default::default()
+                };
+                println!("OK....");
+                let metal_surface = metal_surface_loader.create_metal_surface(&create_info, None);
 
-            self.vulkan_context.surface = surface.ok();
+                let Ok(surface) = metal_surface else {
+                    panic!("metal surface creation failed");
+                };
+                self.vulkan_context.surface = Some(surface);
+            }
+
             println!("Created SurfaceKHR Successfully!");
         } else {
             panic!(
