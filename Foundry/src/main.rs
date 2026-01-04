@@ -88,7 +88,6 @@ fn create_instance(context: &mut VulkanContext) -> Option<ash::Instance> {
         //Save Cstrings in vulkan_context and make a list of pointers to those
         layer_count = VALIDATION_LAYERS.len() as u32;
         for item in VALIDATION_LAYERS.iter() {
-            println!("{:?}", item);
             context
                 .validation_layer_names
                 .push(CString::new(*item).expect("ih on"));
@@ -194,6 +193,8 @@ impl HelloTriangleApp {
         println!("Shutdown complete");
     }
 
+    #[allow(deprecated)]
+    //Depreciated code is using EventLoop<> instead of ActiveEventLoop
     fn load_window_early(&mut self) -> EventLoop<()> {
         let window_attributes = Window::default_attributes()
             .with_title("Foundry Engine")
@@ -362,7 +363,9 @@ impl HelloTriangleApp {
                 let present_support = surface_instance
                     .get_physical_device_surface_support(device, i, surface)
                     .expect("Failed to check surface support");
+                println!("{:?}", present_support);
                 if (present_support) {
+                    println!("present_family index = {:?}", i);
                     self.vulkan_context.family_indicies.present_family = i as u32;
                 }
                 i += 1;
@@ -417,7 +420,6 @@ impl HelloTriangleApp {
         unsafe {
             match instance.create_device(physical_device, &create_info, None) {
                 Ok(logical_device) => {
-                    println!("yay!");
                     self.vulkan_context.logical_device = Some(logical_device);
                 }
                 Err(e) => {
@@ -466,7 +468,6 @@ impl HelloTriangleApp {
                 let create_info = vk::MetalSurfaceCreateInfoEXT {
                     ..Default::default()
                 };
-                println!("OK....");
                 let metal_surface = metal_surface_loader.create_metal_surface(&create_info, None);
 
                 let Ok(surface) = metal_surface else {
@@ -475,7 +476,7 @@ impl HelloTriangleApp {
                 self.vulkan_context.surface = Some(surface);
             }
 
-            println!("Created SurfaceKHR Successfully!");
+            println!("Created SurfaceKHR Successfully");
         } else {
             panic!(
                 "No implementation for creating a window for {:?}",
