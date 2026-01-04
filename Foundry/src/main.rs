@@ -28,7 +28,7 @@ use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::window::{Window, WindowAttributes, WindowId};
 
 use ash::{self, Entry, Instance, vk};
-use nalgebra_glm as glm;
+use nalgebra_glm::{self as glm, any};
 use std::ffi::{CStr, CString};
 use std::hash::Hash;
 
@@ -237,7 +237,19 @@ impl HelloTriangleApp {
         let Some(logical_device) = &self.vulkan_context.logical_device else {
             panic!("No logical device when cleaning up");
         };
+        let Some(surface) = self.vulkan_context.surface else {
+            panic!("No surface when cleaning up");
+        };
+        let Some(entry) = &self.vulkan_context.entry else {
+            panic!("No entry when cleaning up");
+        };
+
+        let Some(instance) = &self.vulkan_context.instance else {
+            panic!("No instance when cleaning up");
+        };
         unsafe {
+            let surface_instance = ash::khr::surface::Instance::new(entry, instance);
+            surface_instance.destroy_surface(surface, None);
             logical_device.destroy_device(None);
             instance.destroy_instance(None);
             println!("Destroyed instance Successfully");
