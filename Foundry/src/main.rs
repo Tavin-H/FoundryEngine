@@ -177,8 +177,16 @@ struct VulkanContext {
 
 #[derive(Default)]
 struct QueueFamilyIndices {
-    graphics_family: u32,
-    present_family: u32,
+    graphics_family: Option<u32>,
+    present_family: Option<u32>,
+}
+
+impl QueueFamilyIndices {
+    fn is_complete(&self) -> bool {
+        println!("Graphics index: {:?}", self.graphics_family);
+        println!("Preseent index: {:?}", self.present_family);
+        return self.graphics_family.is_some() && self.present_family.is_some();
+    }
 }
 
 impl HelloTriangleApp {
@@ -221,8 +229,8 @@ impl HelloTriangleApp {
         unsafe {
             self.vulkan_context.instance = instance_result;
         }
-        self.pick_physical_device();
         self.create_surface();
+        self.pick_physical_device();
         self.find_queue_families();
         self.create_logical_device();
         self.retrieve_queue_handles();
@@ -332,7 +340,7 @@ impl HelloTriangleApp {
         }
     }
 
-    fn find_queue_families(&mut self) -> QueueFamilyIndices {
+    fn find_queue_families(&mut self) {
         let Some(device) = self.vulkan_context.physical_device else {
             panic!("No physical_device when finding families");
         };
@@ -354,19 +362,25 @@ impl HelloTriangleApp {
                 instance.get_physical_device_queue_family_properties(device);
             let mut i = 0;
             for family in queue_families.iter() {
-                if (family.queue_flags.contains(vk::QueueFlags::GRAPHICS)) {
-                    self.vulkan_context.family_indicies.graphics_family = i as u32;
+                if (family.queue_flags.contains(vk::QueueFlags::GRAPHICS)
+                    && !indices.graphics_family.is_some())
+                {
+                    indices.graphics_family = Some(i as u32);
                 }
                 let present_support = surface_instance
                     .get_physical_device_surface_support(device, i, surface)
                     .expect("Failed to check surface support");
-                if (present_support) {
-                    self.vulkan_context.family_indicies.present_family = i as u32;
+                if (!indices.present_family.is_some() && present_support) {
+                    indices.present_family = Some(i as u32);
                 }
                 i += 1;
             }
         }
-        return indices;
+        if (!indices.is_complete()) {
+            panic!("Did not find all needed indices");
+        }
+        self.vulkan_context.family_indicies = indices;
+        return;
     }
 
     #[allow(deprecated)]
@@ -374,7 +388,13 @@ impl HelloTriangleApp {
         let indices = &self.vulkan_context.family_indicies;
         //Remember to add indices to this list
         //BUG
-        let indices_vec = vec![indices.graphics_family, indices.present_family];
+        let Some(graphics_index) = indices.graphics_family else {
+            panic!("");
+        };
+        let Some(present_index) = indices.present_family else {
+            panic!("");
+        };
+        let indices_vec = vec![graphics_index, present_index];
         let mut queue_create_infos: Vec<vk::DeviceQueueCreateInfo> = Vec::new();
 
         for queue in indices_vec.iter() {
@@ -438,11 +458,17 @@ impl HelloTriangleApp {
             panic!("No physical_device when calling retrieve_queue_handles");
         };
         let indices = &self.vulkan_context.family_indicies;
+        let Some(graphics_index) = indices.graphics_family else {
+            panic!();
+        };
+        let Some(present_index) = indices.present_family else {
+            panic!();
+        };
         unsafe {
-            let device_queue: vk::Queue = device.get_device_queue(indices.graphics_family, 0);
+            let device_queue: vk::Queue = device.get_device_queue(graphics_index, 0);
             self.vulkan_context.graphics_queue = Some(device_queue);
 
-            let present_queue: vk::Queue = device.get_device_queue(indices.present_family, 0);
+            let present_queue: vk::Queue = device.get_device_queue(present_index, 0);
             self.vulkan_context.present_queue = Some(present_queue);
         };
     }
@@ -487,6 +513,7 @@ impl HelloTriangleApp {
             let Ok(surface) = surface else {
                 panic!("metal surface creation failed");
             };
+
             self.vulkan_context.surface = Some(surface);
 
             println!("Created SurfaceKHR Successfully");
@@ -494,7 +521,7 @@ impl HelloTriangleApp {
             panic!(
                 "No implementation for creating a window for {:?}",
                 std::env::consts::OS
-            );
+            )
         }
     }
 }
