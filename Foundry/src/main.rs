@@ -147,7 +147,6 @@ fn is_device_stable(instance: &ash::Instance, device: &vk::PhysicalDevice) -> bo
         let properties = instance.get_physical_device_properties(*device);
         let features = instance.get_physical_device_features(*device);
         let name = unsafe { CStr::from_ptr(properties.device_name.as_ptr()) }.to_str();
-        println!("{:?}, {:?}", device, name);
         return (properties.device_type == vk::PhysicalDeviceType::DISCRETE_GPU);
     };
 }
@@ -172,6 +171,7 @@ struct VulkanContext {
     logical_device: Option<ash::Device>,
     family_indicies: QueueFamilyIndices,
     graphics_queue: Option<vk::Queue>,
+    present_queue: Option<vk::Queue>,
     surface: Option<vk::SurfaceKHR>,
 }
 
@@ -350,22 +350,18 @@ impl HelloTriangleApp {
         };
         let surface_instance = ash::khr::surface::Instance::new(entry, instance);
         unsafe {
-            println!("Finding families");
             let queue_families: Vec<vk::QueueFamilyProperties> =
                 instance.get_physical_device_queue_family_properties(device);
             let mut i = 0;
             for family in queue_families.iter() {
-                println!("{:?}", family);
                 if (family.queue_flags.contains(vk::QueueFlags::GRAPHICS)) {
                     self.vulkan_context.family_indicies.graphics_family = i as u32;
                 }
                 let present_support = surface_instance
                     .get_physical_device_surface_support(device, i, surface)
                     .expect("Failed to check surface support");
-                println!("{:?}", present_support);
                 if (present_support) {
                     self.vulkan_context.family_indicies.present_family = i as u32;
-                    println!("Found thing");
                 }
                 i += 1;
             }
@@ -375,12 +371,22 @@ impl HelloTriangleApp {
 
     #[allow(deprecated)]
     fn create_logical_device(&mut self) {
-        let queue_create_info = vk::DeviceQueueCreateInfo {
-            queue_count: 1,
-            queue_family_index: self.vulkan_context.family_indicies.graphics_family,
-            p_queue_priorities: &FIRST_PRIORITY,
-            ..Default::default()
-        };
+        let indices = &self.vulkan_context.family_indicies;
+        //Remember to add indices to this list
+        //BUG
+        let indices_vec = vec![indices.graphics_family, indices.present_family];
+        let mut queue_create_infos: Vec<vk::DeviceQueueCreateInfo> = Vec::new();
+
+        for queue in indices_vec.iter() {
+            let queue_create_info = vk::DeviceQueueCreateInfo {
+                queue_count: 1,
+                queue_family_index: *queue,
+                p_queue_priorities: &FIRST_PRIORITY,
+                ..Default::default()
+            };
+            queue_create_infos.push(queue_create_info);
+        }
+
         let device_features: vk::PhysicalDeviceFeatures = vk::PhysicalDeviceFeatures {
             ..Default::default()
         };
@@ -392,7 +398,7 @@ impl HelloTriangleApp {
         }
 
         let mut create_info: vk::DeviceCreateInfo = vk::DeviceCreateInfo {
-            p_queue_create_infos: &queue_create_info,
+            p_queue_create_infos: queue_create_infos.as_ptr(),
             queue_create_info_count: 1,
             p_enabled_features: &device_features,
             pp_enabled_extension_names: device_extensions.as_ptr(),
@@ -435,6 +441,9 @@ impl HelloTriangleApp {
         unsafe {
             let device_queue: vk::Queue = device.get_device_queue(indices.graphics_family, 0);
             self.vulkan_context.graphics_queue = Some(device_queue);
+
+            let present_queue: vk::Queue = device.get_device_queue(indices.present_family, 0);
+            self.vulkan_context.present_queue = Some(present_queue);
         };
     }
 
