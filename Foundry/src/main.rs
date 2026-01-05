@@ -15,6 +15,7 @@ const VALIDATION_LAYERS: &[&str] = &["VK_LAYER_KHRONOS_validation"];
 
 const FIRST_PRIORITY: f32 = 1.0;
 
+use ash::ext::surface_maintenance1;
 use ash::khr::get_physical_device_properties2;
 use ash::vk::PFN_vkEnumeratePhysicalDevices;
 use ash_window;
@@ -42,10 +43,7 @@ struct WinitApp {
 
 impl ApplicationHandler for HelloTriangleApp {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        let window_attributes = Window::default_attributes()
-            .with_title("Foundry Engine")
-            .with_inner_size(self.size);
-        self.window = Some(event_loop.create_window(window_attributes).unwrap());
+        self.init_vulkan();
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, id: WindowId, event: WindowEvent) {
@@ -54,7 +52,7 @@ impl ApplicationHandler for HelloTriangleApp {
                 event_loop.exit();
             }
             WindowEvent::RedrawRequested => {
-                self.window.as_ref().unwrap().request_redraw();
+                self.window.as_ref().unwrap();
             }
             _ => (),
         }
@@ -72,7 +70,6 @@ fn create_instance(context: &mut VulkanContext) -> Option<ash::Instance> {
     let app_info = vk::ApplicationInfo {
         api_version: vk::make_api_version(0, 1, 0, 0),
         p_engine_name: engine_name.as_ptr(),
-
         ..Default::default()
     };
     let mut layer_count: u32 = 0;
@@ -150,6 +147,7 @@ fn is_device_stable(instance: &ash::Instance, device: &vk::PhysicalDevice) -> bo
         let properties = instance.get_physical_device_properties(*device);
         let features = instance.get_physical_device_features(*device);
         let name = unsafe { CStr::from_ptr(properties.device_name.as_ptr()) }.to_str();
+        println!("{:?}, {:?}", device, name);
         return (properties.device_type == vk::PhysicalDeviceType::DISCRETE_GPU);
     };
 }
@@ -185,8 +183,8 @@ struct QueueFamilyIndices {
 
 impl HelloTriangleApp {
     fn run(&mut self, window_width: f64, window_height: f64) {
+        self.size = winit::dpi::LogicalSize::new(window_width, window_height);
         let event_loop = self.load_window_early();
-        self.init_vulkan();
         self.init_window(event_loop, window_width, window_height);
         self.main_loop();
         self.cleanup();
@@ -300,7 +298,7 @@ impl HelloTriangleApp {
         }
     }
 
-    fn pick_physical_device(&mut self) -> vk::PhysicalDevice {
+    fn pick_physical_device(&mut self) {
         //physical_device: vk::PhysicalDevice;
         let Some(instance) = &self.vulkan_context.instance else {
             panic!("invalid instance when getting physical devices");
@@ -326,7 +324,6 @@ impl HelloTriangleApp {
                     }
 
                     self.vulkan_context.physical_device = Some(physical_device);
-                    return physical_device_list[0];
                 }
                 Err(e) => {
                     panic!("{:?}", e);
@@ -346,17 +343,19 @@ impl HelloTriangleApp {
             panic!("No entry when calling find_queue_families");
         };
         let Some(surface) = self.vulkan_context.surface else {
-            panic!("No surface when calling pick_physical_device");
+            panic!("No surface when calling find_queue_families");
         };
         let mut indices = QueueFamilyIndices {
             ..Default::default()
         };
         let surface_instance = ash::khr::surface::Instance::new(entry, instance);
         unsafe {
+            println!("Finding families");
             let queue_families: Vec<vk::QueueFamilyProperties> =
                 instance.get_physical_device_queue_family_properties(device);
             let mut i = 0;
             for family in queue_families.iter() {
+                println!("{:?}", family);
                 if (family.queue_flags.contains(vk::QueueFlags::GRAPHICS)) {
                     self.vulkan_context.family_indicies.graphics_family = i as u32;
                 }
@@ -365,8 +364,8 @@ impl HelloTriangleApp {
                     .expect("Failed to check surface support");
                 println!("{:?}", present_support);
                 if (present_support) {
-                    println!("present_family index = {:?}", i);
                     self.vulkan_context.family_indicies.present_family = i as u32;
+                    println!("Found thing");
                 }
                 i += 1;
             }
@@ -458,23 +457,28 @@ impl HelloTriangleApp {
             .expect("failed to get window_handle");
         if (std::env::consts::OS == "macos") {
             //Mac implementation
+            let surface: Result<vk::SurfaceKHR, ash::vk::Result> = unsafe {
+                ash_window::create_surface(&entry, &instance, display_handle, window_handle, None)
+            };
             /*
-                        let surface: Result<vk::SurfaceKHR, ash::vk::Result> = unsafe {
-                            ash_window::create_surface(&entry, &instance, display_handle, window_handle, None)
-                        };
-            */
-            let metal_surface_loader = ash::ext::metal_surface::Instance::new(entry, instance);
-            unsafe {
-                let create_info = vk::MetalSurfaceCreateInfoEXT {
-                    ..Default::default()
-                };
-                let metal_surface = metal_surface_loader.create_metal_surface(&create_info, None);
+                        let metal_surface_loader = ash::ext::metal_surface::Instance::new(entry, instance);
+                        let surface_loader = ash::khr::surface::Instance::new(entry, instance);
+                        unsafe {
+                            let create_info = vk::MetalSurfaceCreateInfoEXT {
+                                ..Default::default()
+                            };
+                            let metal_surface = metal_surface_loader.create_metal_surface(&create_info, None);
 
-                let Ok(surface) = metal_surface else {
-                    panic!("metal surface creation failed");
-                };
-                self.vulkan_context.surface = Some(surface);
-            }
+                            let Ok(surface) = metal_surface else {
+                                panic!("metal surface creation failed");
+                            };
+                            self.vulkan_context.surface = Some(surface);
+                        }
+            */
+            let Ok(surface) = surface else {
+                panic!("metal surface creation failed");
+            };
+            self.vulkan_context.surface = Some(surface);
 
             println!("Created SurfaceKHR Successfully");
         } else {
