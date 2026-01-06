@@ -12,6 +12,7 @@
 //Basic config
 #![allow(unused)]
 const VALIDATION_LAYERS: &[&str] = &["VK_LAYER_KHRONOS_validation"];
+const WANTED_EXTENSION_NAMES: &[&CStr] = &[vk::KHR_SWAPCHAIN_NAME];
 
 const FIRST_PRIORITY: f32 = 1.0;
 
@@ -142,19 +143,34 @@ fn create_instance(context: &mut VulkanContext) -> Option<ash::Instance> {
     return None;
 }
 
-fn is_device_stable(instance: &ash::Instance, device: &vk::PhysicalDevice) -> bool {
+fn is_device_stable(
+    entry: &ash::Entry,
+    instance: &ash::Instance,
+    device: &vk::PhysicalDevice,
+    surface: &vk::SurfaceKHR,
+) -> bool {
     unsafe {
         let properties = instance.get_physical_device_properties(*device);
         let features = instance.get_physical_device_features(*device);
         let name = unsafe { CStr::from_ptr(properties.device_name.as_ptr()) }.to_str();
+
         let extension_supported: bool = check_extenstion_support(instance, &device);
+
+        let mut swapchain_supported: bool = false;
+        if (extension_supported) {
+            let swapchain_support_details =
+                query_swapchain_support(entry, instance, device, surface);
+
+            swapchain_supported = swapchain_support_details.formats.len() != 0
+                && swapchain_support_details.present_modes.len() != 0;
+        }
         return (properties.device_type == vk::PhysicalDeviceType::DISCRETE_GPU
-            && extension_supported);
+            && extension_supported
+            && swapchain_supported);
     };
 }
 
 fn check_extenstion_support(instance: &ash::Instance, device: &vk::PhysicalDevice) -> bool {
-    let wanted_extension_names: Vec<&CStr> = vec![vk::KHR_SWAPCHAIN_NAME];
     unsafe {
         let available_extensions: Vec<vk::ExtensionProperties> = instance
             .enumerate_device_extension_properties(*device)
@@ -162,15 +178,45 @@ fn check_extenstion_support(instance: &ash::Instance, device: &vk::PhysicalDevic
         let mut extensions_supported = 0;
         for extension in available_extensions.iter() {
             let name = extension.extension_name;
-            println!("{:?}", CStr::from_ptr(name.as_ptr()).to_string_lossy());
-            for extension in wanted_extension_names.iter() {
+            for extension in WANTED_EXTENSION_NAMES.iter() {
                 if (CStr::from_ptr(name.as_ptr()) == CStr::from_ptr(extension.as_ptr())) {
-                    println!("Found!!!!");
                     extensions_supported += 1;
                 }
             }
         }
-        return wanted_extension_names.len() == extensions_supported;
+        return WANTED_EXTENSION_NAMES.len() == extensions_supported;
+    }
+}
+
+fn query_swapchain_support(
+    entry: &Entry,
+    instance: &Instance,
+    device: &vk::PhysicalDevice,
+    surface: &vk::SurfaceKHR,
+) -> SwapChainSupportDetails {
+    unsafe {
+        let surface_instance = ash::khr::surface::Instance::new(entry, instance);
+
+        // get the capabilities
+        let capability_details = surface_instance
+            .get_physical_device_surface_capabilities(*device, *surface)
+            .expect("failed");
+
+        // find formats
+        let format_details: Vec<vk::SurfaceFormatKHR> = surface_instance
+            .get_physical_device_surface_formats(*device, *surface)
+            .expect("failed");
+
+        // find present modes
+        let present_mode_details: Vec<vk::PresentModeKHR> = surface_instance
+            .get_physical_device_surface_present_modes(*device, *surface)
+            .expect("failed");
+
+        return SwapChainSupportDetails {
+            capabilities: capability_details,
+            formats: format_details,
+            present_modes: present_mode_details,
+        };
     }
 }
 
@@ -186,16 +232,27 @@ struct HelloTriangleApp {
 //Holds all vulkan objects in a single struct to controll lifetimes more precisely
 #[derive(Default)]
 struct VulkanContext {
+    //Basics
     instance: Option<ash::Instance>,
     entry: Option<ash::Entry>,
     validation_layers_enabaled: bool,
     validation_layer_names: Vec<CString>,
+    //Devices
     physical_device: Option<vk::PhysicalDevice>,
     logical_device: Option<ash::Device>,
+    //Queue Indices Struct
     family_indicies: QueueFamilyIndices,
+    //Queue Handles
     graphics_queue: Option<vk::Queue>,
     present_queue: Option<vk::Queue>,
+    //Surface
     surface: Option<vk::SurfaceKHR>,
+    swap_chain_details: Option<SwapChainSupportDetails>,
+}
+struct SwapChainSupportDetails {
+    capabilities: vk::SurfaceCapabilitiesKHR,
+    formats: Vec<vk::SurfaceFormatKHR>,
+    present_modes: Vec<vk::PresentModeKHR>,
 }
 
 #[derive(Default)]
@@ -206,8 +263,6 @@ struct QueueFamilyIndices {
 
 impl QueueFamilyIndices {
     fn is_complete(&self) -> bool {
-        println!("Graphics index: {:?}", self.graphics_family);
-        println!("Preseent index: {:?}", self.present_family);
         return self.graphics_family.is_some() && self.present_family.is_some();
     }
 }
@@ -334,6 +389,12 @@ impl HelloTriangleApp {
         let Some(instance) = &self.vulkan_context.instance else {
             panic!("invalid instance when getting physical devices");
         };
+        let Some(entry) = &self.vulkan_context.entry else {
+            panic!("No entry in pick_physical_device");
+        };
+        let Some(surface) = &self.vulkan_context.surface else {
+            panic!("No surface in pick_physical_device");
+        };
         unsafe {
             match instance.enumerate_physical_devices() {
                 Ok(physical_device_list) => {
@@ -345,7 +406,7 @@ impl HelloTriangleApp {
                     };
                     let mut physical_device: vk::PhysicalDevice = vk::PhysicalDevice::null();
                     for device in physical_device_list.iter() {
-                        if (is_device_stable(&instance, device)) {
+                        if (is_device_stable(entry, &instance, device, surface)) {
                             physical_device = *device;
                             break;
                         }
@@ -435,6 +496,9 @@ impl HelloTriangleApp {
         };
         let mut device_extensions: Vec<*const i8> = Vec::new();
 
+        for extension in WANTED_EXTENSION_NAMES.iter() {
+            device_extensions.push(extension.as_ptr());
+        }
         //Port to MoltenVK if needed
         if (std::env::consts::OS == "macos") {
             device_extensions.push(vk::KHR_PORTABILITY_SUBSET_NAME.as_ptr());
@@ -445,7 +509,7 @@ impl HelloTriangleApp {
             queue_create_info_count: 1,
             p_enabled_features: &device_features,
             pp_enabled_extension_names: device_extensions.as_ptr(),
-            enabled_extension_count: 1,
+            enabled_extension_count: device_extensions.len() as u32,
             ..Default::default()
         };
         let mut enabled_layer_names: Vec<*const i8> = Vec::new();
@@ -519,6 +583,7 @@ impl HelloTriangleApp {
                 ash_window::create_surface(&entry, &instance, display_handle, window_handle, None)
             };
             /*
+            IN CASE I WANT TO DO THIS MANUALLY LATER
                         let metal_surface_loader = ash::ext::metal_surface::Instance::new(entry, instance);
                         let surface_loader = ash::khr::surface::Instance::new(entry, instance);
                         unsafe {
