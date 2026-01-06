@@ -147,8 +147,31 @@ fn is_device_stable(instance: &ash::Instance, device: &vk::PhysicalDevice) -> bo
         let properties = instance.get_physical_device_properties(*device);
         let features = instance.get_physical_device_features(*device);
         let name = unsafe { CStr::from_ptr(properties.device_name.as_ptr()) }.to_str();
-        return (properties.device_type == vk::PhysicalDeviceType::DISCRETE_GPU);
+        let extension_supported: bool = check_extenstion_support(instance, &device);
+        return (properties.device_type == vk::PhysicalDeviceType::DISCRETE_GPU
+            && extension_supported);
     };
+}
+
+fn check_extenstion_support(instance: &ash::Instance, device: &vk::PhysicalDevice) -> bool {
+    let wanted_extension_names: Vec<&CStr> = vec![vk::KHR_SWAPCHAIN_NAME];
+    unsafe {
+        let available_extensions: Vec<vk::ExtensionProperties> = instance
+            .enumerate_device_extension_properties(*device)
+            .expect("failed to enumerate extensions in check_extenstion_support");
+        let mut extensions_supported = 0;
+        for extension in available_extensions.iter() {
+            let name = extension.extension_name;
+            println!("{:?}", CStr::from_ptr(name.as_ptr()).to_string_lossy());
+            for extension in wanted_extension_names.iter() {
+                if (CStr::from_ptr(name.as_ptr()) == CStr::from_ptr(extension.as_ptr())) {
+                    println!("Found!!!!");
+                    extensions_supported += 1;
+                }
+            }
+        }
+        return wanted_extension_names.len() == extensions_supported;
+    }
 }
 
 //Vulkan app struct that ties everything together (winit, vulkan, and game engine stuff in the
