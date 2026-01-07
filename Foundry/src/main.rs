@@ -16,6 +16,8 @@ const WANTED_EXTENSION_NAMES: &[&CStr] = &[vk::KHR_SWAPCHAIN_NAME];
 
 const FIRST_PRIORITY: f32 = 1.0;
 
+use num::clamp;
+
 use ash::ext::surface_maintenance1;
 use ash::khr::get_physical_device_properties2;
 use ash::vk::PFN_vkEnumeratePhysicalDevices;
@@ -217,6 +219,56 @@ fn query_swapchain_support(
             formats: format_details,
             present_modes: present_mode_details,
         };
+    }
+}
+
+fn choose_swap_surface_format(
+    available_formats: &Vec<vk::SurfaceFormatKHR>,
+) -> vk::SurfaceFormatKHR {
+    for available_format in available_formats.iter() {
+        if (available_format.format == vk::Format::B8G8R8_SRGB
+            && available_format.color_space == vk::ColorSpaceKHR::SRGB_NONLINEAR)
+        {
+            println!("Found everthing");
+            return *available_format;
+        }
+    }
+    println!("Warning: using default surface format may not be optimmized");
+    return available_formats[0];
+}
+
+fn choose_swap_surface_mode(available_modes: &Vec<vk::PresentModeKHR>) -> vk::PresentModeKHR {
+    for available_mode in available_modes.iter() {
+        if (*available_mode == vk::PresentModeKHR::MAILBOX) {
+            println!("Found mailbox");
+            return *available_mode;
+        }
+    }
+    println!("Did not find mailbox :(");
+    return vk::PresentModeKHR::FIFO;
+}
+
+fn choose_swap_extent(
+    surface_capabilities: vk::SurfaceCapabilitiesKHR,
+    window: Window,
+) -> vk::Extent2D {
+    if (surface_capabilities.current_extent.width != u32::MAX) {
+        return surface_capabilities.current_extent;
+    } else {
+        let actual_size = window.inner_size();
+        let return_size = vk::Extent2D {
+            width: clamp(
+                actual_size.width,
+                surface_capabilities.min_image_extent.width,
+                surface_capabilities.max_image_extent.width,
+            ),
+            height: clamp(
+                actual_size.height,
+                surface_capabilities.min_image_extent.height,
+                surface_capabilities.max_image_extent.height,
+            ),
+        };
+        return return_size;
     }
 }
 

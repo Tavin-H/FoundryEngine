@@ -9,6 +9,7 @@ ash = "0.38"
 ash-window = "0.13.0"
 nalgebra-glm = "0.19"
 raw-window-handle = "0.6" 
+num = "0.4.3"
 
 [dependencies.vulkan-headers]
 version = "0.1.1+1.4.336"
