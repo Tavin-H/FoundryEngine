@@ -32,7 +32,7 @@ use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::window::{Window, WindowAttributes, WindowId};
 
 use ash::{self, Entry, Instance, vk};
-use nalgebra_glm::{self as glm, any};
+use nalgebra_glm::{self as glm, any, log};
 use std::ffi::{CStr, CString};
 use std::hash::Hash;
 use std::panic;
@@ -230,11 +230,10 @@ fn choose_swap_surface_format(
         if (available_format.format == vk::Format::B8G8R8A8_SRGB
             && available_format.color_space == vk::ColorSpaceKHR::SRGB_NONLINEAR)
         {
-            println!("Found everthing");
             return *available_format;
         }
     }
-    println!("Warning: using default surface format may not be optimmized");
+
     return available_formats[0];
 }
 
@@ -301,6 +300,7 @@ struct VulkanContext {
     //Surface
     surface: Option<vk::SurfaceKHR>,
     swap_chain_details: Option<SwapChainSupportDetails>,
+    swapchain: Option<ash::vk::SwapchainKHR>,
 }
 struct SwapChainSupportDetails {
     capabilities: vk::SurfaceCapabilitiesKHR,
@@ -376,12 +376,20 @@ impl HelloTriangleApp {
         let Some(entry) = &self.vulkan_context.entry else {
             panic!("No entry when cleaning up");
         };
+        let Some(device) = &self.vulkan_context.logical_device else {
+            panic!("No logical_device when cleaning up");
+        };
 
         let Some(instance) = &self.vulkan_context.instance else {
             panic!("No instance when cleaning up");
         };
+        let Some(swapchain) = self.vulkan_context.swapchain else {
+            panic!("No swapchain when cleaning up");
+        };
         unsafe {
+            let swapchain_device = ash::khr::swapchain::Device::new(instance, device);
             let surface_instance = ash::khr::surface::Instance::new(entry, instance);
+            swapchain_device.destroy_swapchain(swapchain, None);
             surface_instance.destroy_surface(surface, None);
             logical_device.destroy_device(None);
             instance.destroy_instance(None);
@@ -651,7 +659,7 @@ impl HelloTriangleApp {
             )
         }
     }
-    fn create_swapchain(&self) {
+    fn create_swapchain(&mut self) {
         let Some(instance) = &self.vulkan_context.instance else {
             panic!("No instance when calling create_swapchain");
         };
@@ -693,6 +701,12 @@ impl HelloTriangleApp {
             //WARNING THIS IS ANNOYING
             image_array_layers: 1,
             image_usage: vk::ImageUsageFlags::COLOR_ATTACHMENT,
+            pre_transform: swapchain_support.capabilities.current_transform,
+            composite_alpha: vk::CompositeAlphaFlagsKHR::OPAQUE,
+            present_mode: present_mode,
+            image_format: surface_format.format,
+            clipped: vk::TRUE,
+            old_swapchain: vk::SwapchainKHR::null(),
             ..Default::default()
         };
 
@@ -705,6 +719,21 @@ impl HelloTriangleApp {
             create_info.image_sharing_mode = vk::SharingMode::CONCURRENT;
             create_info.queue_family_index_count = 2;
             create_info.queue_family_indices(&indices);
+        }
+        let Some(logical_device) = &self.vulkan_context.logical_device else {
+            panic!("No logical device in create_swapchain");
+        };
+        let swapchain_device = ash::khr::swapchain::Device::new(instance, logical_device);
+        unsafe {
+            match swapchain_device.create_swapchain(&create_info, None) {
+                Ok(swapchain) => {
+                    println!("Created Swapchain");
+                    self.vulkan_context.swapchain = Some(swapchain);
+                }
+                Err(e) => {
+                    panic!("{:?}", e);
+                }
+            }
         }
     }
 }
