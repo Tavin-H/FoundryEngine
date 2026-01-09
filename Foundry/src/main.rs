@@ -35,6 +35,7 @@ use ash::{self, Entry, Instance, vk};
 use nalgebra_glm::{self as glm, any};
 use std::ffi::{CStr, CString};
 use std::hash::Hash;
+use std::panic;
 
 //Setup winit boilerplate
 #[derive(Default)]
@@ -226,7 +227,7 @@ fn choose_swap_surface_format(
     available_formats: &Vec<vk::SurfaceFormatKHR>,
 ) -> vk::SurfaceFormatKHR {
     for available_format in available_formats.iter() {
-        if (available_format.format == vk::Format::B8G8R8_SRGB
+        if (available_format.format == vk::Format::B8G8R8A8_SRGB
             && available_format.color_space == vk::ColorSpaceKHR::SRGB_NONLINEAR)
         {
             println!("Found everthing");
@@ -244,13 +245,13 @@ fn choose_swap_surface_mode(available_modes: &Vec<vk::PresentModeKHR>) -> vk::Pr
             return *available_mode;
         }
     }
-    println!("Did not find mailbox :(");
+    println!("Did not find mailbox present mode, using FIFO as default");
     return vk::PresentModeKHR::FIFO;
 }
 
 fn choose_swap_extent(
     surface_capabilities: vk::SurfaceCapabilitiesKHR,
-    window: Window,
+    window: &Window,
 ) -> vk::Extent2D {
     if (surface_capabilities.current_extent.width != u32::MAX) {
         return surface_capabilities.current_extent;
@@ -309,14 +310,8 @@ struct SwapChainSupportDetails {
 
 #[derive(Default)]
 struct QueueFamilyIndices {
-    graphics_family: Option<u32>,
-    present_family: Option<u32>,
-}
-
-impl QueueFamilyIndices {
-    fn is_complete(&self) -> bool {
-        return self.graphics_family.is_some() && self.present_family.is_some();
-    }
+    graphics_family: u32,
+    present_family: u32,
 }
 
 impl HelloTriangleApp {
@@ -364,6 +359,7 @@ impl HelloTriangleApp {
         self.find_queue_families();
         self.create_logical_device();
         self.retrieve_queue_handles();
+        self.create_swapchain();
     }
     fn main_loop(&self) {}
     fn cleanup(&self) {
@@ -494,29 +490,31 @@ impl HelloTriangleApp {
         };
         let surface_instance = ash::khr::surface::Instance::new(entry, instance);
         unsafe {
+            let mut found_graphics_index: bool = false;
+            let mut found_present_index: bool = false;
             let queue_families: Vec<vk::QueueFamilyProperties> =
                 instance.get_physical_device_queue_family_properties(device);
             let mut i = 0;
             for family in queue_families.iter() {
-                if (family.queue_flags.contains(vk::QueueFlags::GRAPHICS)
-                    && !indices.graphics_family.is_some())
+                if (family.queue_flags.contains(vk::QueueFlags::GRAPHICS) && !found_graphics_index)
                 {
-                    indices.graphics_family = Some(i as u32);
+                    indices.graphics_family = i as u32;
+                    found_graphics_index = true;
                 }
                 let present_support = surface_instance
                     .get_physical_device_surface_support(device, i, surface)
                     .expect("Failed to check surface support");
-                if (!indices.present_family.is_some() && present_support) {
-                    indices.present_family = Some(i as u32);
+                if (!found_present_index && present_support) {
+                    indices.present_family = i as u32;
+                    found_present_index = true;
                 }
                 i += 1;
             }
-        }
-        if (!indices.is_complete()) {
-            panic!("Did not find all needed indices");
+            if (!found_present_index && !found_graphics_index) {
+                panic!("Did not find all needed indices");
+            }
         }
         self.vulkan_context.family_indicies = indices;
-        return;
     }
 
     #[allow(deprecated)]
@@ -524,16 +522,11 @@ impl HelloTriangleApp {
         let indices = &self.vulkan_context.family_indicies;
         //Remember to add indices to this list
         //BUG
-        let Some(graphics_index) = indices.graphics_family else {
-            panic!("");
-        };
-        let Some(present_index) = indices.present_family else {
-            panic!("");
-        };
-        let indices_vec = vec![graphics_index, present_index];
+        let indices_vec = vec![indices.graphics_family, indices.present_family];
         let mut queue_create_infos: Vec<vk::DeviceQueueCreateInfo> = Vec::new();
 
         for queue in indices_vec.iter() {
+            println!("{}", *queue);
             let queue_create_info = vk::DeviceQueueCreateInfo {
                 queue_count: 1,
                 queue_family_index: *queue,
@@ -597,17 +590,11 @@ impl HelloTriangleApp {
             panic!("No physical_device when calling retrieve_queue_handles");
         };
         let indices = &self.vulkan_context.family_indicies;
-        let Some(graphics_index) = indices.graphics_family else {
-            panic!();
-        };
-        let Some(present_index) = indices.present_family else {
-            panic!();
-        };
         unsafe {
-            let device_queue: vk::Queue = device.get_device_queue(graphics_index, 0);
+            let device_queue: vk::Queue = device.get_device_queue(indices.graphics_family, 0);
             self.vulkan_context.graphics_queue = Some(device_queue);
 
-            let present_queue: vk::Queue = device.get_device_queue(present_index, 0);
+            let present_queue: vk::Queue = device.get_device_queue(indices.present_family, 0);
             self.vulkan_context.present_queue = Some(present_queue);
         };
     }
@@ -662,6 +649,62 @@ impl HelloTriangleApp {
                 "No implementation for creating a window for {:?}",
                 std::env::consts::OS
             )
+        }
+    }
+    fn create_swapchain(&self) {
+        let Some(instance) = &self.vulkan_context.instance else {
+            panic!("No instance when calling create_swapchain");
+        };
+        let Some(entry) = &self.vulkan_context.entry else {
+            panic!("No entry when calling create_swapchain");
+        };
+        let Some(surface) = &self.vulkan_context.surface else {
+            panic!("No surface when calling create_swapchain");
+        };
+        let Some(device) = &self.vulkan_context.physical_device else {
+            panic!("No physical_device when calling create_swapchain");
+        };
+        let Some(window) = &self.window else {
+            panic!("No window when calling create_swapchain");
+        };
+
+        let swapchain_support: SwapChainSupportDetails =
+            query_swapchain_support(entry, instance, device, surface);
+        let surface_format: vk::SurfaceFormatKHR =
+            choose_swap_surface_format(&swapchain_support.formats);
+        let present_mode: vk::PresentModeKHR =
+            choose_swap_surface_mode(&swapchain_support.present_modes);
+        let extent: vk::Extent2D = choose_swap_extent(swapchain_support.capabilities, window);
+        let mut image_count = swapchain_support.capabilities.min_image_count + 1;
+        if (swapchain_support.capabilities.max_image_count > 0
+            && image_count > swapchain_support.capabilities.max_image_count)
+        {
+            image_count = swapchain_support.capabilities.max_image_count;
+        }
+        let indices = &self.vulkan_context.family_indicies;
+
+        //Assume values are same
+        //TUTORAL MENTIONS HOW TO USE POST PROCESSING KINDA
+        let mut create_info = vk::SwapchainCreateInfoKHR {
+            surface: *surface,
+            min_image_count: image_count,
+            image_color_space: surface_format.color_space,
+            image_extent: extent,
+            //WARNING THIS IS ANNOYING
+            image_array_layers: 1,
+            image_usage: vk::ImageUsageFlags::COLOR_ATTACHMENT,
+            ..Default::default()
+        };
+
+        if (indices.graphics_family == indices.present_family) {
+            create_info.queue_family_index_count = 0;
+            create_info.image_sharing_mode = vk::SharingMode::EXCLUSIVE;
+        } else {
+            println!("Not same");
+            let indices = [indices.graphics_family, indices.present_family];
+            create_info.image_sharing_mode = vk::SharingMode::CONCURRENT;
+            create_info.queue_family_index_count = 2;
+            create_info.queue_family_indices(&indices);
         }
     }
 }
