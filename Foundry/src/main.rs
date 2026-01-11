@@ -97,12 +97,22 @@ fn create_instance(context: &mut VulkanContext) -> Option<ash::Instance> {
             enabled_layer_names.push(item.as_ptr());
         }
     }
+    let mut extension_names: Vec<*const i8> = Vec::new();
+    extension_names.push(ash::khr::surface::NAME.as_ptr());
+    if (std::env::consts::OS == "windows") {
+        println!("WINDOWS");
+        extension_names.push(ash::vk::KHR_WIN32_SURFACE_NAME.as_ptr());
+    }
     let mut create_info = vk::InstanceCreateInfo {
         p_application_info: &app_info,
         enabled_layer_count: layer_count,
         pp_enabled_layer_names: enabled_layer_names.as_ptr(),
+        pp_enabled_extension_names: extension_names.as_ptr(),
+        enabled_extension_count: extension_names.len() as u32,
+
         ..Default::default()
     };
+
     unsafe {
         match entry.create_instance(&create_info, None) {
             Ok(instance) => {
@@ -138,6 +148,10 @@ fn create_instance(context: &mut VulkanContext) -> Option<ash::Instance> {
                             panic!("{:?}", result);
                         }
                     }
+                }
+                if (std::env::consts::OS == "windows") {
+                    println!("Windows problem");
+                    panic!("{}", result);
                 }
             }
         }
@@ -650,10 +664,13 @@ impl HelloTriangleApp {
 
             println!("Created SurfaceKHR Successfully");
         } else {
-            panic!(
-                "No implementation for creating a window for {:?}",
-                std::env::consts::OS
-            )
+            let surface: Result<vk::SurfaceKHR, ash::vk::Result> = unsafe {
+                ash_window::create_surface(&entry, &instance, display_handle, window_handle, None)
+            };
+            let Ok(surface) = surface else {
+                panic!("metal surface creation failed");
+            };
+            self.vulkan_context.surface = Some(surface);
         }
     }
     fn create_swapchain(&mut self) {
@@ -737,6 +754,7 @@ impl HelloTriangleApp {
 
 fn main() {
     //Vulkan Setup
+    println!("Program running");
     let mut app: HelloTriangleApp = HelloTriangleApp {
         ..Default::default()
     };
