@@ -20,7 +20,7 @@ use num::clamp;
 
 use ash::ext::surface_maintenance1;
 use ash::khr::get_physical_device_properties2;
-use ash::vk::PFN_vkEnumeratePhysicalDevices;
+use ash::vk::{PFN_vkEnumeratePhysicalDevices, SamplerCubicWeightsCreateInfoQCOM};
 use ash_window;
 #[allow(deprecated)]
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
@@ -376,9 +376,6 @@ impl HelloTriangleApp {
         let Some(entry) = &self.vulkan_context.entry else {
             panic!("No entry when cleaning up");
         };
-        let Some(device) = &self.vulkan_context.logical_device else {
-            panic!("No logical_device when cleaning up");
-        };
 
         let Some(instance) = &self.vulkan_context.instance else {
             panic!("No instance when cleaning up");
@@ -387,7 +384,7 @@ impl HelloTriangleApp {
             panic!("No swapchain when cleaning up");
         };
         unsafe {
-            let swapchain_device = ash::khr::swapchain::Device::new(instance, device);
+            let swapchain_device = ash::khr::swapchain::Device::new(instance, logical_device);
             let surface_instance = ash::khr::surface::Instance::new(entry, instance);
             swapchain_device.destroy_swapchain(swapchain, None);
             surface_instance.destroy_surface(surface, None);
