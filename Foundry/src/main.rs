@@ -379,6 +379,7 @@ impl HelloTriangleApp {
         self.retrieve_queue_handles();
         self.create_swapchain();
         self.create_image_views();
+        self.create_graphics_pipeline();
     }
     fn main_loop(&self) {}
     fn cleanup(&self) {
@@ -801,10 +802,6 @@ impl HelloTriangleApp {
             unsafe {
                 match logical_device.create_image_view(&create_info, None) {
                     Ok(image_view) => {
-<<<<<<< HEAD
-=======
-                        println!("Created image view");
->>>>>>> origin/main
                         swap_chain_image_views.push(image_view);
                     }
                     Err(e) => {
@@ -815,6 +812,7 @@ impl HelloTriangleApp {
         }
         self.vulkan_context.swap_chain_image_views = swap_chain_image_views;
     }
+    fn create_graphics_pipeline(&mut self) {}
 }
 
 fn main() {
