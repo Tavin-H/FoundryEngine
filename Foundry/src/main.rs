@@ -17,6 +17,7 @@ const WANTED_EXTENSION_NAMES: &[&CStr] = &[vk::KHR_SWAPCHAIN_NAME];
 const FIRST_PRIORITY: f32 = 1.0;
 
 use num::clamp;
+use std::fs;
 
 use ash::ext::surface_maintenance1;
 use ash::khr::get_physical_device_properties2;
@@ -37,6 +38,8 @@ use std::ffi::{CStr, CString};
 use std::hash::Hash;
 use std::mem::swap;
 use std::panic;
+
+use bytemuck::cast;
 
 //Setup winit boilerplate
 #[derive(Default)]
@@ -286,6 +289,24 @@ fn choose_swap_extent(
     }
 }
 
+fn read_file(file_path: &String) -> Vec<u8> {
+    //let contents = fs::read(ffile_path).expect("Failed to read file");
+    match fs::read(file_path) {
+        Ok(file) => {
+            return file;
+        }
+        Err(e) => {
+            panic!("{}", e);
+        }
+    }
+}
+
+fn convert_u8_to_u32_vec(bytes: &Vec<u8>) -> Vec<u32> {
+    //let bytes_as_u32: Vec<u32> = bytes.into_iter().map(|x| x as u32).collect();
+    let converted_bytes: &[u8] = &bytes;
+    let bytes_as_u32: &[u32] = bytemuck::cast_slice(converted_bytes);
+    return bytes_as_u32.to_vec();
+}
 //Vulkan app struct that ties everything together (winit, vulkan, and game engine stuff in the
 //future)
 #[derive(Default)]
@@ -319,6 +340,9 @@ struct VulkanContext {
     swap_chain_format: Option<vk::SurfaceFormatKHR>,
     swap_chain_extent_used: Option<vk::Extent2D>,
     swap_chain_image_views: Vec<vk::ImageView>,
+
+    //Shader Info
+    shader_list: Vec<vk::ShaderModule>,
 }
 struct SwapChainSupportDetails {
     capabilities: vk::SurfaceCapabilitiesKHR,
@@ -408,6 +432,9 @@ impl HelloTriangleApp {
             let surface_instance = ash::khr::surface::Instance::new(entry, instance);
             for image_view in self.vulkan_context.swap_chain_image_views.iter() {
                 logical_device.destroy_image_view(*image_view, None);
+            }
+            for shader_module in self.vulkan_context.shader_list.iter() {
+                logical_device.destroy_shader_module(*shader_module, None);
             }
             swapchain_device.destroy_swapchain(swapchain, None);
             surface_instance.destroy_surface(surface, None);
@@ -812,7 +839,37 @@ impl HelloTriangleApp {
         }
         self.vulkan_context.swap_chain_image_views = swap_chain_image_views;
     }
-    fn create_graphics_pipeline(&mut self) {}
+
+    fn create_shader_module(&mut self, bytes: Vec<u8>) -> vk::ShaderModule {
+        let bytes_as_u32: Vec<u32> = convert_u8_to_u32_vec(&bytes);
+        let create_info = vk::ShaderModuleCreateInfo {
+            code_size: bytes.len(),
+            p_code: bytes_as_u32.as_ptr(),
+            ..Default::default()
+        };
+        let Some(logical_device) = &self.vulkan_context.logical_device else {
+            panic!("No logical_device when calling create_shader_module");
+        };
+        unsafe {
+            match logical_device.create_shader_module(&create_info, None) {
+                Ok(shader_module) => shader_module,
+                Err(e) => panic!("Failed to create_shader_module"),
+            }
+        }
+    }
+
+    fn create_graphics_pipeline(&mut self) {
+        let vert_shader_path = String::from("./shaders/vert.spv");
+        let frag_shader_path = String::from("./shaders/frag.spv");
+        let vert_shader_code: Vec<u8> = read_file(&vert_shader_path);
+        let frag_shader_code: Vec<u8> = read_file(&frag_shader_path);
+
+        let vert_shader_module: vk::ShaderModule = self.create_shader_module(vert_shader_code);
+        let frag_shader_module: vk::ShaderModule = self.create_shader_module(frag_shader_code);
+
+        self.vulkan_context.shader_list.push(vert_shader_module);
+        self.vulkan_context.shader_list.push(frag_shader_module);
+    }
 }
 
 fn main() {
