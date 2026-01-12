@@ -801,6 +801,10 @@ impl HelloTriangleApp {
             unsafe {
                 match logical_device.create_image_view(&create_info, None) {
                     Ok(image_view) => {
+<<<<<<< HEAD
+=======
+                        println!("Created image view");
+>>>>>>> origin/main
                         swap_chain_image_views.push(image_view);
                     }
                     Err(e) => {
