@@ -1,3 +1,4 @@
+#version 450
 layout(location = 0) out vec3 frag_color;
 
 vec2 positions[3] = vec2[] (
