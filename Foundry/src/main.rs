@@ -35,6 +35,7 @@ use ash::{self, Entry, Instance, vk};
 use nalgebra_glm::{self as glm, any, log};
 use std::ffi::{CStr, CString};
 use std::hash::Hash;
+use std::mem::swap;
 use std::panic;
 
 //Setup winit boilerplate
@@ -100,7 +101,6 @@ fn create_instance(context: &mut VulkanContext) -> Option<ash::Instance> {
     let mut extension_names: Vec<*const i8> = Vec::new();
     extension_names.push(ash::khr::surface::NAME.as_ptr());
     if (std::env::consts::OS == "windows") {
-        println!("WINDOWS");
         extension_names.push(ash::vk::KHR_WIN32_SURFACE_NAME.as_ptr());
     }
     let mut create_info = vk::InstanceCreateInfo {
@@ -116,7 +116,7 @@ fn create_instance(context: &mut VulkanContext) -> Option<ash::Instance> {
     unsafe {
         match entry.create_instance(&create_info, None) {
             Ok(instance) => {
-                print!("Created Vulkan Instance");
+                println!("Created Vulkan Instance");
                 return Some(instance);
             }
             Err(result) => {
@@ -314,7 +314,11 @@ struct VulkanContext {
     //Surface
     surface: Option<vk::SurfaceKHR>,
     swap_chain_details: Option<SwapChainSupportDetails>,
-    swapchain: Option<ash::vk::SwapchainKHR>,
+    swap_chain: Option<ash::vk::SwapchainKHR>,
+    swap_chain_images: Vec<ash::vk::Image>,
+    swap_chain_format: Option<vk::SurfaceFormatKHR>,
+    swap_chain_extent_used: Option<vk::Extent2D>,
+    swap_chain_image_views: Vec<vk::ImageView>,
 }
 struct SwapChainSupportDetails {
     capabilities: vk::SurfaceCapabilitiesKHR,
@@ -374,6 +378,7 @@ impl HelloTriangleApp {
         self.create_logical_device();
         self.retrieve_queue_handles();
         self.create_swapchain();
+        self.create_image_views();
     }
     fn main_loop(&self) {}
     fn cleanup(&self) {
@@ -394,12 +399,15 @@ impl HelloTriangleApp {
         let Some(instance) = &self.vulkan_context.instance else {
             panic!("No instance when cleaning up");
         };
-        let Some(swapchain) = self.vulkan_context.swapchain else {
+        let Some(swapchain) = self.vulkan_context.swap_chain else {
             panic!("No swapchain when cleaning up");
         };
         unsafe {
             let swapchain_device = ash::khr::swapchain::Device::new(instance, logical_device);
             let surface_instance = ash::khr::surface::Instance::new(entry, instance);
+            for image_view in self.vulkan_context.swap_chain_image_views.iter() {
+                logical_device.destroy_image_view(*image_view, None);
+            }
             swapchain_device.destroy_swapchain(swapchain, None);
             surface_instance.destroy_surface(surface, None);
             logical_device.destroy_device(None);
@@ -545,7 +553,6 @@ impl HelloTriangleApp {
         let mut queue_create_infos: Vec<vk::DeviceQueueCreateInfo> = Vec::new();
 
         for queue in indices_vec.iter() {
-            println!("{}", *queue);
             let queue_create_info = vk::DeviceQueueCreateInfo {
                 queue_count: 1,
                 queue_family_index: *queue,
@@ -742,7 +749,16 @@ impl HelloTriangleApp {
             match swapchain_device.create_swapchain(&create_info, None) {
                 Ok(swapchain) => {
                     println!("Created Swapchain");
-                    self.vulkan_context.swapchain = Some(swapchain);
+                    let swap_chain_images: Vec<ash::vk::Image> = swapchain_device
+                        .get_swapchain_images(swapchain)
+                        .expect("Failed to get swap_chain images");
+
+                    //Store variables
+                    self.vulkan_context.swap_chain_details = Some(swapchain_support);
+                    self.vulkan_context.swap_chain = Some(swapchain);
+                    self.vulkan_context.swap_chain_images = swap_chain_images;
+                    self.vulkan_context.swap_chain_format = Some(surface_format);
+                    self.vulkan_context.swap_chain_extent_used = Some(extent);
                 }
                 Err(e) => {
                     panic!("{:?}", e);
@@ -750,11 +766,56 @@ impl HelloTriangleApp {
             }
         }
     }
+
+    fn create_image_views(&mut self) {
+        let swap_chain_images = &self.vulkan_context.swap_chain_images;
+        let Some(surface_format) = self.vulkan_context.swap_chain_format else {
+            panic!("No format when calling create_image_views");
+        };
+        let Some(logical_device) = &self.vulkan_context.logical_device else {
+            panic!("No logical_device when calling create_image_views");
+        };
+        let mut swap_chain_image_views: Vec<vk::ImageView> = Vec::new();
+        let image_components = vk::ComponentMapping {
+            r: vk::ComponentSwizzle::IDENTITY,
+            g: vk::ComponentSwizzle::IDENTITY,
+            b: vk::ComponentSwizzle::IDENTITY,
+            a: vk::ComponentSwizzle::IDENTITY,
+        };
+        let image_subresource_range = vk::ImageSubresourceRange {
+            aspect_mask: vk::ImageAspectFlags::COLOR,
+            base_mip_level: 0,
+            level_count: 1,
+            base_array_layer: 0,
+            layer_count: 1,
+        };
+        for image in swap_chain_images.iter() {
+            let create_info = vk::ImageViewCreateInfo {
+                image: *image,
+                format: surface_format.format,
+                view_type: vk::ImageViewType::TYPE_2D,
+                components: image_components,
+                subresource_range: image_subresource_range,
+                ..Default::default()
+            };
+            unsafe {
+                match logical_device.create_image_view(&create_info, None) {
+                    Ok(image_view) => {
+                        println!("Created image view");
+                        swap_chain_image_views.push(image_view);
+                    }
+                    Err(e) => {
+                        panic!("{}", e);
+                    }
+                }
+            }
+        }
+        self.vulkan_context.swap_chain_image_views = swap_chain_image_views;
+    }
 }
 
 fn main() {
     //Vulkan Setup
-    println!("Program running");
     let mut app: HelloTriangleApp = HelloTriangleApp {
         ..Default::default()
     };
