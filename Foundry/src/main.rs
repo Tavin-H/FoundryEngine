@@ -307,6 +307,7 @@ fn convert_u8_to_u32_vec(bytes: &Vec<u8>) -> Vec<u32> {
     let bytes_as_u32: &[u32] = bytemuck::cast_slice(converted_bytes);
     return bytes_as_u32.to_vec();
 }
+
 //Vulkan app struct that ties everything together (winit, vulkan, and game engine stuff in the
 //future)
 #[derive(Default)]
@@ -869,6 +870,42 @@ impl HelloTriangleApp {
 
         self.vulkan_context.shader_list.push(vert_shader_module);
         self.vulkan_context.shader_list.push(frag_shader_module);
+
+        let vert_shader_create_info = vk::PipelineShaderStageCreateInfo {
+            stage: vk::ShaderStageFlags::VERTEX,
+            module: vert_shader_module,
+            p_name: "main".as_ptr() as *const i8,
+            ..Default::default()
+        };
+        let frag_shader_create_info = vk::PipelineShaderStageCreateInfo {
+            stage: vk::ShaderStageFlags::VERTEX,
+            module: frag_shader_module,
+            p_name: "main".as_ptr() as *const i8,
+            ..Default::default()
+        };
+
+        let shader_stages: Vec<vk::PipelineShaderStageCreateInfo> =
+            vec![vert_shader_create_info, frag_shader_create_info];
+
+        //FIXED FUNCTIONS
+        let dynamic_states: Vec<vk::DynamicState> =
+            vec![vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR];
+
+        let dynamic_state = vk::PipelineDynamicStateCreateInfo {
+            dynamic_state_count: dynamic_states.len() as u32,
+            p_dynamic_states: dynamic_states.as_ptr(),
+            ..Default::default()
+        };
+
+        let binding_descriptions_list: Vec<vk::VertexInputBindingDescription> = Vec::new();
+        let attributes_list: Vec<vk::VertexInputAttributeDescription> = Vec::new();
+        let vertex_input_info = vk::PipelineVertexInputStateCreateInfo {
+            vertex_binding_description_count: 0,
+            p_vertex_binding_descriptions: binding_descriptions_list.as_ptr(),
+            vertex_attribute_description_count: 0,
+            p_vertex_attribute_descriptions: attributes_list.as_ptr(),
+            ..Default::default()
+        };
     }
 }
 
