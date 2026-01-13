@@ -13,33 +13,35 @@
 #![allow(unused)]
 const VALIDATION_LAYERS: &[&str] = &["VK_LAYER_KHRONOS_validation"];
 const WANTED_EXTENSION_NAMES: &[&CStr] = &[vk::KHR_SWAPCHAIN_NAME];
-
 const FIRST_PRIORITY: f32 = 1.0;
 
-use num::clamp;
-use std::fs;
-
-use ash::ext::surface_maintenance1;
-use ash::khr::get_physical_device_properties2;
-use ash::vk::{PFN_vkEnumeratePhysicalDevices, SamplerCubicWeightsCreateInfoQCOM};
+//Window
 use ash_window;
 #[allow(deprecated)]
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
-//Imports
 use winit::application::ApplicationHandler;
 use winit::dpi::LogicalSize;
 use winit::event::WindowEvent;
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::window::{Window, WindowAttributes, WindowId};
 
+//Ash
+use ash::ext::surface_maintenance1;
+use ash::khr::get_physical_device_properties2;
+use ash::vk::{PFN_vkEnumeratePhysicalDevices, SamplerCubicWeightsCreateInfoQCOM};
 use ash::{self, Entry, Instance, vk};
+
+//Math
 use nalgebra_glm::{self as glm, any, log};
+
+//General
+use bytemuck::cast;
+use num::clamp;
 use std::ffi::{CStr, CString};
+use std::fs;
 use std::hash::Hash;
 use std::mem::swap;
 use std::panic;
-
-use bytemuck::cast;
 
 //Setup winit boilerplate
 #[derive(Default)]
@@ -887,7 +889,9 @@ impl HelloTriangleApp {
         let shader_stages: Vec<vk::PipelineShaderStageCreateInfo> =
             vec![vert_shader_create_info, frag_shader_create_info];
 
-        //FIXED FUNCTIONS
+        //--------FIXED FUNCTIONS--------
+
+        //Vertex Input
         let dynamic_states: Vec<vk::DynamicState> =
             vec![vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR];
 
@@ -904,6 +908,48 @@ impl HelloTriangleApp {
             p_vertex_binding_descriptions: binding_descriptions_list.as_ptr(),
             vertex_attribute_description_count: 0,
             p_vertex_attribute_descriptions: attributes_list.as_ptr(),
+            ..Default::default()
+        };
+
+        //Input assembly
+        let input_assembly_info = vk::PipelineInputAssemblyStateCreateInfo {
+            topology: vk::PrimitiveTopology::TRIANGLE_LIST,
+            primitive_restart_enable: vk::TRUE,
+            ..Default::default()
+        };
+
+        //Viewport
+        let Some(swapchain_extent) = self.vulkan_context.swap_chain_extent_used else {
+            panic!("No swapchain_extent when calling create_graphics_pipeline");
+        };
+        let viewport = vk::Viewport {
+            x: 0 as f32,
+            y: 0 as f32,
+            width: swapchain_extent.width as f32,
+            height: swapchain_extent.height as f32,
+            min_depth: 0.0,
+            max_depth: 1.0,
+            ..Default::default()
+        };
+        let viewport_array: Vec<vk::Viewport> = vec![viewport];
+
+        let scissor = vk::Rect2D {
+            offset: vk::Offset2D { x: 0, y: 0 },
+            extent: swapchain_extent,
+        };
+        let scissor_array: Vec<vk::Rect2D> = vec![scissor];
+
+        let dynamic_state_info = vk::PipelineDynamicStateCreateInfo {
+            dynamic_state_count: dynamic_states.len() as u32,
+            p_dynamic_states: dynamic_states.as_ptr(),
+            ..Default::default()
+        };
+
+        let viewport_state = vk::PipelineViewportStateCreateInfo {
+            viewport_count: 1,
+            p_viewports: viewport_array.as_ptr(),
+            scissor_count: 1,
+            p_scissors: scissor_array.as_ptr(),
             ..Default::default()
         };
     }
