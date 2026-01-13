@@ -862,6 +862,7 @@ impl HelloTriangleApp {
     }
 
     fn create_graphics_pipeline(&mut self) {
+        //Load shader modules
         let vert_shader_path = String::from("./shaders/vert.spv");
         let frag_shader_path = String::from("./shaders/frag.spv");
         let vert_shader_code: Vec<u8> = read_file(&vert_shader_path);
@@ -950,6 +951,61 @@ impl HelloTriangleApp {
             p_viewports: viewport_array.as_ptr(),
             scissor_count: 1,
             p_scissors: scissor_array.as_ptr(),
+            ..Default::default()
+        };
+
+        //Rasterizer
+        //Note to self: chaning PolygonMode to be wireframe or points would be good for debugging
+        let rasterizer_info = vk::PipelineRasterizationStateCreateInfo {
+            depth_clamp_enable: vk::FALSE,
+            rasterizer_discard_enable: vk::FALSE,
+            polygon_mode: vk::PolygonMode::FILL,
+            line_width: 1.0,
+            cull_mode: vk::CullModeFlags::BACK,
+            front_face: vk::FrontFace::CLOCKWISE,
+            depth_bias_enable: vk::FALSE,
+            depth_bias_constant_factor: 0.0,
+            depth_bias_slope_factor: 0.0,
+            depth_bias_clamp: 0.0,
+            ..Default::default()
+        };
+
+        //Multisampling
+        //(Anti-aliasing)
+        let sample_mask_list: Vec<vk::SampleMask> = Vec::new();
+        let multisampling_info = vk::PipelineMultisampleStateCreateInfo {
+            sample_shading_enable: vk::FALSE,
+            rasterization_samples: vk::SampleCountFlags::TYPE_1,
+            min_sample_shading: 1.0,
+            p_sample_mask: sample_mask_list.as_ptr(),
+            alpha_to_coverage_enable: 0,
+            alpha_to_one_enable: vk::FALSE,
+            ..Default::default()
+        };
+
+        //Color blending
+        let colour_blend_attatchment = vk::PipelineColorBlendAttachmentState {
+            color_write_mask: vk::ColorComponentFlags::R
+                | vk::ColorComponentFlags::G
+                | vk::ColorComponentFlags::B,
+            blend_enable: vk::FALSE,
+            src_color_blend_factor: vk::BlendFactor::ONE,
+            dst_color_blend_factor: vk::BlendFactor::ZERO,
+            color_blend_op: vk::BlendOp::ADD,
+            src_alpha_blend_factor: vk::BlendFactor::ONE,
+            dst_alpha_blend_factor: vk::BlendFactor::ZERO,
+            alpha_blend_op: vk::BlendOp::ADD,
+            ..Default::default()
+        };
+
+        let attatchments: Vec<vk::PipelineColorBlendAttachmentState> =
+            vec![colour_blend_attatchment];
+        let colour_blend_info = vk::PipelineColorBlendStateCreateInfo {
+            logic_op_enable: vk::FALSE,
+            logic_op: vk::LogicOp::COPY,
+            attachment_count: 1,
+            p_attachments: attatchments.as_ptr(),
+            blend_constants: [0.0, 0.0, 0.0, 0.0],
             ..Default::default()
         };
     }
