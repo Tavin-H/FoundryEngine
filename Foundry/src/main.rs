@@ -28,7 +28,9 @@ use winit::window::{Window, WindowAttributes, WindowId};
 //Ash
 use ash::ext::surface_maintenance1;
 use ash::khr::get_physical_device_properties2;
-use ash::vk::{PFN_vkEnumeratePhysicalDevices, SamplerCubicWeightsCreateInfoQCOM};
+use ash::vk::{
+    PFN_vkEnumeratePhysicalDevices, SamplerCubicWeightsCreateInfoQCOM, SetLatencyMarkerInfoNV,
+};
 use ash::{self, Entry, Instance, vk};
 
 //Math
@@ -42,6 +44,7 @@ use std::fs;
 use std::hash::Hash;
 use std::mem::swap;
 use std::panic;
+use std::sync::Arc;
 
 //Setup winit boilerplate
 #[derive(Default)]
@@ -346,6 +349,9 @@ struct VulkanContext {
 
     //Shader Info
     shader_list: Vec<vk::ShaderModule>,
+
+    //Graphics pipleline
+    pipeline_layout: Option<vk::PipelineLayout>,
 }
 struct SwapChainSupportDetails {
     capabilities: vk::SurfaceCapabilitiesKHR,
@@ -406,6 +412,7 @@ impl HelloTriangleApp {
         self.retrieve_queue_handles();
         self.create_swapchain();
         self.create_image_views();
+        self.create_render_pass();
         self.create_graphics_pipeline();
     }
     fn main_loop(&self) {}
@@ -430,9 +437,14 @@ impl HelloTriangleApp {
         let Some(swapchain) = self.vulkan_context.swap_chain else {
             panic!("No swapchain when cleaning up");
         };
+        let Some(pipeline_layout) = self.vulkan_context.pipeline_layout else {
+            panic!("No pipeline_layout when cleaning up");
+        };
         unsafe {
             let swapchain_device = ash::khr::swapchain::Device::new(instance, logical_device);
             let surface_instance = ash::khr::surface::Instance::new(entry, instance);
+
+            logical_device.destroy_pipeline_layout(pipeline_layout, None);
             for image_view in self.vulkan_context.swap_chain_image_views.iter() {
                 logical_device.destroy_image_view(*image_view, None);
             }
@@ -998,13 +1010,13 @@ impl HelloTriangleApp {
             ..Default::default()
         };
 
-        let attatchments: Vec<vk::PipelineColorBlendAttachmentState> =
+        let color_attatchments: Vec<vk::PipelineColorBlendAttachmentState> =
             vec![colour_blend_attatchment];
         let colour_blend_info = vk::PipelineColorBlendStateCreateInfo {
             logic_op_enable: vk::FALSE,
             logic_op: vk::LogicOp::COPY,
             attachment_count: 1,
-            p_attachments: attatchments.as_ptr(),
+            p_attachments: color_attatchments.as_ptr(),
             blend_constants: [0.0, 0.0, 0.0, 0.0],
             ..Default::default()
         };
@@ -1022,15 +1034,53 @@ impl HelloTriangleApp {
 
         let Some(logical_device) = &self.vulkan_context.logical_device else {
             panic!("No logical_device when calling create_graphics_pipeline");
-        }
-            unsafe {
-
-        match logical_device.create_pipeline_layout(&pipeline_layout_create_info, None) {
-
+        };
+        unsafe {
+            match logical_device.create_pipeline_layout(&pipeline_layout_create_info, None) {
+                Ok(pipeline_layout) => self.vulkan_context.pipeline_layout = Some(pipeline_layout),
+                Err(e) => panic!("Failed to create pipeline_layout"),
             }
-        let pipeline_layout = pipeline_layout_object;
+        }
 
-}
+        //Render pass
+        /*
+                let render_pass_info = vk::RenderPassCreateInfo {
+                    attachment_count: 1,
+                    p_attachments: color_attatchments.as_ptr(),
+                    ..Default::default()
+                };
+        */
+    }
+
+    fn create_render_pass(&mut self) {
+        let Some(swapchain_format) = self.vulkan_context.swap_chain_format else {
+            panic!("No swapchain_format when calling create_render_pass");
+        };
+        let color_attatchment = vk::AttachmentDescription {
+            format: swapchain_format.format,
+            samples: vk::SampleCountFlags::TYPE_1,
+            load_op: vk::AttachmentLoadOp::CLEAR,
+            store_op: vk::AttachmentStoreOp::STORE,
+            stencil_load_op: vk::AttachmentLoadOp::DONT_CARE,
+            stencil_store_op: vk::AttachmentStoreOp::DONT_CARE,
+            initial_layout: vk::ImageLayout::UNDEFINED,
+            final_layout: vk::ImageLayout::PRESENT_SRC_KHR,
+            ..Default::default()
+        };
+
+        let colour_attatchment_ref = vk::AttachmentReference {
+            attachment: 0,
+            layout: vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
+        };
+        let colour_attatchment_ref_list: Vec<vk::AttachmentReference> =
+            vec![colour_attatchment_ref];
+
+        let subpass = vk::SubpassDescription {
+            pipeline_bind_point: vk::PipelineBindPoint::GRAPHICS,
+            color_attachment_count: 1,
+            p_color_attachments: colour_attatchment_ref_list.as_ptr(),
+            ..Default::default()
+        };
     }
 }
 
