@@ -44,6 +44,7 @@ use std::fs;
 use std::hash::Hash;
 use std::mem::swap;
 use std::panic;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 //Setup winit boilerplate
@@ -352,6 +353,8 @@ struct VulkanContext {
 
     //Graphics pipleline
     pipeline_layout: Option<vk::PipelineLayout>,
+    render_pass: Option<vk::RenderPass>,
+    graphics_pipeline: Option<vk::Pipeline>,
 }
 struct SwapChainSupportDetails {
     capabilities: vk::SurfaceCapabilitiesKHR,
@@ -424,38 +427,55 @@ impl HelloTriangleApp {
         let Some(logical_device) = &self.vulkan_context.logical_device else {
             panic!("No logical device when cleaning up");
         };
-        let Some(surface) = self.vulkan_context.surface else {
-            panic!("No surface when cleaning up");
-        };
         let Some(entry) = &self.vulkan_context.entry else {
             panic!("No entry when cleaning up");
         };
 
-        let Some(instance) = &self.vulkan_context.instance else {
-            panic!("No instance when cleaning up");
-        };
-        let Some(swapchain) = self.vulkan_context.swap_chain else {
-            panic!("No swapchain when cleaning up");
-        };
-        let Some(pipeline_layout) = self.vulkan_context.pipeline_layout else {
-            panic!("No pipeline_layout when cleaning up");
-        };
-        unsafe {
-            let swapchain_device = ash::khr::swapchain::Device::new(instance, logical_device);
-            let surface_instance = ash::khr::surface::Instance::new(entry, instance);
+        let swapchain_device = ash::khr::swapchain::Device::new(instance, logical_device);
+        let surface_instance = ash::khr::surface::Instance::new(entry, instance);
 
+        unsafe {
+            let Some(render_pass) = self.vulkan_context.render_pass else {
+                panic!("No render_pass when cleaning up");
+            };
+            logical_device.destroy_render_pass(render_pass, None);
+
+            //Pipeline Layout
+            let Some(pipeline_layout) = self.vulkan_context.pipeline_layout else {
+                panic!("No pipeline_layout when cleaning up");
+            };
             logical_device.destroy_pipeline_layout(pipeline_layout, None);
+
+            //Graphics pipleline handles
             for image_view in self.vulkan_context.swap_chain_image_views.iter() {
                 logical_device.destroy_image_view(*image_view, None);
             }
             for shader_module in self.vulkan_context.shader_list.iter() {
                 logical_device.destroy_shader_module(*shader_module, None);
             }
+
+            //Swapchain
+            let Some(swapchain) = self.vulkan_context.swap_chain else {
+                panic!("No swapchain when cleaning up");
+            };
             swapchain_device.destroy_swapchain(swapchain, None);
+
+            //Surface
+            let Some(surface) = self.vulkan_context.surface else {
+                panic!("No surface when cleaning up");
+            };
             surface_instance.destroy_surface(surface, None);
+
+            //Device
             logical_device.destroy_device(None);
+
+            //Instance
+            let Some(instance) = &self.vulkan_context.instance else {
+                panic!("No instance when cleaning up");
+            };
             instance.destroy_instance(None);
-            println!("Destroyed instance Successfully");
+
+            println!("Everything cleaned up");
         }
     }
     fn init_window(&mut self, event_loop: EventLoop<()>, window_width: f64, window_height: f64) {
@@ -886,16 +906,18 @@ impl HelloTriangleApp {
         self.vulkan_context.shader_list.push(vert_shader_module);
         self.vulkan_context.shader_list.push(frag_shader_module);
 
+        //Make main as a string to avoid a danging pointer
+        let main_name: String = String::from("main");
         let vert_shader_create_info = vk::PipelineShaderStageCreateInfo {
             stage: vk::ShaderStageFlags::VERTEX,
             module: vert_shader_module,
-            p_name: "main".as_ptr() as *const i8,
+            p_name: main_name.as_ptr() as *const i8,
             ..Default::default()
         };
         let frag_shader_create_info = vk::PipelineShaderStageCreateInfo {
             stage: vk::ShaderStageFlags::VERTEX,
             module: frag_shader_module,
-            p_name: "main".as_ptr() as *const i8,
+            p_name: main_name.as_ptr() as *const i8,
             ..Default::default()
         };
 
@@ -913,6 +935,7 @@ impl HelloTriangleApp {
             p_dynamic_states: dynamic_states.as_ptr(),
             ..Default::default()
         };
+        let dynamic_state_list: Vec<vk::PipelineDynamicStateCreateInfo> = vec![dynamic_state];
 
         let binding_descriptions_list: Vec<vk::VertexInputBindingDescription> = Vec::new();
         let attributes_list: Vec<vk::VertexInputAttributeDescription> = Vec::new();
@@ -923,6 +946,8 @@ impl HelloTriangleApp {
             p_vertex_attribute_descriptions: attributes_list.as_ptr(),
             ..Default::default()
         };
+        let vertex_input_info_list: Vec<vk::PipelineVertexInputStateCreateInfo> =
+            vec![vertex_input_info];
 
         //Input assembly
         let input_assembly_info = vk::PipelineInputAssemblyStateCreateInfo {
@@ -930,6 +955,8 @@ impl HelloTriangleApp {
             primitive_restart_enable: vk::TRUE,
             ..Default::default()
         };
+        let input_assembly_info_list: Vec<vk::PipelineInputAssemblyStateCreateInfo> =
+            vec![input_assembly_info];
 
         //Viewport
         let Some(swapchain_extent) = self.vulkan_context.swap_chain_extent_used else {
@@ -965,6 +992,7 @@ impl HelloTriangleApp {
             p_scissors: scissor_array.as_ptr(),
             ..Default::default()
         };
+        let viewport_state_list: Vec<vk::PipelineViewportStateCreateInfo> = vec![viewport_state];
 
         //Rasterizer
         //Note to self: chaning PolygonMode to be wireframe or points would be good for debugging
@@ -981,6 +1009,8 @@ impl HelloTriangleApp {
             depth_bias_clamp: 0.0,
             ..Default::default()
         };
+        let rasterizer_info_list: Vec<vk::PipelineRasterizationStateCreateInfo> =
+            vec![rasterizer_info];
 
         //Multisampling
         //(Anti-aliasing)
@@ -994,6 +1024,8 @@ impl HelloTriangleApp {
             alpha_to_one_enable: vk::FALSE,
             ..Default::default()
         };
+        let multisampling_info_list: Vec<vk::PipelineMultisampleStateCreateInfo> =
+            vec![multisampling_info];
 
         //Color blending
         let colour_blend_attatchment = vk::PipelineColorBlendAttachmentState {
@@ -1020,6 +1052,8 @@ impl HelloTriangleApp {
             blend_constants: [0.0, 0.0, 0.0, 0.0],
             ..Default::default()
         };
+        let colour_blend_info_list: Vec<vk::PipelineColorBlendStateCreateInfo> =
+            vec![colour_blend_info];
 
         //Pipeline Layout
         let set_layouts: Vec<vk::DescriptorSetLayout> = Vec::new();
@@ -1050,6 +1084,44 @@ impl HelloTriangleApp {
                     ..Default::default()
                 };
         */
+        let Some(pipeline_layout) = self.vulkan_context.pipeline_layout else {
+            panic!("No pipeline_layout when calling create_graphics_pipeline");
+        };
+        let Some(render_pass) = self.vulkan_context.render_pass else {
+            panic!("No render_pass when calling create_graphics_pipeline");
+        };
+        let pipeline_create_info = vk::GraphicsPipelineCreateInfo {
+            stage_count: 2,
+            p_stages: shader_stages.as_ptr(),
+            p_vertex_input_state: vertex_input_info_list.as_ptr(),
+            p_input_assembly_state: input_assembly_info_list.as_ptr(),
+            p_viewport_state: viewport_state_list.as_ptr(),
+            p_rasterization_state: rasterizer_info_list.as_ptr(),
+            p_multisample_state: multisampling_info_list.as_ptr(),
+            p_color_blend_state: colour_blend_info_list.as_ptr(),
+            p_dynamic_state: dynamic_state_list.as_ptr(),
+            layout: pipeline_layout,
+            render_pass: render_pass,
+            subpass: 0,
+            base_pipeline_index: -1,
+            base_pipeline_handle: vk::Pipeline::null(),
+            //Base pipeline layout isnt implemented because this pipeline
+            //does not inherit from any other pipeline
+            //base_pipeline_index is which index to use as a handle for other
+            //pipeleine creation
+            ..Default::default()
+        };
+
+        unsafe {
+            match (logical_device.create_graphics_pipelines(
+                vk::PipelineCache::null(),
+                &[pipeline_create_info],
+                None,
+            )) {
+                Ok(some) => println!("YAY"),
+                Err(e) => panic!("NOOO"),
+            }
+        }
     }
 
     fn create_render_pass(&mut self) {
@@ -1067,6 +1139,7 @@ impl HelloTriangleApp {
             final_layout: vk::ImageLayout::PRESENT_SRC_KHR,
             ..Default::default()
         };
+        let colour_attatchment_list: Vec<vk::AttachmentDescription> = vec![color_attatchment];
 
         let colour_attatchment_ref = vk::AttachmentReference {
             attachment: 0,
@@ -1081,6 +1154,27 @@ impl HelloTriangleApp {
             p_color_attachments: colour_attatchment_ref_list.as_ptr(),
             ..Default::default()
         };
+        let subpass_list: Vec<vk::SubpassDescription> = vec![subpass];
+
+        let render_pass_info = vk::RenderPassCreateInfo {
+            attachment_count: 1,
+            p_attachments: colour_attatchment_list.as_ptr(),
+            subpass_count: 1,
+            p_subpasses: subpass_list.as_ptr(),
+            ..Default::default()
+        };
+
+        let Some(logical_device) = &self.vulkan_context.logical_device else {
+            panic!("No logical when calling create_render_pass");
+        };
+        unsafe {
+            match logical_device.create_render_pass(&render_pass_info, None) {
+                Ok(render_pass) => self.vulkan_context.render_pass = Some(render_pass),
+                Err(e) => panic!("NOOO"),
+            }
+        }
+
+        //Read from
     }
 }
 
