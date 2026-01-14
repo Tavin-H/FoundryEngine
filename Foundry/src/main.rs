@@ -1008,6 +1008,29 @@ impl HelloTriangleApp {
             blend_constants: [0.0, 0.0, 0.0, 0.0],
             ..Default::default()
         };
+
+        //Pipeline Layout
+        let set_layouts: Vec<vk::DescriptorSetLayout> = Vec::new();
+        let push_constants: Vec<vk::PushConstantRange> = Vec::new();
+        let pipeline_layout_create_info = vk::PipelineLayoutCreateInfo {
+            set_layout_count: 0,
+            p_set_layouts: set_layouts.as_ptr(),
+            push_constant_range_count: 0,
+            p_push_constant_ranges: push_constants.as_ptr(),
+            ..Default::default()
+        };
+
+        let Some(logical_device) = &self.vulkan_context.logical_device else {
+            panic!("No logical_device when calling create_graphics_pipeline");
+        }
+            unsafe {
+
+        match logical_device.create_pipeline_layout(&pipeline_layout_create_info, None) {
+
+            }
+        let pipeline_layout = pipeline_layout_object;
+
+}
     }
 }
 
