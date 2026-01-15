@@ -368,6 +368,11 @@ struct VulkanContext {
     pipeline_layout: Option<vk::PipelineLayout>,
     render_pass: Option<vk::RenderPass>,
     graphics_pipelines: Vec<vk::Pipeline>,
+    frame_buffers: Vec<vk::Framebuffer>,
+
+    //Command stuff
+    command_pool: Option<vk::CommandPool>,
+    command_buffer: Option<vk::CommandBuffer>,
 }
 struct SwapChainSupportDetails {
     capabilities: vk::SurfaceCapabilitiesKHR,
@@ -430,6 +435,9 @@ impl HelloTriangleApp {
         self.create_image_views();
         self.create_render_pass();
         self.create_graphics_pipeline();
+        self.create_frame_buffers();
+        self.create_command_pool();
+        self.create_command_buffer();
     }
     fn main_loop(&self) {}
     fn cleanup(&self) {
@@ -448,6 +456,13 @@ impl HelloTriangleApp {
         let surface_instance = ash::khr::surface::Instance::new(entry, instance);
 
         unsafe {
+            let Some(command_pool) = self.vulkan_context.command_pool else {
+                panic!("No command_pool when cleaning up");
+            };
+            logical_device.destroy_command_pool(command_pool, None);
+            for frame_buffer in self.vulkan_context.frame_buffers.iter() {
+                logical_device.destroy_framebuffer(*frame_buffer, None);
+            }
             for graphics_pipeline in self.vulkan_context.graphics_pipelines.iter() {
                 logical_device.destroy_pipeline(*graphics_pipeline, None);
             }
@@ -1177,6 +1192,60 @@ impl HelloTriangleApp {
             }
         }
     }
+
+    fn create_frame_buffers(&mut self) {
+        let Some(render_pass) = self.vulkan_context.render_pass else {
+            panic!("No render_pass when calling create_frame_buffers");
+        };
+        let Some(swapchain_extent) = self.vulkan_context.swap_chain_extent_used else {
+            panic!("No swap_chain_extent_used when calling create_frame_buffers");
+        };
+        let Some(logical_device) = &self.vulkan_context.logical_device else {
+            panic!("No logical_device when calling create_frame_buffers");
+        };
+        let image_views = &self.vulkan_context.swap_chain_image_views;
+        let swapchain_frame_frame_buffers: Vec<vk::Framebuffer> = Vec::new();
+        let frame_buffer_count = image_views.len();
+        for i in 0..frame_buffer_count {
+            let attatchments: [vk::ImageView; 1] = [image_views[i]];
+            let frame_buffer_info = vk::FramebufferCreateInfo {
+                render_pass: render_pass,
+                attachment_count: 1,
+                p_attachments: attatchments.as_ptr(),
+                width: swapchain_extent.width,
+                height: swapchain_extent.height,
+                layers: 1,
+                ..Default::default()
+            };
+            unsafe {
+                match logical_device.create_framebuffer(&frame_buffer_info, None) {
+                    Ok(frame_buffer) => self.vulkan_context.frame_buffers.push(frame_buffer),
+                    Err(e) => panic!("{}", e),
+                };
+            }
+        }
+    }
+    fn create_command_pool(&mut self) {
+        let Some(logical_device) = &self.vulkan_context.logical_device else {
+            panic!("No logical_device when calling create_command_buffers");
+        };
+        let queue_families = &self.vulkan_context.family_indicies;
+        let pool_info = vk::CommandPoolCreateInfo {
+            flags: vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER,
+            queue_family_index: queue_families.graphics_family,
+            ..Default::default()
+        };
+        unsafe {
+            match logical_device.create_command_pool(&pool_info, None) {
+                Ok(command_pool) => {
+                    self.vulkan_context.command_pool = Some(command_pool);
+                }
+                Err(e) => panic!("{}", e),
+            };
+        }
+    }
+
+    fn create_command_buffer(&mut self) {}
 }
 
 fn main() {
