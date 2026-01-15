@@ -372,7 +372,7 @@ struct VulkanContext {
 
     //Command stuff
     command_pool: Option<vk::CommandPool>,
-    command_buffer: Option<vk::CommandBuffer>,
+    command_buffers: Vec<vk::CommandBuffer>,
 }
 struct SwapChainSupportDetails {
     capabilities: vk::SurfaceCapabilitiesKHR,
@@ -1245,7 +1245,28 @@ impl HelloTriangleApp {
         }
     }
 
-    fn create_command_buffer(&mut self) {}
+    fn create_command_buffer(&mut self) {
+        let Some(pool) = self.vulkan_context.command_pool else {
+            panic!("No command_pool when calling create_command_buffer");
+        };
+        let Some(logical_device) = &self.vulkan_context.logical_device else {
+            panic!("No logical_device when calling create_command_buffer");
+        };
+        let alloc_info = vk::CommandBufferAllocateInfo {
+            command_pool: pool,
+            level: vk::CommandBufferLevel::PRIMARY,
+            command_buffer_count: 1,
+            ..Default::default()
+        };
+        unsafe {
+            match logical_device.allocate_command_buffers(&alloc_info) {
+                Ok(command_buffer_vec) => {
+                    self.vulkan_context.command_buffers = command_buffer_vec;
+                }
+                Err(e) => panic!("{:?}", e),
+            }
+        }
+    }
 }
 
 fn main() {
