@@ -15,6 +15,9 @@ const VALIDATION_LAYERS: &[&str] = &["VK_LAYER_KHRONOS_validation"];
 const WANTED_EXTENSION_NAMES: &[&CStr] = &[vk::KHR_SWAPCHAIN_NAME];
 const FIRST_PRIORITY: f32 = 1.0;
 
+//const main_name: CString = CString::new("main").expect("failed to load c string");
+//const MAIN_NAME: &[i8] = &[109, 97, 105, 110, 0];
+const MAIN_NAME: *const i8 = [109 as i8, 97 as i8, 105 as i8, 110 as i8, 0 as i8].as_ptr();
 //Window
 use ash_window;
 #[allow(deprecated)]
@@ -29,12 +32,13 @@ use winit::window::{Window, WindowAttributes, WindowId};
 use ash::ext::surface_maintenance1;
 use ash::khr::get_physical_device_properties2;
 use ash::vk::{
-    PFN_vkEnumeratePhysicalDevices, SamplerCubicWeightsCreateInfoQCOM, SetLatencyMarkerInfoNV,
+    PFN_vkEnumeratePhysicalDevices, PipelineShaderStageRequiredSubgroupSizeCreateInfoEXT,
+    SamplerCubicWeightsCreateInfoQCOM, SetLatencyMarkerInfoNV,
 };
 use ash::{self, Entry, Instance, vk};
 
 //Math
-use nalgebra_glm::{self as glm, any, log};
+use nalgebra_glm::{self as glm, any, log, pi};
 
 //General
 use bytemuck::cast;
@@ -314,6 +318,15 @@ fn convert_u8_to_u32_vec(bytes: &Vec<u8>) -> Vec<u32> {
     return bytes_as_u32.to_vec();
 }
 
+//DEBUG HELPING FUNCTIONS
+fn print_cstring_as_i8(c_string: &CString, size: i8) {
+    unsafe {
+        for i in 0..(size + 1) {
+            println!("Cstring: {:?}", *(c_string.as_ptr().byte_add(i as usize)));
+        }
+    }
+}
+
 //Vulkan app struct that ties everything together (winit, vulkan, and game engine stuff in the
 //future)
 #[derive(Default)]
@@ -354,7 +367,7 @@ struct VulkanContext {
     //Graphics pipleline
     pipeline_layout: Option<vk::PipelineLayout>,
     render_pass: Option<vk::RenderPass>,
-    graphics_pipeline: Option<vk::Pipeline>,
+    graphics_pipelines: Vec<vk::Pipeline>,
 }
 struct SwapChainSupportDetails {
     capabilities: vk::SurfaceCapabilitiesKHR,
@@ -435,6 +448,9 @@ impl HelloTriangleApp {
         let surface_instance = ash::khr::surface::Instance::new(entry, instance);
 
         unsafe {
+            for graphics_pipeline in self.vulkan_context.graphics_pipelines.iter() {
+                logical_device.destroy_pipeline(*graphics_pipeline, None);
+            }
             let Some(render_pass) = self.vulkan_context.render_pass else {
                 panic!("No render_pass when cleaning up");
             };
@@ -907,22 +923,23 @@ impl HelloTriangleApp {
         self.vulkan_context.shader_list.push(frag_shader_module);
 
         //Make main as a string to avoid a danging pointer
-        let main_name: String = String::from("main");
+        let main_name: CString = CString::new("main").expect("failed to load c string");
+
         let vert_shader_create_info = vk::PipelineShaderStageCreateInfo {
             stage: vk::ShaderStageFlags::VERTEX,
             module: vert_shader_module,
-            p_name: main_name.as_ptr() as *const i8,
+            p_name: main_name.as_ptr(),
             ..Default::default()
         };
         let frag_shader_create_info = vk::PipelineShaderStageCreateInfo {
-            stage: vk::ShaderStageFlags::VERTEX,
+            stage: vk::ShaderStageFlags::FRAGMENT,
             module: frag_shader_module,
-            p_name: main_name.as_ptr() as *const i8,
+            p_name: main_name.as_ptr(),
             ..Default::default()
         };
 
-        let shader_stages: Vec<vk::PipelineShaderStageCreateInfo> =
-            vec![vert_shader_create_info, frag_shader_create_info];
+        let shader_stages: [vk::PipelineShaderStageCreateInfo; 2] =
+            [vert_shader_create_info, frag_shader_create_info];
 
         //--------FIXED FUNCTIONS--------
 
@@ -935,7 +952,6 @@ impl HelloTriangleApp {
             p_dynamic_states: dynamic_states.as_ptr(),
             ..Default::default()
         };
-        let dynamic_state_list: Vec<vk::PipelineDynamicStateCreateInfo> = vec![dynamic_state];
 
         let binding_descriptions_list: Vec<vk::VertexInputBindingDescription> = Vec::new();
         let attributes_list: Vec<vk::VertexInputAttributeDescription> = Vec::new();
@@ -946,17 +962,14 @@ impl HelloTriangleApp {
             p_vertex_attribute_descriptions: attributes_list.as_ptr(),
             ..Default::default()
         };
-        let vertex_input_info_list: Vec<vk::PipelineVertexInputStateCreateInfo> =
-            vec![vertex_input_info];
+        vec![vertex_input_info];
 
         //Input assembly
         let input_assembly_info = vk::PipelineInputAssemblyStateCreateInfo {
             topology: vk::PrimitiveTopology::TRIANGLE_LIST,
-            primitive_restart_enable: vk::TRUE,
+            primitive_restart_enable: vk::FALSE,
             ..Default::default()
         };
-        let input_assembly_info_list: Vec<vk::PipelineInputAssemblyStateCreateInfo> =
-            vec![input_assembly_info];
 
         //Viewport
         let Some(swapchain_extent) = self.vulkan_context.swap_chain_extent_used else {
@@ -971,28 +984,28 @@ impl HelloTriangleApp {
             max_depth: 1.0,
             ..Default::default()
         };
-        let viewport_array: Vec<vk::Viewport> = vec![viewport];
+        //let viewport_array: Vec<vk::Viewport> = vec![viewport];
 
         let scissor = vk::Rect2D {
             offset: vk::Offset2D { x: 0, y: 0 },
             extent: swapchain_extent,
         };
-        let scissor_array: Vec<vk::Rect2D> = vec![scissor];
-
-        let dynamic_state_info = vk::PipelineDynamicStateCreateInfo {
-            dynamic_state_count: dynamic_states.len() as u32,
-            p_dynamic_states: dynamic_states.as_ptr(),
-            ..Default::default()
-        };
+        //let scissor_array: Vec<vk::Rect2D> = vec![scissor];
+        /*
+                let dynamic_state_info = vk::PipelineDynamicStateCreateInfo {
+                    dynamic_state_count: dynamic_states.len() as u32,
+                    p_dynamic_states: dynamic_states.as_ptr(),
+                    ..Default::default()
+                };
+        */
 
         let viewport_state = vk::PipelineViewportStateCreateInfo {
             viewport_count: 1,
-            p_viewports: viewport_array.as_ptr(),
+            //p_viewports: &viewport,
             scissor_count: 1,
-            p_scissors: scissor_array.as_ptr(),
+            //p_scissors: &scissor,
             ..Default::default()
         };
-        let viewport_state_list: Vec<vk::PipelineViewportStateCreateInfo> = vec![viewport_state];
 
         //Rasterizer
         //Note to self: chaning PolygonMode to be wireframe or points would be good for debugging
@@ -1009,8 +1022,6 @@ impl HelloTriangleApp {
             depth_bias_clamp: 0.0,
             ..Default::default()
         };
-        let rasterizer_info_list: Vec<vk::PipelineRasterizationStateCreateInfo> =
-            vec![rasterizer_info];
 
         //Multisampling
         //(Anti-aliasing)
@@ -1019,7 +1030,7 @@ impl HelloTriangleApp {
             sample_shading_enable: vk::FALSE,
             rasterization_samples: vk::SampleCountFlags::TYPE_1,
             min_sample_shading: 1.0,
-            p_sample_mask: sample_mask_list.as_ptr(),
+            //p_sample_mask: sample_mask_list.as_ptr(),
             alpha_to_coverage_enable: 0,
             alpha_to_one_enable: vk::FALSE,
             ..Default::default()
@@ -1042,18 +1053,14 @@ impl HelloTriangleApp {
             ..Default::default()
         };
 
-        let color_attatchments: Vec<vk::PipelineColorBlendAttachmentState> =
-            vec![colour_blend_attatchment];
         let colour_blend_info = vk::PipelineColorBlendStateCreateInfo {
             logic_op_enable: vk::FALSE,
             logic_op: vk::LogicOp::COPY,
             attachment_count: 1,
-            p_attachments: color_attatchments.as_ptr(),
+            p_attachments: &colour_blend_attatchment,
             blend_constants: [0.0, 0.0, 0.0, 0.0],
             ..Default::default()
         };
-        let colour_blend_info_list: Vec<vk::PipelineColorBlendStateCreateInfo> =
-            vec![colour_blend_info];
 
         //Pipeline Layout
         let set_layouts: Vec<vk::DescriptorSetLayout> = Vec::new();
@@ -1077,13 +1084,6 @@ impl HelloTriangleApp {
         }
 
         //Render pass
-        /*
-                let render_pass_info = vk::RenderPassCreateInfo {
-                    attachment_count: 1,
-                    p_attachments: color_attatchments.as_ptr(),
-                    ..Default::default()
-                };
-        */
         let Some(pipeline_layout) = self.vulkan_context.pipeline_layout else {
             panic!("No pipeline_layout when calling create_graphics_pipeline");
         };
@@ -1093,13 +1093,13 @@ impl HelloTriangleApp {
         let pipeline_create_info = vk::GraphicsPipelineCreateInfo {
             stage_count: 2,
             p_stages: shader_stages.as_ptr(),
-            p_vertex_input_state: vertex_input_info_list.as_ptr(),
-            p_input_assembly_state: input_assembly_info_list.as_ptr(),
-            p_viewport_state: viewport_state_list.as_ptr(),
-            p_rasterization_state: rasterizer_info_list.as_ptr(),
-            p_multisample_state: multisampling_info_list.as_ptr(),
-            p_color_blend_state: colour_blend_info_list.as_ptr(),
-            p_dynamic_state: dynamic_state_list.as_ptr(),
+            p_vertex_input_state: &vertex_input_info,
+            p_input_assembly_state: &input_assembly_info,
+            p_viewport_state: &viewport_state,
+            p_rasterization_state: &rasterizer_info,
+            p_multisample_state: &multisampling_info,
+            p_color_blend_state: &colour_blend_info,
+            p_dynamic_state: &dynamic_state,
             layout: pipeline_layout,
             render_pass: render_pass,
             subpass: 0,
@@ -1118,7 +1118,10 @@ impl HelloTriangleApp {
                 &[pipeline_create_info],
                 None,
             )) {
-                Ok(some) => println!("YAY"),
+                Ok(pipeline) => {
+                    println!("Created graphics pipeline");
+                    self.vulkan_context.graphics_pipelines = pipeline;
+                }
                 Err(e) => panic!("NOOO"),
             }
         }
@@ -1173,8 +1176,6 @@ impl HelloTriangleApp {
                 Err(e) => panic!("NOOO"),
             }
         }
-
-        //Read from
     }
 }
 
