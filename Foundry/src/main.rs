@@ -20,6 +20,7 @@ const FIRST_PRIORITY: f32 = 1.0;
 const MAIN_NAME: *const i8 = [109 as i8, 97 as i8, 105 as i8, 110 as i8, 0 as i8].as_ptr();
 //Window
 use ash_window;
+use image;
 #[allow(deprecated)]
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 use winit::application::ApplicationHandler;
@@ -78,7 +79,20 @@ impl ApplicationHandler for HelloTriangleApp {
     }
 }
 
-//----------------Helper funtions-----------------
+//----------------Helper functions-----------------
+
+fn load_icon(file_path: &String) -> winit::window::Icon {
+    let bytes = read_file(file_path);
+    let (icon_rgba, icon_width, icon_height) = {
+        let image = image::load_from_memory(&bytes).unwrap().into_rgba8();
+        let (width, height) = image.dimensions();
+        let rgba = image.into_raw();
+        (rgba, width, height)
+    };
+
+    winit::window::Icon::from_rgba(icon_rgba, icon_width, icon_height).expect("Failed to open icon")
+}
+
 //Change to entry::linked() if having problems
 fn create_instance(context: &mut VulkanContext) -> Option<ash::Instance> {
     let Some(entry) = &context.entry else {
@@ -400,9 +414,12 @@ impl HelloTriangleApp {
     #[allow(deprecated)]
     //Depreciated code is using EventLoop<> instead of ActiveEventLoop
     fn load_window_early(&mut self) -> EventLoop<()> {
-        let window_attributes = Window::default_attributes()
+        let icon_path = String::from("unity.png");
+        let icon = load_icon(&icon_path);
+        let mut window_attributes = Window::default_attributes()
             .with_title("Foundry Engine")
             .with_inner_size(self.size);
+        window_attributes.window_icon = Some(icon);
         let event_loop = EventLoop::new().unwrap();
         self.window = Some(event_loop.create_window(window_attributes).unwrap());
         event_loop
@@ -1272,7 +1289,11 @@ impl HelloTriangleApp {
     fn record_command_buffer(
         logical_device: ash::Device,
         command_buffer: vk::CommandBuffer,
-        image_index: u32,
+        rendeer_pass: vk::RenderPass,
+        swapchain_extent: vk::Extent2D,
+        frame_buffers: Vec<vk::Framebuffer>,
+        image_index: usize,
+        pipeline: vk::Pipeline,
     ) {
         let begin_info = vk::CommandBufferBeginInfo {
             ..Default::default()
@@ -1283,6 +1304,57 @@ impl HelloTriangleApp {
                     println!("Ok");
                 }
                 Err(e) => panic!("{:?}", e),
+            }
+        };
+        let clear_color = vk::ClearValue {
+            color: vk::ClearColorValue {
+                float32: [1.0, 0.0, 0.0, 1.0],
+            },
+        };
+        let render_pass_info = vk::RenderPassBeginInfo {
+            render_pass: rendeer_pass,
+            render_area: vk::Rect2D {
+                offset: vk::Offset2D { x: 0, y: 0 },
+                extent: swapchain_extent,
+            },
+            framebuffer: frame_buffers[image_index],
+            clear_value_count: 1,
+            p_clear_values: &clear_color,
+            ..Default::default()
+        };
+        unsafe {
+            logical_device.cmd_begin_render_pass(
+                command_buffer,
+                &render_pass_info,
+                vk::SubpassContents::INLINE,
+            );
+            logical_device.cmd_bind_pipeline(
+                command_buffer,
+                vk::PipelineBindPoint::GRAPHICS,
+                pipeline,
+            );
+        };
+
+        //Coppied from create_graphics_pipeline if broken check if it matches
+        let viewport = vk::Viewport {
+            x: 0 as f32,
+            y: 0 as f32,
+            width: swapchain_extent.width as f32,
+            height: swapchain_extent.height as f32,
+            min_depth: 0.0,
+            max_depth: 1.0,
+            ..Default::default()
+        };
+        let scissor = vk::Rect2D {
+            offset: vk::Offset2D { x: 0, y: 0 },
+            extent: swapchain_extent,
+        };
+
+        unsafe {
+            logical_device.cmd_draw(command_buffer, 3, 1, 0, 0);
+            match logical_device.end_command_buffer(command_buffer) {
+                Ok(something) => print!("YAYAYAYYAY"),
+                Err(e) => panic!("{}", e),
             }
         }
     }

@@ -11,6 +11,7 @@ nalgebra-glm = "0.19"
 raw-window-handle = "0.6" 
 num = "0.4.3"
 bytemuck = "1.24.0"
+image = "0.25.9"
 
 [dependencies.vulkan-headers]
 version = "0.1.1+1.4.336"
