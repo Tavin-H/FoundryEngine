@@ -32,8 +32,9 @@ use winit::window::{Window, WindowAttributes, WindowId};
 use ash::ext::surface_maintenance1;
 use ash::khr::get_physical_device_properties2;
 use ash::vk::{
-    PFN_vkEnumeratePhysicalDevices, PipelineShaderStageRequiredSubgroupSizeCreateInfoEXT,
-    SamplerCubicWeightsCreateInfoQCOM, SetLatencyMarkerInfoNV,
+    CommandBufferUsageFlags, PFN_vkEnumeratePhysicalDevices,
+    PipelineShaderStageRequiredSubgroupSizeCreateInfoEXT, SamplerCubicWeightsCreateInfoQCOM,
+    SetLatencyMarkerInfoNV,
 };
 use ash::{self, Entry, Instance, vk};
 
@@ -1262,6 +1263,24 @@ impl HelloTriangleApp {
             match logical_device.allocate_command_buffers(&alloc_info) {
                 Ok(command_buffer_vec) => {
                     self.vulkan_context.command_buffers = command_buffer_vec;
+                }
+                Err(e) => panic!("{:?}", e),
+            }
+        }
+    }
+
+    fn record_command_buffer(
+        logical_device: ash::Device,
+        command_buffer: vk::CommandBuffer,
+        image_index: u32,
+    ) {
+        let begin_info = vk::CommandBufferBeginInfo {
+            ..Default::default()
+        };
+        unsafe {
+            match logical_device.begin_command_buffer(command_buffer, &begin_info) {
+                Ok(some) => {
+                    println!("Ok");
                 }
                 Err(e) => panic!("{:?}", e),
             }
