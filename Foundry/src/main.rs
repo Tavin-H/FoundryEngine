@@ -34,8 +34,8 @@ use ash::ext::surface_maintenance1;
 use ash::khr::get_physical_device_properties2;
 use ash::vk::{
     CommandBufferUsageFlags, PFN_vkEnumeratePhysicalDevices,
-    PipelineShaderStageRequiredSubgroupSizeCreateInfoEXT, SamplerCubicWeightsCreateInfoQCOM,
-    SetLatencyMarkerInfoNV,
+    PipelineShaderStageRequiredSubgroupSizeCreateInfoEXT, PresentInfoKHR,
+    SamplerCubicWeightsCreateInfoQCOM, SetLatencyMarkerInfoNV,
 };
 use ash::{self, Entry, Instance, vk};
 
@@ -75,6 +75,15 @@ impl ApplicationHandler for HelloTriangleApp {
                 self.window.as_ref().unwrap();
             }
             _ => (),
+        }
+    }
+
+    fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+        // update logic here
+        //println!("test"); works!
+        self.draw_frame();
+        if let Some(window) = &self.window {
+            window.request_redraw();
         }
     }
 }
@@ -388,6 +397,11 @@ struct VulkanContext {
     //Command stuff
     command_pool: Option<vk::CommandPool>,
     command_buffers: Vec<vk::CommandBuffer>,
+
+    //Syncronization
+    image_available_semaphore: Option<vk::Semaphore>,
+    render_finished_semaphore: Option<vk::Semaphore>,
+    in_flight_fence: Option<vk::Fence>,
 }
 struct SwapChainSupportDetails {
     capabilities: vk::SurfaceCapabilitiesKHR,
@@ -456,6 +470,7 @@ impl HelloTriangleApp {
         self.create_frame_buffers();
         self.create_command_pool();
         self.create_command_buffer();
+        self.create_sync_object();
     }
     fn main_loop(&self) {}
     fn cleanup(&self) {
@@ -474,6 +489,21 @@ impl HelloTriangleApp {
         let surface_instance = ash::khr::surface::Instance::new(entry, instance);
 
         unsafe {
+            //Syncronization
+            let Some(fence) = self.vulkan_context.in_flight_fence else {
+                panic!("No fence when cleaning up");
+            };
+            logical_device.destroy_fence(fence, None);
+            let Some(image_semaphore) = self.vulkan_context.image_available_semaphore else {
+                panic!("No sephamore when cleaning up");
+            };
+            logical_device.destroy_semaphore(image_semaphore, None);
+            let Some(render_semaphore) = self.vulkan_context.image_available_semaphore else {
+                panic!("No sephamore when cleaning up");
+            };
+            logical_device.destroy_semaphore(render_semaphore, None);
+
+            //Command stuff
             let Some(command_pool) = self.vulkan_context.command_pool else {
                 panic!("No command_pool when cleaning up");
             };
@@ -481,6 +511,8 @@ impl HelloTriangleApp {
             for frame_buffer in self.vulkan_context.frame_buffers.iter() {
                 logical_device.destroy_framebuffer(*frame_buffer, None);
             }
+
+            //Graphics pipleline
             for graphics_pipeline in self.vulkan_context.graphics_pipelines.iter() {
                 logical_device.destroy_pipeline(*graphics_pipeline, None);
             }
@@ -1184,6 +1216,15 @@ impl HelloTriangleApp {
         let colour_attatchment_ref_list: Vec<vk::AttachmentReference> =
             vec![colour_attatchment_ref];
 
+        let subpass_dependancy = vk::SubpassDependency {
+            dst_subpass: 0,
+            src_stage_mask: vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
+            src_access_mask: vk::AccessFlags::empty(),
+            dst_stage_mask: vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
+            dst_access_mask: vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
+            dependency_flags: vk::DependencyFlags::BY_REGION,
+            ..Default::default()
+        };
         let subpass = vk::SubpassDescription {
             pipeline_bind_point: vk::PipelineBindPoint::GRAPHICS,
             color_attachment_count: 1,
@@ -1197,6 +1238,8 @@ impl HelloTriangleApp {
             p_attachments: colour_attatchment_list.as_ptr(),
             subpass_count: 1,
             p_subpasses: subpass_list.as_ptr(),
+            dependency_count: 1,
+            p_dependencies: &subpass_dependancy,
             ..Default::default()
         };
 
@@ -1287,11 +1330,11 @@ impl HelloTriangleApp {
     }
 
     fn record_command_buffer(
-        logical_device: ash::Device,
+        logical_device: &ash::Device,
         command_buffer: vk::CommandBuffer,
-        rendeer_pass: vk::RenderPass,
+        render_pass: vk::RenderPass,
         swapchain_extent: vk::Extent2D,
-        frame_buffers: Vec<vk::Framebuffer>,
+        frame_buffers: &Vec<vk::Framebuffer>,
         image_index: usize,
         pipeline: vk::Pipeline,
     ) {
@@ -1301,18 +1344,18 @@ impl HelloTriangleApp {
         unsafe {
             match logical_device.begin_command_buffer(command_buffer, &begin_info) {
                 Ok(some) => {
-                    println!("Ok");
+                    ();
                 }
                 Err(e) => panic!("{:?}", e),
             }
         };
         let clear_color = vk::ClearValue {
             color: vk::ClearColorValue {
-                float32: [1.0, 0.0, 0.0, 1.0],
+                float32: [0.0, 0.0, 0.0, 1.0],
             },
         };
         let render_pass_info = vk::RenderPassBeginInfo {
-            render_pass: rendeer_pass,
+            render_pass: render_pass,
             render_area: vk::Rect2D {
                 offset: vk::Offset2D { x: 0, y: 0 },
                 extent: swapchain_extent,
@@ -1345,17 +1388,142 @@ impl HelloTriangleApp {
             max_depth: 1.0,
             ..Default::default()
         };
+
+        let viewports = [viewport];
+        unsafe {
+            logical_device.cmd_set_viewport(command_buffer, 0, &viewports);
+        }
         let scissor = vk::Rect2D {
             offset: vk::Offset2D { x: 0, y: 0 },
             extent: swapchain_extent,
         };
+        let scissors = [scissor];
 
         unsafe {
+            logical_device.cmd_set_scissor(command_buffer, 0, &scissors);
             logical_device.cmd_draw(command_buffer, 3, 1, 0, 0);
             match logical_device.end_command_buffer(command_buffer) {
-                Ok(something) => print!("YAYAYAYYAY"),
+                Ok(something) => (),
                 Err(e) => panic!("{}", e),
             }
+        }
+    }
+    fn create_sync_object(&mut self) {
+        let Some(logical_device) = &self.vulkan_context.logical_device else {
+            panic!("No logical_device when calling create_sync_object");
+        };
+        let semaphore_info = vk::SemaphoreCreateInfo {
+            ..Default::default()
+        };
+        let fence_info = vk::FenceCreateInfo {
+            flags: vk::FenceCreateFlags::SIGNALED, //It will be active on creation
+            ..Default::default()
+        };
+        unsafe {
+            match logical_device.create_semaphore(&semaphore_info, None) {
+                Ok(semaphore) => self.vulkan_context.image_available_semaphore = Some(semaphore),
+                Err(e) => panic!("{}", e),
+            }
+            match logical_device.create_semaphore(&semaphore_info, None) {
+                Ok(semaphore) => self.vulkan_context.render_finished_semaphore = Some(semaphore),
+                Err(e) => panic!("{}", e),
+            }
+            match logical_device.create_fence(&fence_info, None) {
+                Ok(fence) => self.vulkan_context.in_flight_fence = Some(fence),
+                Err(e) => panic!("{}", e),
+            }
+        }
+    }
+
+    fn draw_frame(&mut self) {
+        let Some(instance) = &self.vulkan_context.instance else {
+            panic!("No instance when calling draw_frame... somehow..?");
+        };
+        let Some(logical_device) = &self.vulkan_context.logical_device else {
+            panic!("No logical_device when calling create_sync_object");
+        };
+        let Some(in_flight_fence) = self.vulkan_context.in_flight_fence else {
+            panic!("No in_flight_fence when calling draw_frame");
+        };
+        let Some(image_available_semaphore) = self.vulkan_context.image_available_semaphore else {
+            panic!("No image_available_semaphore when calling draw_frame");
+        };
+        let Some(render_finished_semaphore) = self.vulkan_context.render_finished_semaphore else {
+            panic!();
+        };
+        let Some(swapchain) = self.vulkan_context.swap_chain else {
+            panic!("No swap_chain when calling draw_frame");
+        };
+        let Some(render_pass) = self.vulkan_context.render_pass else {
+            panic!();
+        };
+        let Some(swapchain_extent) = self.vulkan_context.swap_chain_extent_used else {
+            panic!();
+        };
+        let Some(graphics_queue) = self.vulkan_context.graphics_queue else {
+            panic!();
+        };
+        let swapchain_device = ash::khr::swapchain::Device::new(instance, &logical_device);
+        let fences = [in_flight_fence]; //Avoid array to have better memory management
+        unsafe {
+            //Params: list of fences to wait for / should wait for all? / timeout
+            logical_device.wait_for_fences(&fences, true, u64::MAX);
+            logical_device.reset_fences(&fences);
+
+            let mut image_index: usize = 0;
+            match swapchain_device.acquire_next_image(
+                swapchain,
+                u64::MAX,
+                image_available_semaphore,
+                vk::Fence::null(),
+            ) {
+                Ok((index, bool)) => {
+                    image_index = index as usize;
+                }
+                Err(e) => panic!("{}", e),
+            }
+
+            let main_command_buffer = self.vulkan_context.command_buffers[0];
+            logical_device
+                .reset_command_buffer(main_command_buffer, vk::CommandBufferResetFlags::empty()); //MIGHT
+            //ERROR
+            HelloTriangleApp::record_command_buffer(
+                logical_device,
+                main_command_buffer,
+                render_pass,
+                swapchain_extent,
+                &self.vulkan_context.frame_buffers,
+                image_index,
+                self.vulkan_context.graphics_pipelines[0],
+            );
+            let wait_semaphores = [image_available_semaphore];
+            let wait_stages = [vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];
+            let signal_semaphores = [render_finished_semaphore];
+            let submit_info = vk::SubmitInfo {
+                wait_semaphore_count: 1,
+                p_wait_semaphores: wait_semaphores.as_ptr(),
+                p_wait_dst_stage_mask: wait_stages.as_ptr(),
+                command_buffer_count: 1,
+                p_command_buffers: &main_command_buffer,
+                signal_semaphore_count: 1,
+                p_signal_semaphores: &render_finished_semaphore,
+                ..Default::default()
+            };
+            let submit_infos = [submit_info];
+            match logical_device.queue_submit(graphics_queue, &submit_infos, in_flight_fence) {
+                Ok(something) => (),
+                Err(e) => panic!("{}", e),
+            }
+
+            let image_index_32 = image_index as u32;
+            let present_info = vk::PresentInfoKHR {
+                swapchain_count: 1,
+                p_swapchains: &swapchain,
+                p_image_indices: &image_index_32,
+                ..Default::default()
+            };
+
+            swapchain_device.queue_present(graphics_queue, &present_info);
         }
     }
 }
