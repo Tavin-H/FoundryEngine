@@ -428,7 +428,7 @@ impl HelloTriangleApp {
     #[allow(deprecated)]
     //Depreciated code is using EventLoop<> instead of ActiveEventLoop
     fn load_window_early(&mut self) -> EventLoop<()> {
-        let icon_path = String::from("unity.png");
+        let icon_path = String::from("F-example.jpg");
         let icon = load_icon(&icon_path);
         let mut window_attributes = Window::default_attributes()
             .with_title("Foundry Engine")
