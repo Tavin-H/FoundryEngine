@@ -1,0 +1,5 @@
+# This directory is a Syncthing folder marker.
+# Do not delete.
+
+folderID: 2dnuw-hinsa
+created: 2026-01-17T20:12:48-08:00

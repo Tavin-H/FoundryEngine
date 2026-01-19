@@ -1,0 +1,220 @@
+{
+  "main": {
+    "id": "7f5e58dea42dbe3e",
+    "type": "split",
+    "children": [
+      {
+        "id": "13c015a1589d795f",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "3ac81cd135d74cb8",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "Vulkan Interactions/Logical Device.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "Logical Device"
+            }
+          }
+        ]
+      },
+      {
+        "id": "2f75181846daaf28",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "5627ac845238082f",
+            "type": "leaf",
+            "state": {
+              "type": "graph",
+              "state": {},
+              "icon": "lucide-git-fork",
+              "title": "Graph view"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "a247e5d993c48d3a",
+    "type": "split",
+    "children": [
+      {
+        "id": "6df0ead60454a313",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "e4f08a101222b749",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical",
+                "autoReveal": false
+              },
+              "icon": "lucide-folder-closed",
+              "title": "Files"
+            }
+          },
+          {
+            "id": "27276bf7be69ebc1",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              },
+              "icon": "lucide-search",
+              "title": "Search"
+            }
+          },
+          {
+            "id": "07f321bd1728719e",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {},
+              "icon": "lucide-bookmark",
+              "title": "Bookmarks"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300
+  },
+  "right": {
+    "id": "8c4929b63adc1e4d",
+    "type": "split",
+    "children": [
+      {
+        "id": "84764fad2b5bcb7b",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "561ce4160f679bdb",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-coming-in",
+              "title": "Backlinks"
+            }
+          },
+          {
+            "id": "1fd6ef673843ca2a",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-going-out",
+              "title": "Outgoing links"
+            }
+          },
+          {
+            "id": "71338141ade35879",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-tags",
+              "title": "Tags"
+            }
+          },
+          {
+            "id": "c296f63bd7dba689",
+            "type": "leaf",
+            "state": {
+              "type": "all-properties",
+              "state": {
+                "sortOrder": "frequency",
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-archive",
+              "title": "All properties"
+            }
+          },
+          {
+            "id": "a94e73b8218b07cc",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "followCursor": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-list",
+              "title": "Outline"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300,
+    "collapsed": true
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "switcher:Open quick switcher": false,
+      "graph:Open graph view": false,
+      "canvas:Create new canvas": false,
+      "daily-notes:Open today's daily note": false,
+      "templates:Insert template": false,
+      "command-palette:Open command palette": false,
+      "bases:Create new base": false
+    }
+  },
+  "active": "5627ac845238082f",
+  "lastOpenFiles": [
+    "Vulkan Interactions/Logical Device.md",
+    "Vulkan Interactions/Instance.md",
+    "Vulkan Interactions/Surface Instance.md",
+    "Vulkan Interactions/Surface Instance.md",
+    "Vulkan Interactions/Queue.md",
+    "Vulkan Interactions/Physical Device.md",
+    "Vulkan Interactions/Entry.md",
+    "Vulkan Interactions/Swapchain.md",
+    "Vulkan Interactions/Queue Families.md",
+    "Vulkan Interactions/Command Buffer.md",
+    "Untitled.md",
+    "Vulkan Interactions/Surface.md",
+    "Vulkan Interactions/Introduction to this folder.md",
+    "Vulkan Interactions/Semaphores & Fences.md",
+    "Vulkan Other",
+    "Vulkan Other/Validation layers.md",
+    "Welcome.md",
+    "Vulkan Interactions"
+  ]
+}

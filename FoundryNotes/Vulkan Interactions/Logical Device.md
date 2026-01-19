@@ -1,0 +1,1 @@
+A Logical Device is an instance of Vulkan running on a [[Physical Device]] with it's own resources. Note: each Physical Device can be exposed to multiple logical devices within the same application.
