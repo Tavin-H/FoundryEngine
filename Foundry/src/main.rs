@@ -1187,7 +1187,7 @@ impl HelloTriangleApp {
                     println!("Created graphics pipeline");
                     self.vulkan_context.graphics_pipelines = pipeline;
                 }
-                Err(e) => panic!("NOOO"),
+                Err(e) => panic!("{:?}", e),
             }
         }
     }

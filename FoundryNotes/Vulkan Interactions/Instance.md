@@ -11,3 +11,4 @@ Connections:
 - Used to create a [[Logical Device]]
 - Used to create a [[Surface Instance]]
 - Used to create a [[Surface Instance]]
+- Used as a parameter to create a [[Swapchain Instance]].
