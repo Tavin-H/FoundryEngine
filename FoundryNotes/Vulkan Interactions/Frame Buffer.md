@@ -1,0 +1,1 @@
+A frame buffer is the collection of vkImage

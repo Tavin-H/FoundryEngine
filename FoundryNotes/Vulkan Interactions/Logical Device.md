@@ -4,3 +4,5 @@ Connections:
 - Can retrieve handles to a [[Queue]] using a queue family index.
 - Used as a parameter to create a [[Swapchain Instance]].
 - Used to create a [[Render Pass]].
+- Used to create a [[Graphics Pipeline]].
+- 
