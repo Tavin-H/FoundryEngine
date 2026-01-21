@@ -1,0 +1,1 @@
+https://gpuopen.com/learn/understanding-vulkan-objects/

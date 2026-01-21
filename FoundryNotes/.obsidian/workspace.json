@@ -4,7 +4,7 @@
     "type": "split",
     "children": [
       {
-        "id": "80ebfb77b26719d5",
+        "id": "13c015a1589d795f",
         "type": "tabs",
         "children": [
           {
@@ -13,18 +13,18 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "Vulkan Interactions/Frame Buffer.md",
+                "file": "Vulkan Interactions/Subpass.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "Frame Buffer"
+              "title": "Subpass"
             }
           }
         ]
       },
       {
-        "id": "d94367232ce416b7",
+        "id": "1b9fce8bce6249a8",
         "type": "tabs",
         "children": [
           {
@@ -199,22 +199,25 @@
   "active": "5627ac845238082f",
   "lastOpenFiles": [
     "Vulkan Interactions/Render Pass.md",
+    "Vulkan Interactions/Subpass.md",
     "Vulkan Interactions/Frame Buffer.md",
+    "Vulkan Interactions/Attachment.md",
+    "Vulkan Interactions/Introduction to this folder.md",
+    "cooked.avif",
+    "Vulkan Interactions/Useful links and resources.md",
     "Vulkan Interactions/Logical Device.md",
-    "Vulkan Interactions/Instance.md",
     "Vulkan Interactions/Graphics Pipeline.md",
     "Vulkan Interactions/Shader Module.md",
-    "Vulkan Interactions/Pipeline Layout.md",
-    "Vulkan Interactions/Swapchain Instance.md",
+    "Vulkan Interactions/Instance.md",
     "Vulkan Interactions/Extent.md",
     "Vulkan Interactions/Surface Instance.md",
     "Vulkan Interactions/Image.md",
     "Vulkan Interactions/Image View.md",
     "Vulkan Interactions/Swapchain.md",
+    "Vulkan Interactions/Swapchain Instance.md",
     "Vulkan Interactions/Physical Device.md",
     "Vulkan Interactions/Queue Families.md",
     "Vulkan Interactions/Command Buffer.md",
-    "Vulkan Interactions/Introduction to this folder.md",
     "Vulkan Other/Validation layers.md",
     "Vulkan Interactions/Queue.md",
     "Vulkan Interactions/Entry.md",
