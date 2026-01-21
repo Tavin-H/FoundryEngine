@@ -3,7 +3,7 @@ A collection of [[Image]]s in the GPU memory that are used to render to and pres
 
 Different types:
 - Triple buffer swapchain (what I use) - contains 3 images
-- Double bugger swapchain - contains 2 images
+- Double buffer swapchain - contains 2 images
 
 Different Modes:
 - Immediate - Images that are finished being rendered are presented to the screen right away (Warning: this may result in tearing).

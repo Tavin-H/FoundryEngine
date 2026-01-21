@@ -5,4 +5,4 @@ Connections:
 - Used as a parameter to create a [[Swapchain Instance]].
 - Used to create a [[Render Pass]].
 - Used to create a [[Graphics Pipeline]].
-- 
+- Used to create a [[Command Pool]]
