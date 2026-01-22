@@ -30,3 +30,7 @@ I've chosen each of my tools for specific reasons as stated below.
   - Newer, more modern API compared to others like OpenGL
   - Extremely customizable
   - Lets me get my hands dirty and learn as much as possible
+
+For those of you wanting to create a similar project, or just want to know how vulkan works, I've created some documentation of this project with obsidian. So far I've explained all the interactions between the Vulkan Objects and the significance of each one, but I will keep these notes updated as I progress.
+<img width="957" height="743" alt="Screenshot 2026-01-21 at 10 33 15 PM" src="https://github.com/user-attachments/assets/6bd7971d-d0c5-4c4a-91a5-f2ad3629e3c5" />
+Example of how all interactions are linked
