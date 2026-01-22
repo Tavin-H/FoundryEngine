@@ -13,5 +13,5 @@ vkCmdEndRenderPass(cmd);
 Example of how the render pass is used in the [[Graphics Pipeline]].
 
 Connections:
-- 
+- Check out [[Draw Frame function explained]] for a detailed explanation of how this is used.
 

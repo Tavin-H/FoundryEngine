@@ -6,3 +6,6 @@ Connections:
 - Used to create a [[Render Pass]].
 - Used to create a [[Graphics Pipeline]].
 - Used to create a [[Command Pool]]
+- Used to create a [[Command Buffer]].
+- Used to create sync objects ([[Semaphore]] and [[Fence]]).
+
