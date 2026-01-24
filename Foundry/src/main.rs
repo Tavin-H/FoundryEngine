@@ -27,7 +27,7 @@ use winit::application::ApplicationHandler;
 use winit::dpi::LogicalSize;
 use winit::event::WindowEvent;
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
-use winit::window::{Window, WindowAttributes, WindowId};
+use winit::window::{self, Window, WindowAttributes, WindowId};
 
 //Ash
 use ash::ext::surface_maintenance1;
@@ -69,7 +69,14 @@ impl ApplicationHandler for HelloTriangleApp {
     fn window_event(&mut self, event_loop: &ActiveEventLoop, id: WindowId, event: WindowEvent) {
         match event {
             WindowEvent::CloseRequested => {
+                self.closing = true;
                 event_loop.exit();
+                let Some(logical_device) = &self.vulkan_context.logical_device else {
+                    panic!("AAA");
+                };
+                unsafe {
+                    logical_device.device_wait_idle();
+                }
             }
             WindowEvent::RedrawRequested => {
                 self.window.as_ref().unwrap();
@@ -80,15 +87,25 @@ impl ApplicationHandler for HelloTriangleApp {
 
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
         // update logic here
-        //println!("test"); works!
-        self.draw_frame();
-        if let Some(window) = &self.window {
-            window.request_redraw();
+        if (!self.closing) {
+            self.draw_frame();
+            if let Some(window) = &self.window {
+                window.request_redraw();
+            }
         }
     }
 }
 
 //----------------Helper functions-----------------
+
+fn debug_call_back(
+    message_severity: vk::DebugUtilsMessageSeverityFlagsEXT,
+    message_type: vk::DebugUtilsMessageTypeFlagsEXT,
+    p_callback_data: vk::DebugUtilsMessengerCallbackDataEXT,
+) -> vk::Bool32 {
+    println!("Validation layer: {:?}", p_callback_data.p_message);
+    return vk::FALSE;
+}
 
 fn load_icon(file_path: &String) -> winit::window::Icon {
     let bytes = read_file(file_path);
@@ -359,6 +376,7 @@ struct HelloTriangleApp {
     size: winit::dpi::LogicalSize<f64>,
     event_loop: Option<EventLoop<()>>,
     vulkan_context: VulkanContext,
+    closing: bool,
 }
 //Holds all vulkan objects in a single struct to controll lifetimes more precisely
 #[derive(Default)]
@@ -498,7 +516,8 @@ impl HelloTriangleApp {
                 panic!("No sephamore when cleaning up");
             };
             logical_device.destroy_semaphore(image_semaphore, None);
-            let Some(render_semaphore) = self.vulkan_context.image_available_semaphore else {
+
+            let Some(render_semaphore) = self.vulkan_context.render_finished_semaphore else {
                 panic!("No sephamore when cleaning up");
             };
             logical_device.destroy_semaphore(render_semaphore, None);
