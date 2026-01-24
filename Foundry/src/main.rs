@@ -1207,7 +1207,7 @@ impl HelloTriangleApp {
             final_layout: vk::ImageLayout::PRESENT_SRC_KHR,
             ..Default::default()
         };
-        let colour_attatchment_list: Vec<vk::AttachmentDescription> = vec![color_attatchment];
+        //let colour_attatchment_list: Vec<vk::AttachmentDescription> = vec![color_attatchment];
 
         let colour_attatchment_ref = vk::AttachmentReference {
             attachment: 0,
@@ -1235,9 +1235,9 @@ impl HelloTriangleApp {
 
         let render_pass_info = vk::RenderPassCreateInfo {
             attachment_count: 1,
-            p_attachments: colour_attatchment_list.as_ptr(),
+            p_attachments: &color_attatchment,
             subpass_count: 1,
-            p_subpasses: subpass_list.as_ptr(),
+            p_subpasses: &subpass,
             dependency_count: 1,
             p_dependencies: &subpass_dependancy,
             ..Default::default()
