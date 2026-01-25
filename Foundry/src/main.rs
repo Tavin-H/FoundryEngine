@@ -98,7 +98,6 @@ impl ApplicationHandler for HelloTriangleApp {
         // update logic here
         if (!self.closing) {
             self.draw_frame();
-            println!("Hey");
             if let Some(window) = &self.window {
                 window.request_redraw();
             }
@@ -502,7 +501,7 @@ impl HelloTriangleApp {
         self.create_sync_object();
     }
     fn main_loop(&self) {}
-    fn cleanup(&self) {
+    fn cleanup(&mut self) {
         let Some(instance) = &self.vulkan_context.instance else {
             println!("Instance does not exist");
             return;
@@ -553,11 +552,11 @@ impl HelloTriangleApp {
                 panic!("No command_pool when cleaning up");
             };
             logical_device.destroy_command_pool(command_pool, None);
+            //Graphics pipleline
             for frame_buffer in self.vulkan_context.frame_buffers.iter() {
                 logical_device.destroy_framebuffer(*frame_buffer, None);
             }
 
-            //Graphics pipleline
             for graphics_pipeline in self.vulkan_context.graphics_pipelines.iter() {
                 logical_device.destroy_pipeline(*graphics_pipeline, None);
             }
@@ -954,6 +953,50 @@ impl HelloTriangleApp {
                 }
             }
         }
+    }
+
+    fn cleanup_swapchain(&mut self) {
+        let Some(logical_device) = &self.vulkan_context.logical_device else {
+            panic!("Cannot fetch logical_device during recreate_swapchain");
+        };
+        let Some(instance) = &self.vulkan_context.instance else {
+            panic!("Cannot fetch instance during cleanup_swapchain");
+        };
+        let swapchain_device = ash::khr::swapchain::Device::new(instance, logical_device);
+        unsafe {
+            for image_view in self.vulkan_context.swap_chain_image_views.iter() {
+                logical_device.destroy_image_view(*image_view, None);
+            }
+            for frame_buffer in self.vulkan_context.frame_buffers.iter() {
+                logical_device.destroy_framebuffer(*frame_buffer, None);
+            }
+            let Some(swapchain) = self.vulkan_context.swap_chain else {
+                panic!("No swapchain when cleaning up");
+            };
+
+            //Clear old lists to avoid dangling pointers
+            self.vulkan_context.frame_buffers.clear();
+            self.vulkan_context.swap_chain_image_views.clear();
+
+            swapchain_device.destroy_swapchain(swapchain, None);
+        }
+        println!("cleaned up swapchain");
+    }
+
+    fn recreate_swapchain(&mut self) {
+        let Some(logical_device) = &self.vulkan_context.logical_device else {
+            panic!("Cannot fetch logical_device durring recreate_swapchain");
+        };
+        unsafe {
+            logical_device.device_wait_idle();
+
+            self.cleanup_swapchain();
+
+            self.create_swapchain();
+            self.create_image_views();
+            self.create_frame_buffers();
+        }
+        println!("created new swapchain");
     }
 
     fn create_image_views(&mut self) {
@@ -1497,23 +1540,15 @@ impl HelloTriangleApp {
     }
 
     fn draw_frame(&mut self) {
+        if (self.vulkan_context.frame_buffers.is_empty()) {
+            return;
+        }
         let Some(instance) = &self.vulkan_context.instance else {
             panic!("No instance when calling draw_frame... somehow..?");
         };
         let Some(logical_device) = &self.vulkan_context.logical_device else {
             panic!("No logical_device when calling create_sync_object");
         };
-        /*
-                let Some(in_flight_fence) = self.vulkan_context.in_flight_fence else {
-                    panic!("No in_flight_fence when calling draw_frame");
-                };
-                let Some(image_available_semaphore) = self.vulkan_context.image_available_semaphore else {
-                    panic!("No image_available_semaphore when calling draw_frame");
-                };
-                let Some(render_finished_semaphore) = self.vulkan_context.render_finished_semaphore else {
-                    panic!();
-                };
-        */
         let Some(swapchain) = self.vulkan_context.swap_chain else {
             panic!("No swap_chain when calling draw_frame");
         };
@@ -1527,7 +1562,6 @@ impl HelloTriangleApp {
             panic!();
         };
         let swapchain_device = ash::khr::swapchain::Device::new(instance, &logical_device);
-        //let fences = [in_flight_fence]; //Avoid array to have better memory management
 
         //Get all command buffers and sync objects for current frame
         let current_frame = self.vulkan_context.current_frame as usize;
@@ -1553,7 +1587,17 @@ impl HelloTriangleApp {
                 Ok((index, bool)) => {
                     image_index = index as usize;
                 }
-                Err(e) => panic!("{}", e),
+                Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => {
+                    //panic!("recreate swapchain");
+
+                    println!("\n\n\n recreating \n\n\n");
+                    //panic!("LKSJD");
+                    self.recreate_swapchain();
+                    return;
+                }
+                Err(e) => {
+                    panic!("{}", e);
+                }
             }
 
             logical_device
@@ -1596,7 +1640,23 @@ impl HelloTriangleApp {
                 ..Default::default()
             };
 
-            swapchain_device.queue_present(graphics_queue, &present_info);
+            match swapchain_device.queue_present(graphics_queue, &present_info) {
+                Ok(is_suboptimal) => {
+                    if (is_suboptimal) {
+                        println!("\n\n\n recreating because is_suboptimal \n\n\n");
+                        self.recreate_swapchain();
+                        return;
+                    }
+                }
+                Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => {
+                    println!("\n\n\n recreating during draw \n\n\n");
+                    self.recreate_swapchain();
+                    return;
+                }
+                Err(e) => {
+                    panic!("{:?}", e);
+                }
+            }
             self.vulkan_context.current_frame =
                 (self.vulkan_context.current_frame + 1) % MAX_FRAMES_IN_FLIGHT as i32;
         }
