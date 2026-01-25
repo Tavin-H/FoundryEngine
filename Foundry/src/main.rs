@@ -14,6 +14,7 @@
 const VALIDATION_LAYERS: &[&str] = &["VK_LAYER_KHRONOS_validation"];
 const WANTED_EXTENSION_NAMES: &[&CStr] = &[vk::KHR_SWAPCHAIN_NAME];
 const FIRST_PRIORITY: f32 = 1.0;
+const MAX_FRAMES_IN_FLIGHT: u32 = 2;
 
 //const main_name: CString = CString::new("main").expect("failed to load c string");
 //const MAIN_NAME: &[i8] = &[109, 97, 105, 110, 0];
@@ -52,6 +53,7 @@ use std::mem::swap;
 use std::panic;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::thread::current;
 
 //Setup winit boilerplate
 #[derive(Default)]
@@ -81,6 +83,13 @@ impl ApplicationHandler for HelloTriangleApp {
             WindowEvent::RedrawRequested => {
                 self.window.as_ref().unwrap();
             }
+            WindowEvent::KeyboardInput {
+                device_id,
+                event,
+                is_synthetic,
+            } => {
+                println!("{:?} {:?}", event.physical_key, event.state);
+            }
             _ => (),
         }
     }
@@ -89,6 +98,7 @@ impl ApplicationHandler for HelloTriangleApp {
         // update logic here
         if (!self.closing) {
             self.draw_frame();
+            println!("Hey");
             if let Some(window) = &self.window {
                 window.request_redraw();
             }
@@ -417,9 +427,10 @@ struct VulkanContext {
     command_buffers: Vec<vk::CommandBuffer>,
 
     //Syncronization
-    image_available_semaphore: Option<vk::Semaphore>,
-    render_finished_semaphore: Option<vk::Semaphore>,
-    in_flight_fence: Option<vk::Fence>,
+    image_available_semaphores: Vec<vk::Semaphore>,
+    render_finished_semaphores: Vec<vk::Semaphore>,
+    in_flight_fences: Vec<vk::Fence>,
+    current_frame: i32,
 }
 struct SwapChainSupportDetails {
     capabilities: vk::SurfaceCapabilitiesKHR,
@@ -487,7 +498,7 @@ impl HelloTriangleApp {
         self.create_graphics_pipeline();
         self.create_frame_buffers();
         self.create_command_pool();
-        self.create_command_buffer();
+        self.create_command_buffers();
         self.create_sync_object();
     }
     fn main_loop(&self) {}
@@ -508,19 +519,34 @@ impl HelloTriangleApp {
 
         unsafe {
             //Syncronization
-            let Some(fence) = self.vulkan_context.in_flight_fence else {
-                panic!("No fence when cleaning up");
-            };
-            logical_device.destroy_fence(fence, None);
-            let Some(image_semaphore) = self.vulkan_context.image_available_semaphore else {
-                panic!("No sephamore when cleaning up");
-            };
-            logical_device.destroy_semaphore(image_semaphore, None);
+            /*
+                        let Some(fence) = self.vulkan_context.in_flight_fence else {
+                            panic!("No fence when cleaning up");
+                        };
+                        logical_device.destroy_fence(fence, None);
+                        let Some(image_semaphore) = self.vulkan_context.image_available_semaphore else {
+                            panic!("No sephamore when cleaning up");
+                        };
+                        logical_device.destroy_semaphore(image_semaphore, None);
 
-            let Some(render_semaphore) = self.vulkan_context.render_finished_semaphore else {
-                panic!("No sephamore when cleaning up");
-            };
-            logical_device.destroy_semaphore(render_semaphore, None);
+                        let Some(render_semaphore) = self.vulkan_context.render_finished_semaphore else {
+                            panic!("No sephamore when cleaning up");
+                        };
+                        logical_device.destroy_semaphore(render_semaphore, None);
+            */
+
+            for i in 0..MAX_FRAMES_IN_FLIGHT {
+                logical_device.destroy_semaphore(
+                    self.vulkan_context.render_finished_semaphores[i as usize],
+                    None,
+                );
+                logical_device.destroy_semaphore(
+                    self.vulkan_context.image_available_semaphores[i as usize],
+                    None,
+                );
+                logical_device
+                    .destroy_fence(self.vulkan_context.in_flight_fences[i as usize], None);
+            }
 
             //Command stuff
             let Some(command_pool) = self.vulkan_context.command_pool else {
@@ -1325,7 +1351,7 @@ impl HelloTriangleApp {
         }
     }
 
-    fn create_command_buffer(&mut self) {
+    fn create_command_buffers(&mut self) {
         let Some(pool) = self.vulkan_context.command_pool else {
             panic!("No command_pool when calling create_command_buffer");
         };
@@ -1335,7 +1361,7 @@ impl HelloTriangleApp {
         let alloc_info = vk::CommandBufferAllocateInfo {
             command_pool: pool,
             level: vk::CommandBufferLevel::PRIMARY,
-            command_buffer_count: 1,
+            command_buffer_count: MAX_FRAMES_IN_FLIGHT,
             ..Default::default()
         };
         unsafe {
@@ -1439,17 +1465,33 @@ impl HelloTriangleApp {
             ..Default::default()
         };
         unsafe {
-            match logical_device.create_semaphore(&semaphore_info, None) {
-                Ok(semaphore) => self.vulkan_context.image_available_semaphore = Some(semaphore),
-                Err(e) => panic!("{}", e),
-            }
-            match logical_device.create_semaphore(&semaphore_info, None) {
-                Ok(semaphore) => self.vulkan_context.render_finished_semaphore = Some(semaphore),
-                Err(e) => panic!("{}", e),
-            }
-            match logical_device.create_fence(&fence_info, None) {
-                Ok(fence) => self.vulkan_context.in_flight_fence = Some(fence),
-                Err(e) => panic!("{}", e),
+            for i in 0..MAX_FRAMES_IN_FLIGHT {
+                match logical_device.create_semaphore(&semaphore_info, None) {
+                    Ok(semaphore) => {
+                        //self.vulkan_context.image_available_semaphores[i as usize] = semaphore
+                        self.vulkan_context
+                            .image_available_semaphores
+                            .push(semaphore);
+                    }
+                    Err(e) => panic!("{}", e),
+                }
+                match logical_device.create_semaphore(&semaphore_info, None) {
+                    Ok(semaphore) => {
+                        //self.vulkan_context.render_finished_semaphores[i] = Some(semaphore)
+                        self.vulkan_context
+                            .render_finished_semaphores
+                            .push(semaphore);
+                    }
+                    Err(e) => panic!("{}", e),
+                }
+                match logical_device.create_fence(&fence_info, None) {
+                    Ok(fence) => {
+                        //self.vulkan_context.in_flight_fences[i] = Some(fence)
+                        self.vulkan_context.in_flight_fences.push(fence);
+                    }
+
+                    Err(e) => panic!("{}", e),
+                }
             }
         }
     }
@@ -1461,15 +1503,17 @@ impl HelloTriangleApp {
         let Some(logical_device) = &self.vulkan_context.logical_device else {
             panic!("No logical_device when calling create_sync_object");
         };
-        let Some(in_flight_fence) = self.vulkan_context.in_flight_fence else {
-            panic!("No in_flight_fence when calling draw_frame");
-        };
-        let Some(image_available_semaphore) = self.vulkan_context.image_available_semaphore else {
-            panic!("No image_available_semaphore when calling draw_frame");
-        };
-        let Some(render_finished_semaphore) = self.vulkan_context.render_finished_semaphore else {
-            panic!();
-        };
+        /*
+                let Some(in_flight_fence) = self.vulkan_context.in_flight_fence else {
+                    panic!("No in_flight_fence when calling draw_frame");
+                };
+                let Some(image_available_semaphore) = self.vulkan_context.image_available_semaphore else {
+                    panic!("No image_available_semaphore when calling draw_frame");
+                };
+                let Some(render_finished_semaphore) = self.vulkan_context.render_finished_semaphore else {
+                    panic!();
+                };
+        */
         let Some(swapchain) = self.vulkan_context.swap_chain else {
             panic!("No swap_chain when calling draw_frame");
         };
@@ -1483,17 +1527,27 @@ impl HelloTriangleApp {
             panic!();
         };
         let swapchain_device = ash::khr::swapchain::Device::new(instance, &logical_device);
-        let fences = [in_flight_fence]; //Avoid array to have better memory management
+        //let fences = [in_flight_fence]; //Avoid array to have better memory management
+
+        //Get all command buffers and sync objects for current frame
+        let current_frame = self.vulkan_context.current_frame as usize;
+        let fences = &[self.vulkan_context.in_flight_fences[current_frame]];
+        let current_image_available_semaphore =
+            self.vulkan_context.image_available_semaphores[current_frame];
+        let current_render_finished_semaphore =
+            self.vulkan_context.render_finished_semaphores[current_frame];
+        let current_fence = self.vulkan_context.in_flight_fences[current_frame];
+        let current_command_buffer = self.vulkan_context.command_buffers[current_frame];
         unsafe {
             //Params: list of fences to wait for / should wait for all? / timeout
-            logical_device.wait_for_fences(&fences, true, u64::MAX);
-            logical_device.reset_fences(&fences);
+            logical_device.wait_for_fences(fences, true, u64::MAX);
+            logical_device.reset_fences(fences);
 
             let mut image_index: usize = 0;
             match swapchain_device.acquire_next_image(
                 swapchain,
                 u64::MAX,
-                image_available_semaphore,
+                current_image_available_semaphore,
                 vk::Fence::null(),
             ) {
                 Ok((index, bool)) => {
@@ -1502,34 +1556,34 @@ impl HelloTriangleApp {
                 Err(e) => panic!("{}", e),
             }
 
-            let main_command_buffer = self.vulkan_context.command_buffers[0];
             logical_device
-                .reset_command_buffer(main_command_buffer, vk::CommandBufferResetFlags::empty()); //MIGHT
+                .reset_command_buffer(current_command_buffer, vk::CommandBufferResetFlags::empty()); //MIGHT
             //ERROR
             HelloTriangleApp::record_command_buffer(
                 logical_device,
-                main_command_buffer,
+                current_command_buffer,
                 render_pass,
                 swapchain_extent,
                 &self.vulkan_context.frame_buffers,
                 image_index,
                 self.vulkan_context.graphics_pipelines[0],
             );
-            let wait_semaphores = [image_available_semaphore];
+            let wait_semaphores = [current_image_available_semaphore];
             let wait_stages = [vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];
-            let signal_semaphores = [render_finished_semaphore];
+            let signal_semaphores = [current_render_finished_semaphore];
             let submit_info = vk::SubmitInfo {
                 wait_semaphore_count: 1,
-                p_wait_semaphores: wait_semaphores.as_ptr(),
+                p_wait_semaphores: wait_semaphores.as_ptr(), //CHECK
+                //was wait_semaphores
                 p_wait_dst_stage_mask: wait_stages.as_ptr(),
                 command_buffer_count: 1,
-                p_command_buffers: &main_command_buffer,
+                p_command_buffers: &current_command_buffer,
                 signal_semaphore_count: 1,
-                p_signal_semaphores: &render_finished_semaphore,
+                p_signal_semaphores: signal_semaphores.as_ptr(),
                 ..Default::default()
             };
             let submit_infos = [submit_info];
-            match logical_device.queue_submit(graphics_queue, &submit_infos, in_flight_fence) {
+            match logical_device.queue_submit(graphics_queue, &submit_infos, current_fence) {
                 Ok(something) => (),
                 Err(e) => panic!("{}", e),
             }
@@ -1543,6 +1597,8 @@ impl HelloTriangleApp {
             };
 
             swapchain_device.queue_present(graphics_queue, &present_info);
+            self.vulkan_context.current_frame =
+                (self.vulkan_context.current_frame + 1) % MAX_FRAMES_IN_FLIGHT as i32;
         }
     }
 }
