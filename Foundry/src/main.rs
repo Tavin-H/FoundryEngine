@@ -15,6 +15,7 @@ const VALIDATION_LAYERS: &[&str] = &["VK_LAYER_KHRONOS_validation"];
 const WANTED_EXTENSION_NAMES: &[&CStr] = &[vk::KHR_SWAPCHAIN_NAME];
 const FIRST_PRIORITY: f32 = 1.0;
 const MAX_FRAMES_IN_FLIGHT: u32 = 2;
+//static vertices: [Vertex 3];
 
 //const main_name: CString = CString::new("main").expect("failed to load c string");
 //const MAIN_NAME: &[i8] = &[109, 97, 105, 110, 0];
@@ -24,6 +25,7 @@ use ash_window;
 use image;
 #[allow(deprecated)]
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
+use vulkan_headers::vulkan::vulkan::VkExternalMemoryTensorCreateInfoARM;
 use winit::application::ApplicationHandler;
 use winit::dpi::LogicalSize;
 use winit::event::WindowEvent;
@@ -44,7 +46,7 @@ use ash::{self, Entry, Instance, vk};
 use nalgebra_glm::{self as glm, any, log, pi};
 
 //General
-use bytemuck::cast;
+use bytemuck::{cast, offset_of};
 use num::clamp;
 use std::ffi::{CStr, CString};
 use std::fs;
@@ -386,6 +388,7 @@ struct HelloTriangleApp {
     event_loop: Option<EventLoop<()>>,
     vulkan_context: VulkanContext,
     closing: bool,
+    vertices: Vec<Vertex>,
 }
 //Holds all vulkan objects in a single struct to controll lifetimes more precisely
 #[derive(Default)]
@@ -420,6 +423,7 @@ struct VulkanContext {
     render_pass: Option<vk::RenderPass>,
     graphics_pipelines: Vec<vk::Pipeline>,
     frame_buffers: Vec<vk::Framebuffer>,
+    vertex_buffer: vk::Buffer,
 
     //Command stuff
     command_pool: Option<vk::CommandPool>,
@@ -497,6 +501,7 @@ impl HelloTriangleApp {
         self.create_graphics_pipeline();
         self.create_frame_buffers();
         self.create_command_pool();
+        self.create_vertex_buffer();
         self.create_command_buffers();
         self.create_sync_object();
     }
@@ -556,6 +561,8 @@ impl HelloTriangleApp {
             for frame_buffer in self.vulkan_context.frame_buffers.iter() {
                 logical_device.destroy_framebuffer(*frame_buffer, None);
             }
+
+            logical_device.destroy_buffer(self.vulkan_context.vertex_buffer, None);
 
             for graphics_pipeline in self.vulkan_context.graphics_pipelines.iter() {
                 logical_device.destroy_pipeline(*graphics_pipeline, None);
@@ -1106,12 +1113,14 @@ impl HelloTriangleApp {
             ..Default::default()
         };
 
-        let binding_descriptions_list: Vec<vk::VertexInputBindingDescription> = Vec::new();
-        let attributes_list: Vec<vk::VertexInputAttributeDescription> = Vec::new();
+        let binding_descriptions_list = Vertex::get_binding_descs();
+        let attributes_list = Vertex::get_attribute_descs();
+        //let binding_descriptions_list: Vec<vk::VertexInputBindingDescription> = Vec::new();
+        //let attributes_list: Vec<vk::VertexInputAttributeDescription> = Vec::new();
         let vertex_input_info = vk::PipelineVertexInputStateCreateInfo {
-            vertex_binding_description_count: 0,
+            vertex_binding_description_count: 1,
             p_vertex_binding_descriptions: binding_descriptions_list.as_ptr(),
-            vertex_attribute_description_count: 0,
+            vertex_attribute_description_count: attributes_list.len() as u32,
             p_vertex_attribute_descriptions: attributes_list.as_ptr(),
             ..Default::default()
         };
@@ -1394,6 +1403,30 @@ impl HelloTriangleApp {
         }
     }
 
+    fn create_vertex_buffer(&mut self) {
+        let vertices = &self.vertices;
+        let Some(logical_device) = &self.vulkan_context.logical_device else {
+            panic!("No logical_device when calling create_vertex_buffer");
+        };
+        let buffer_info = vk::BufferCreateInfo {
+            size: (size_of::<Vertex>() * vertices.len()) as u64,
+            usage: vk::BufferUsageFlags::VERTEX_BUFFER,
+            sharing_mode: vk::SharingMode::EXCLUSIVE,
+            ..Default::default()
+        };
+        unsafe {
+            match logical_device.create_buffer(&buffer_info, None) {
+                Ok(buffer) => {
+                    println!("Created Frame Buffer Successfully");
+                    self.vulkan_context.vertex_buffer = buffer;
+                }
+                Err(e) => {
+                    panic!("Failed to create vertex buffer");
+                }
+            }
+        }
+    }
+
     fn create_command_buffers(&mut self) {
         let Some(pool) = self.vulkan_context.command_pool else {
             panic!("No command_pool when calling create_command_buffer");
@@ -1663,9 +1696,62 @@ impl HelloTriangleApp {
     }
 }
 
+#[derive(Default)]
+struct Vertex {
+    pos: glm::Vec2,
+    colour: glm::Vec3,
+}
+
+impl Vertex {
+    fn get_binding_descs() -> Vec<vk::VertexInputBindingDescription> {
+        let vertex_size: u32 = std::mem::size_of::<Vertex>() as u32;
+        let binding_desc = vk::VertexInputBindingDescription {
+            binding: 0,
+            stride: vertex_size,
+            input_rate: vk::VertexInputRate::VERTEX,
+            ..Default::default()
+        };
+        vec![binding_desc]
+    }
+
+    fn get_attribute_descs() -> Vec<vk::VertexInputAttributeDescription> {
+        let position_attribute_desc = vk::VertexInputAttributeDescription {
+            binding: 0,
+            location: 0,
+            format: vk::Format::R32G32_SFLOAT,
+            offset: offset_of!(Vertex, pos) as u32,
+            ..Default::default()
+        };
+        let colour_attribute_desc = vk::VertexInputAttributeDescription {
+            binding: 0,
+            location: 1,
+            format: vk::Format::R32G32B32_SFLOAT,
+            offset: offset_of!(Vertex, colour) as u32,
+            ..Default::default()
+        };
+        let attributes = vec![position_attribute_desc, colour_attribute_desc];
+        attributes
+    }
+}
 fn main() {
+    let vertecies: Vec<Vertex> = vec![
+        Vertex {
+            pos: glm::vec2(0.0, -0.5),
+            colour: glm::vec3(1.0, 0.0, 0.0),
+        },
+        Vertex {
+            pos: glm::vec2(0.5, 0.5),
+            colour: glm::vec3(0.0, 1.0, 0.0),
+        },
+        Vertex {
+            pos: glm::vec2(-0.5, 0.5),
+            colour: glm::vec3(0.0, 0.0, 1.0),
+        },
+    ];
+
     //Vulkan Setup
     let mut app: HelloTriangleApp = HelloTriangleApp {
+        vertices: vertecies,
         ..Default::default()
     };
     app.run(800.0, 600.0);
