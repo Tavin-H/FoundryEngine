@@ -54,6 +54,7 @@ use std::hash::Hash;
 use std::mem::swap;
 use std::panic;
 use std::path::PathBuf;
+use std::ptr;
 use std::sync::Arc;
 use std::thread::current;
 
@@ -1485,6 +1486,25 @@ impl HelloTriangleApp {
                 Ok(buffer_memory) => {
                     self.vulkan_context.vertex_buffer_memory = buffer_memory;
                     logical_device.bind_buffer_memory(buffer, buffer_memory, 0);
+
+                    let map_memory_result = logical_device.map_memory(
+                        buffer_memory,
+                        0,
+                        buffer_info.size,
+                        vk::MemoryMapFlags::empty(),
+                    );
+
+                    let Ok(memory_pointer) = map_memory_result else {
+                        panic!("Failed to map memory for vertex buffer");
+                    };
+                    ptr::copy_nonoverlapping(
+                        self.vertices.as_ptr(),
+                        memory_pointer as *mut Vertex, //Cast void to Vertex Data Type
+                        self.vertices.len(),
+                    );
+                    logical_device.unmap_memory(buffer_memory);
+                    //Research this section for Obsidian notes
+
                     println!("Allocated Vertex Buffer Memory");
                 }
                 Err(e) => panic!("{:?}", e),
@@ -1523,6 +1543,7 @@ impl HelloTriangleApp {
         frame_buffers: &Vec<vk::Framebuffer>,
         image_index: usize,
         pipeline: vk::Pipeline,
+        vertex_buffer: vk::Buffer,
     ) {
         let begin_info = vk::CommandBufferBeginInfo {
             ..Default::default()
@@ -1587,6 +1608,19 @@ impl HelloTriangleApp {
 
         unsafe {
             logical_device.cmd_set_scissor(command_buffer, 0, &scissors);
+
+            //Added from Vertex Buffer
+            logical_device.cmd_bind_pipeline(
+                command_buffer,
+                vk::PipelineBindPoint::GRAPHICS,
+                pipeline,
+            );
+
+            let vertex_buffers = [vertex_buffer];
+            let offsets: [vk::DeviceSize; 1] = [0];
+            logical_device.cmd_bind_vertex_buffers(command_buffer, 0, &vertex_buffers, &offsets);
+            //
+
             logical_device.cmd_draw(command_buffer, 3, 1, 0, 0);
             match logical_device.end_command_buffer(command_buffer) {
                 Ok(something) => (),
@@ -1717,6 +1751,7 @@ impl HelloTriangleApp {
                 &self.vulkan_context.frame_buffers,
                 image_index,
                 self.vulkan_context.graphics_pipelines[0],
+                self.vulkan_context.vertex_buffer,
             );
             let wait_semaphores = [current_image_available_semaphore];
             let wait_stages = [vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];
@@ -1768,6 +1803,7 @@ impl HelloTriangleApp {
 }
 
 #[derive(Default)]
+#[repr(C)]
 struct Vertex {
     pos: glm::Vec2,
     colour: glm::Vec3,
