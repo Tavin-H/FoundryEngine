@@ -33,7 +33,7 @@ use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::window::{self, Window, WindowAttributes, WindowId};
 
 //Ash
-use ash::ext::surface_maintenance1;
+use ash::ext::{device_memory_report, surface_maintenance1};
 use ash::khr::get_physical_device_properties2;
 use ash::vk::{
     CommandBufferUsageFlags, PFN_vkEnumeratePhysicalDevices,
@@ -85,6 +85,13 @@ impl ApplicationHandler for HelloTriangleApp {
             WindowEvent::RedrawRequested => {
                 self.window.as_ref().unwrap();
             }
+            WindowEvent::Resized(size) => {
+                if (size.width == 0 && size.height == 0) {
+                    self.minimized = true;
+                    return;
+                }
+                self.window_resized = true;
+            }
             WindowEvent::KeyboardInput {
                 device_id,
                 event,
@@ -108,6 +115,25 @@ impl ApplicationHandler for HelloTriangleApp {
 }
 
 //----------------Helper functions-----------------
+
+fn find_memory_type(
+    type_filter: u32,
+    property_flags: vk::MemoryPropertyFlags,
+    device_memory_properties: vk::PhysicalDeviceMemoryProperties,
+) -> u32 {
+    for i in 0..device_memory_properties.memory_type_count {
+        //Check if it's the right memory type
+        if (type_filter & (1 << i) != 0) {
+            //Check if it has the right property
+            if (device_memory_properties.memory_types[i as usize].property_flags & property_flags
+                == property_flags)
+            {
+                return i;
+            }
+        }
+    }
+    panic!("Failed to find suitible memory type!");
+}
 
 fn debug_call_back(
     message_severity: vk::DebugUtilsMessageSeverityFlagsEXT,
@@ -389,6 +415,8 @@ struct HelloTriangleApp {
     vulkan_context: VulkanContext,
     closing: bool,
     vertices: Vec<Vertex>,
+    minimized: bool,
+    window_resized: bool,
 }
 //Holds all vulkan objects in a single struct to controll lifetimes more precisely
 #[derive(Default)]
@@ -424,6 +452,7 @@ struct VulkanContext {
     graphics_pipelines: Vec<vk::Pipeline>,
     frame_buffers: Vec<vk::Framebuffer>,
     vertex_buffer: vk::Buffer,
+    vertex_buffer_memory: vk::DeviceMemory,
 
     //Command stuff
     command_pool: Option<vk::CommandPool>,
@@ -563,6 +592,7 @@ impl HelloTriangleApp {
             }
 
             logical_device.destroy_buffer(self.vulkan_context.vertex_buffer, None);
+            logical_device.free_memory(self.vulkan_context.vertex_buffer_memory, None);
 
             for graphics_pipeline in self.vulkan_context.graphics_pipelines.iter() {
                 logical_device.destroy_pipeline(*graphics_pipeline, None);
@@ -987,7 +1017,6 @@ impl HelloTriangleApp {
 
             swapchain_device.destroy_swapchain(swapchain, None);
         }
-        println!("cleaned up swapchain");
     }
 
     fn recreate_swapchain(&mut self) {
@@ -1003,7 +1032,6 @@ impl HelloTriangleApp {
             self.create_image_views();
             self.create_frame_buffers();
         }
-        println!("created new swapchain");
     }
 
     fn create_image_views(&mut self) {
@@ -1408,21 +1436,58 @@ impl HelloTriangleApp {
         let Some(logical_device) = &self.vulkan_context.logical_device else {
             panic!("No logical_device when calling create_vertex_buffer");
         };
+        let Some(physical_device) = &self.vulkan_context.physical_device else {
+            panic!("No physical_device when calling create_vertex_buffer");
+        };
+        let Some(instance) = &self.vulkan_context.instance else {
+            panic!("No instance when calling create_vertex_buffer");
+        };
         let buffer_info = vk::BufferCreateInfo {
             size: (size_of::<Vertex>() * vertices.len()) as u64,
             usage: vk::BufferUsageFlags::VERTEX_BUFFER,
             sharing_mode: vk::SharingMode::EXCLUSIVE,
             ..Default::default()
         };
+
+        //Declare as null (I know this is bad practice but I'm being carefull)
+        //At least I'm not using C++
+        let mut result: ash::prelude::VkResult<vk::Buffer> = Ok(vk::Buffer::null());
         unsafe {
-            match logical_device.create_buffer(&buffer_info, None) {
-                Ok(buffer) => {
-                    println!("Created Frame Buffer Successfully");
-                    self.vulkan_context.vertex_buffer = buffer;
+            result = logical_device.create_buffer(&buffer_info, None);
+        }
+
+        let Ok(buffer) = result else {
+            panic!("Failed to create vertex buffer");
+        };
+        self.vulkan_context.vertex_buffer = buffer;
+
+        unsafe {
+            let mem_requirements: vk::MemoryRequirements =
+                logical_device.get_buffer_memory_requirements(buffer);
+            let device_memory_properties =
+                instance.get_physical_device_memory_properties(*physical_device);
+            let property_flags =
+                vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT;
+
+            let found_memory_type_index = find_memory_type(
+                mem_requirements.memory_type_bits,
+                property_flags,
+                device_memory_properties,
+            );
+
+            let alloc_info = vk::MemoryAllocateInfo {
+                allocation_size: mem_requirements.size,
+                memory_type_index: found_memory_type_index,
+                ..Default::default()
+            };
+
+            match logical_device.allocate_memory(&alloc_info, None) {
+                Ok(buffer_memory) => {
+                    self.vulkan_context.vertex_buffer_memory = buffer_memory;
+                    logical_device.bind_buffer_memory(buffer, buffer_memory, 0);
+                    println!("Allocated Vertex Buffer Memory");
                 }
-                Err(e) => {
-                    panic!("Failed to create vertex buffer");
-                }
+                Err(e) => panic!("{:?}", e),
             }
         }
     }
@@ -1608,9 +1673,16 @@ impl HelloTriangleApp {
         unsafe {
             //Params: list of fences to wait for / should wait for all? / timeout
             logical_device.wait_for_fences(fences, true, u64::MAX);
-            logical_device.reset_fences(fences);
 
             let mut image_index: usize = 0;
+
+            //In case device driver doesn't handle ERROR_OUT_OF_DATE_KHR
+            if (self.window_resized) {
+                self.recreate_swapchain();
+                self.window_resized = false;
+                return;
+            }
+
             match swapchain_device.acquire_next_image(
                 swapchain,
                 u64::MAX,
@@ -1632,6 +1704,7 @@ impl HelloTriangleApp {
                     panic!("{}", e);
                 }
             }
+            logical_device.reset_fences(fences);
 
             logical_device
                 .reset_command_buffer(current_command_buffer, vk::CommandBufferResetFlags::empty()); //MIGHT
@@ -1676,13 +1749,11 @@ impl HelloTriangleApp {
             match swapchain_device.queue_present(graphics_queue, &present_info) {
                 Ok(is_suboptimal) => {
                     if (is_suboptimal) {
-                        println!("\n\n\n recreating because is_suboptimal \n\n\n");
                         self.recreate_swapchain();
                         return;
                     }
                 }
                 Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => {
-                    println!("\n\n\n recreating during draw \n\n\n");
                     self.recreate_swapchain();
                     return;
                 }
