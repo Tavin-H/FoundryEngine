@@ -117,6 +117,72 @@ impl ApplicationHandler for HelloTriangleApp {
 
 //----------------Helper functions-----------------
 
+//Takes creation info and returns a buffer as well as the device memory where the buffer is
+//located
+fn create_buffer(
+    size: vk::DeviceSize,
+    usage: vk::BufferUsageFlags,
+    property_flags: vk::MemoryPropertyFlags,
+    context: &VulkanContext,
+) -> (vk::Buffer, vk::DeviceMemory) {
+    let Some(logical_device) = &context.logical_device else {
+        panic!("No logical_device when calling create_vertex_buffer");
+    };
+    let Some(physical_device) = &context.physical_device else {
+        panic!("No physical_device when calling create_vertex_buffer");
+    };
+    let Some(instance) = &context.instance else {
+        panic!("No instance when calling create_vertex_buffer");
+    };
+    let buffer_info = vk::BufferCreateInfo {
+        size: size as u64,
+        usage: usage,
+        sharing_mode: vk::SharingMode::EXCLUSIVE,
+        ..Default::default()
+    };
+
+    //Declare as null (I know this is bad practice but I'm being carefull)
+    //At least I'm not using C++
+    let mut result: ash::prelude::VkResult<vk::Buffer> = Ok(vk::Buffer::null());
+    unsafe {
+        result = logical_device.create_buffer(&buffer_info, None);
+    }
+
+    let Ok(buffer) = result else {
+        panic!("Failed to create vertex buffer");
+    };
+
+    unsafe {
+        let mem_requirements: vk::MemoryRequirements =
+            logical_device.get_buffer_memory_requirements(buffer);
+        let device_memory_properties =
+            instance.get_physical_device_memory_properties(*physical_device);
+
+        let found_memory_type_index = find_memory_type(
+            mem_requirements.memory_type_bits,
+            property_flags,
+            device_memory_properties,
+        );
+
+        let alloc_info = vk::MemoryAllocateInfo {
+            allocation_size: mem_requirements.size,
+            memory_type_index: found_memory_type_index,
+            ..Default::default()
+        };
+
+        match logical_device.allocate_memory(&alloc_info, None) {
+            Ok(buffer_memory) => {
+                //self.vulkan_context.vertex_buffer_memory = buffer_memory;
+                logical_device.bind_buffer_memory(buffer, buffer_memory, 0);
+
+                println!("Allocated Vertex Buffer Memory");
+                (buffer, buffer_memory)
+            }
+            Err(e) => panic!("{:?}", e),
+        }
+    }
+}
+
 fn find_memory_type(
     type_filter: u32,
     property_flags: vk::MemoryPropertyFlags,
@@ -1433,83 +1499,39 @@ impl HelloTriangleApp {
     }
 
     fn create_vertex_buffer(&mut self) {
-        let vertices = &self.vertices;
         let Some(logical_device) = &self.vulkan_context.logical_device else {
-            panic!("No logical_device when calling create_vertex_buffer");
+            panic!("No logical device when calling create_vertex_buffer");
         };
-        let Some(physical_device) = &self.vulkan_context.physical_device else {
-            panic!("No physical_device when calling create_vertex_buffer");
-        };
-        let Some(instance) = &self.vulkan_context.instance else {
-            panic!("No instance when calling create_vertex_buffer");
-        };
-        let buffer_info = vk::BufferCreateInfo {
-            size: (size_of::<Vertex>() * vertices.len()) as u64,
-            usage: vk::BufferUsageFlags::VERTEX_BUFFER,
-            sharing_mode: vk::SharingMode::EXCLUSIVE,
-            ..Default::default()
-        };
-
-        //Declare as null (I know this is bad practice but I'm being carefull)
-        //At least I'm not using C++
-        let mut result: ash::prelude::VkResult<vk::Buffer> = Ok(vk::Buffer::null());
+        let vertices = &self.vertices;
+        let vertex_buffer_size = size_of::<Vertex>() * vertices.len();
+        let (vertex_buffer, vertex_buffer_memory) = create_buffer(
+            vertex_buffer_size as u64,
+            vk::BufferUsageFlags::VERTEX_BUFFER,
+            vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
+            &self.vulkan_context,
+        );
+        //MAP MEMORY
         unsafe {
-            result = logical_device.create_buffer(&buffer_info, None);
-        }
-
-        let Ok(buffer) = result else {
-            panic!("Failed to create vertex buffer");
-        };
-        self.vulkan_context.vertex_buffer = buffer;
-
-        unsafe {
-            let mem_requirements: vk::MemoryRequirements =
-                logical_device.get_buffer_memory_requirements(buffer);
-            let device_memory_properties =
-                instance.get_physical_device_memory_properties(*physical_device);
-            let property_flags =
-                vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT;
-
-            let found_memory_type_index = find_memory_type(
-                mem_requirements.memory_type_bits,
-                property_flags,
-                device_memory_properties,
+            let map_memory_result = logical_device.map_memory(
+                vertex_buffer_memory,
+                0,
+                vertex_buffer_size as u64,
+                vk::MemoryMapFlags::empty(),
             );
 
-            let alloc_info = vk::MemoryAllocateInfo {
-                allocation_size: mem_requirements.size,
-                memory_type_index: found_memory_type_index,
-                ..Default::default()
+            let Ok(memory_pointer) = map_memory_result else {
+                panic!("Failed to map memory for vertex buffer");
             };
 
-            match logical_device.allocate_memory(&alloc_info, None) {
-                Ok(buffer_memory) => {
-                    self.vulkan_context.vertex_buffer_memory = buffer_memory;
-                    logical_device.bind_buffer_memory(buffer, buffer_memory, 0);
-
-                    let map_memory_result = logical_device.map_memory(
-                        buffer_memory,
-                        0,
-                        buffer_info.size,
-                        vk::MemoryMapFlags::empty(),
-                    );
-
-                    let Ok(memory_pointer) = map_memory_result else {
-                        panic!("Failed to map memory for vertex buffer");
-                    };
-                    ptr::copy_nonoverlapping(
-                        self.vertices.as_ptr(),
-                        memory_pointer as *mut Vertex, //Cast void to Vertex Data Type
-                        self.vertices.len(),
-                    );
-                    logical_device.unmap_memory(buffer_memory);
-                    //Research this section for Obsidian notes
-
-                    println!("Allocated Vertex Buffer Memory");
-                }
-                Err(e) => panic!("{:?}", e),
-            }
+            ptr::copy_nonoverlapping(
+                self.vertices.as_ptr(),
+                memory_pointer as *mut Vertex, //Cast void to Vertex Data Type
+                self.vertices.len(),
+            );
+            logical_device.unmap_memory(vertex_buffer_memory);
         }
+        self.vulkan_context.vertex_buffer_memory = vertex_buffer_memory;
+        self.vulkan_context.vertex_buffer = vertex_buffer;
     }
 
     fn create_command_buffers(&mut self) {
@@ -1844,7 +1866,7 @@ fn main() {
     let vertecies: Vec<Vertex> = vec![
         Vertex {
             pos: glm::vec2(0.0, -0.5),
-            colour: glm::vec3(1.0, 0.0, 0.0),
+            colour: glm::vec3(1.0, 1.0, 1.0),
         },
         Vertex {
             pos: glm::vec2(0.5, 0.5),
