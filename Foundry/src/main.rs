@@ -183,6 +183,62 @@ fn create_buffer(
     }
 }
 
+fn copy_buffer(
+    src_buffer: vk::Buffer,
+    dst_buffer: vk::Buffer,
+    size: vk::DeviceSize,
+    context: &VulkanContext,
+) {
+    let Some(logical_device) = &context.logical_device else {
+        panic!("No logical_device when calling copy_buffer");
+    };
+    let Some(command_pool) = context.command_pool else {
+        panic!("No command_pool when calling copy_buffer");
+    };
+    let Some(graphics_queue) = context.graphics_queue else {
+        panic!("No graphics_queue when calling copy_region");
+    };
+    let alloc_info = vk::CommandBufferAllocateInfo {
+        level: vk::CommandBufferLevel::PRIMARY,
+        command_pool: command_pool,
+        command_buffer_count: 1,
+        ..Default::default()
+    };
+
+    unsafe {
+        let command_buffer_result = logical_device.allocate_command_buffers(&alloc_info);
+
+        let Ok(command_buffers) = command_buffer_result else {
+            panic!("Failed to create command_buffer");
+        };
+
+        let begin_info = vk::CommandBufferBeginInfo {
+            ..Default::default()
+        };
+
+        logical_device.begin_command_buffer(command_buffers[0], &begin_info);
+        let copy_region = vk::BufferCopy {
+            src_offset: 0,
+            dst_offset: 0,
+            size: size,
+            ..Default::default()
+        };
+        let copy_regions = [copy_region];
+        logical_device.cmd_copy_buffer(command_buffers[0], src_buffer, dst_buffer, &copy_regions);
+        logical_device.end_command_buffer(command_buffers[0]);
+
+        let submit_info = vk::SubmitInfo {
+            command_buffer_count: 1,
+            p_command_buffers: command_buffers.as_ptr(),
+            ..Default::default()
+        };
+
+        logical_device.queue_submit(graphics_queue, &[submit_info], vk::Fence::null());
+        logical_device.queue_wait_idle(graphics_queue);
+        logical_device.free_command_buffers(command_pool, &command_buffers);
+    }
+}
+
 fn find_memory_type(
     type_filter: u32,
     property_flags: vk::MemoryPropertyFlags,
@@ -1504,34 +1560,56 @@ impl HelloTriangleApp {
         };
         let vertices = &self.vertices;
         let vertex_buffer_size = size_of::<Vertex>() * vertices.len();
-        let (vertex_buffer, vertex_buffer_memory) = create_buffer(
+
+        //Create Staging buffer
+        let (staging_buffer, staging_buffer_memory) = create_buffer(
             vertex_buffer_size as u64,
-            vk::BufferUsageFlags::VERTEX_BUFFER,
+            vk::BufferUsageFlags::TRANSFER_SRC,
             vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
             &self.vulkan_context,
         );
+
         //MAP MEMORY
         unsafe {
-            let map_memory_result = logical_device.map_memory(
-                vertex_buffer_memory,
+            let staging_map_memory_result = logical_device.map_memory(
+                staging_buffer_memory,
                 0,
                 vertex_buffer_size as u64,
                 vk::MemoryMapFlags::empty(),
             );
 
-            let Ok(memory_pointer) = map_memory_result else {
+            let Ok(staging_memory_pointer) = staging_map_memory_result else {
                 panic!("Failed to map memory for vertex buffer");
             };
 
             ptr::copy_nonoverlapping(
                 self.vertices.as_ptr(),
-                memory_pointer as *mut Vertex, //Cast void to Vertex Data Type
+                staging_memory_pointer as *mut Vertex, //Cast void to Vertex Data Type
                 self.vertices.len(),
             );
-            logical_device.unmap_memory(vertex_buffer_memory);
+            logical_device.unmap_memory(staging_buffer_memory);
         }
+
+        //Create Vertex buffer
+        let (vertex_buffer, vertex_buffer_memory) = create_buffer(
+            vertex_buffer_size as u64,
+            vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::VERTEX_BUFFER,
+            vk::MemoryPropertyFlags::DEVICE_LOCAL,
+            &self.vulkan_context,
+        );
         self.vulkan_context.vertex_buffer_memory = vertex_buffer_memory;
         self.vulkan_context.vertex_buffer = vertex_buffer;
+
+        copy_buffer(
+            staging_buffer,
+            vertex_buffer,
+            vertex_buffer_size as u64,
+            &self.vulkan_context,
+        );
+        unsafe {
+            logical_device.destroy_buffer(staging_buffer, None);
+            logical_device.free_memory(staging_buffer_memory, None);
+        }
     }
 
     fn create_command_buffers(&mut self) {
@@ -1866,7 +1944,7 @@ fn main() {
     let vertecies: Vec<Vertex> = vec![
         Vertex {
             pos: glm::vec2(0.0, -0.5),
-            colour: glm::vec3(1.0, 1.0, 1.0),
+            colour: glm::vec3(1.0, 0.0, 0.0),
         },
         Vertex {
             pos: glm::vec2(0.5, 0.5),
