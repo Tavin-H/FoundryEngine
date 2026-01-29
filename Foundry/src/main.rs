@@ -538,6 +538,7 @@ struct HelloTriangleApp {
     vulkan_context: VulkanContext,
     closing: bool,
     vertices: Vec<Vertex>,
+    indices: Vec<u32>,
     minimized: bool,
     window_resized: bool,
 }
@@ -576,6 +577,8 @@ struct VulkanContext {
     frame_buffers: Vec<vk::Framebuffer>,
     vertex_buffer: vk::Buffer,
     vertex_buffer_memory: vk::DeviceMemory,
+    index_buffer: vk::Buffer,
+    index_buffer_memory: vk::DeviceMemory,
 
     //Command stuff
     command_pool: Option<vk::CommandPool>,
@@ -654,6 +657,7 @@ impl HelloTriangleApp {
         self.create_frame_buffers();
         self.create_command_pool();
         self.create_vertex_buffer();
+        self.create_index_buffer();
         self.create_command_buffers();
         self.create_sync_object();
     }
@@ -714,8 +718,12 @@ impl HelloTriangleApp {
                 logical_device.destroy_framebuffer(*frame_buffer, None);
             }
 
+            //Buffers
             logical_device.destroy_buffer(self.vulkan_context.vertex_buffer, None);
             logical_device.free_memory(self.vulkan_context.vertex_buffer_memory, None);
+
+            logical_device.destroy_buffer(self.vulkan_context.index_buffer, None);
+            logical_device.free_memory(self.vulkan_context.index_buffer_memory, None);
 
             for graphics_pipeline in self.vulkan_context.graphics_pipelines.iter() {
                 logical_device.destroy_pipeline(*graphics_pipeline, None);
@@ -1612,6 +1620,65 @@ impl HelloTriangleApp {
         }
     }
 
+    //Almost the same as create_vertex_buffer
+    fn create_index_buffer(&mut self) {
+        let Some(logical_device) = &self.vulkan_context.logical_device else {
+            panic!("No logical device when calling create_vertex_buffer");
+        };
+        let indices = &self.indices;
+        let indices_buffer_size = size_of::<u32>() * indices.len();
+
+        //Create Staging buffer
+        let (staging_buffer, staging_buffer_memory) = create_buffer(
+            indices_buffer_size as u64,
+            vk::BufferUsageFlags::TRANSFER_SRC,
+            vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
+            &self.vulkan_context,
+        );
+
+        //MAP MEMORY
+        unsafe {
+            let staging_map_memory_result = logical_device.map_memory(
+                staging_buffer_memory,
+                0,
+                indices_buffer_size as u64,
+                vk::MemoryMapFlags::empty(),
+            );
+
+            let Ok(staging_memory_pointer) = staging_map_memory_result else {
+                panic!("Failed to map memory for vertex buffer");
+            };
+
+            ptr::copy_nonoverlapping(
+                self.indices.as_ptr(),
+                staging_memory_pointer as *mut u32, //Cast void to Vertex Data Type
+                self.indices.len(),
+            );
+            logical_device.unmap_memory(staging_buffer_memory);
+        }
+
+        //Create Index buffer
+        let (indices_buffer, indices_buffer_memory) = create_buffer(
+            indices_buffer_size as u64,
+            vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::INDEX_BUFFER,
+            vk::MemoryPropertyFlags::DEVICE_LOCAL,
+            &self.vulkan_context,
+        );
+        self.vulkan_context.index_buffer = indices_buffer;
+        self.vulkan_context.index_buffer_memory = indices_buffer_memory;
+
+        copy_buffer(
+            staging_buffer,
+            indices_buffer,
+            indices_buffer_size as u64,
+            &self.vulkan_context,
+        );
+        unsafe {
+            logical_device.destroy_buffer(staging_buffer, None);
+            logical_device.free_memory(staging_buffer_memory, None);
+        }
+    }
+
     fn create_command_buffers(&mut self) {
         let Some(pool) = self.vulkan_context.command_pool else {
             panic!("No command_pool when calling create_command_buffer");
@@ -1644,6 +1711,8 @@ impl HelloTriangleApp {
         image_index: usize,
         pipeline: vk::Pipeline,
         vertex_buffer: vk::Buffer,
+        index_buffer: vk::Buffer,
+        indices_count: u32,
     ) {
         let begin_info = vk::CommandBufferBeginInfo {
             ..Default::default()
@@ -1717,11 +1786,18 @@ impl HelloTriangleApp {
             );
 
             let vertex_buffers = [vertex_buffer];
+            let index_buffers = [index_buffer];
             let offsets: [vk::DeviceSize; 1] = [0];
             logical_device.cmd_bind_vertex_buffers(command_buffer, 0, &vertex_buffers, &offsets);
-            //
+            logical_device.cmd_bind_index_buffer(
+                command_buffer,
+                index_buffer,
+                0,
+                vk::IndexType::UINT32,
+            );
 
-            logical_device.cmd_draw(command_buffer, 3, 1, 0, 0);
+            //logical_device.cmd_draw(command_buffer, 3, 1, 0, 0);
+            logical_device.cmd_draw_indexed(command_buffer, indices_count, 1, 0, 0, 0);
             match logical_device.end_command_buffer(command_buffer) {
                 Ok(something) => (),
                 Err(e) => panic!("{}", e),
@@ -1852,6 +1928,8 @@ impl HelloTriangleApp {
                 image_index,
                 self.vulkan_context.graphics_pipelines[0],
                 self.vulkan_context.vertex_buffer,
+                self.vulkan_context.index_buffer,
+                self.indices.len() as u32,
             );
             let wait_semaphores = [current_image_available_semaphore];
             let wait_stages = [vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];
@@ -1940,15 +2018,20 @@ impl Vertex {
         attributes
     }
 }
+
 fn main() {
     let vertecies: Vec<Vertex> = vec![
         Vertex {
-            pos: glm::vec2(0.0, -0.5),
+            pos: glm::vec2(-0.5, -0.5),
             colour: glm::vec3(1.0, 0.0, 0.0),
         },
         Vertex {
-            pos: glm::vec2(0.5, 0.5),
+            pos: glm::vec2(0.5, -0.5),
             colour: glm::vec3(0.0, 1.0, 0.0),
+        },
+        Vertex {
+            pos: glm::vec2(0.5, 0.5),
+            colour: glm::vec3(0.0, 0.0, 1.0),
         },
         Vertex {
             pos: glm::vec2(-0.5, 0.5),
@@ -1956,8 +2039,12 @@ fn main() {
         },
     ];
 
+    //May need to make u32 to hold more vertices
+    let indices: Vec<u32> = vec![0, 1, 2, 2, 3, 0];
+
     //Vulkan Setup
     let mut app: HelloTriangleApp = HelloTriangleApp {
+        indices: indices,
         vertices: vertecies,
         ..Default::default()
     };
