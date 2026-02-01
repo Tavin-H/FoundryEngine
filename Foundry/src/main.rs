@@ -571,6 +571,7 @@ struct VulkanContext {
     shader_list: Vec<vk::ShaderModule>,
 
     //Graphics pipleline
+    descriptor_set_layout: vk::DescriptorSetLayout,
     pipeline_layout: Option<vk::PipelineLayout>,
     render_pass: Option<vk::RenderPass>,
     graphics_pipelines: Vec<vk::Pipeline>,
@@ -653,6 +654,7 @@ impl HelloTriangleApp {
         self.create_swapchain();
         self.create_image_views();
         self.create_render_pass();
+        self.create_descriptor_set_layout();
         self.create_graphics_pipeline();
         self.create_frame_buffers();
         self.create_command_pool();
@@ -738,6 +740,9 @@ impl HelloTriangleApp {
                 panic!("No pipeline_layout when cleaning up");
             };
             logical_device.destroy_pipeline_layout(pipeline_layout, None);
+
+            logical_device
+                .destroy_descriptor_set_layout(self.vulkan_context.descriptor_set_layout, None);
 
             //Graphics pipleline handles
             for image_view in self.vulkan_context.swap_chain_image_views.iter() {
@@ -1228,6 +1233,35 @@ impl HelloTriangleApp {
         }
     }
 
+    fn create_descriptor_set_layout(&mut self) {
+        let Some(logical_device) = &self.vulkan_context.logical_device else {
+            panic!("No logical_device when calling create_descriptor_set_layout");
+        };
+        let ubo_layout_binding = vk::DescriptorSetLayoutBinding {
+            binding: 0,
+            descriptor_type: vk::DescriptorType::UNIFORM_BUFFER,
+            descriptor_count: 1,
+            stage_flags: vk::ShaderStageFlags::VERTEX,
+            ..Default::default()
+        };
+
+        let layout_info = vk::DescriptorSetLayoutCreateInfo {
+            binding_count: 1,
+            p_bindings: &ubo_layout_binding,
+            ..Default::default()
+        };
+
+        unsafe {
+            match logical_device.create_descriptor_set_layout(&layout_info, None) {
+                Ok(descriptor_set_layout) => {
+                    println!("Created descriptor set layout");
+                    self.vulkan_context.descriptor_set_layout = descriptor_set_layout;
+                }
+                Err(e) => panic!("{:?}", e),
+            }
+        }
+    }
+
     fn create_graphics_pipeline(&mut self) {
         //Load shader modules
         let vert_shader_path = String::from("./shaders/vert.spv");
@@ -1384,10 +1418,12 @@ impl HelloTriangleApp {
         };
 
         //Pipeline Layout
-        let set_layouts: Vec<vk::DescriptorSetLayout> = Vec::new();
+        //let set_layouts: Vec<vk::DescriptorSetLayout> = Vec::new();
+        let set_layouts: [vk::DescriptorSetLayout; 1] = [self.vulkan_context.descriptor_set_layout];
+
         let push_constants: Vec<vk::PushConstantRange> = Vec::new();
         let pipeline_layout_create_info = vk::PipelineLayoutCreateInfo {
-            set_layout_count: 0,
+            set_layout_count: 1,
             p_set_layouts: set_layouts.as_ptr(),
             push_constant_range_count: 0,
             p_push_constant_ranges: push_constants.as_ptr(),
@@ -1987,6 +2023,13 @@ struct Vertex {
     colour: glm::Vec3,
 }
 
+#[derive(Default)]
+struct UniformBufferObject {
+    model: glm::Mat4,
+    view: glm::Mat4,
+    proj: glm::Mat4,
+}
+
 impl Vertex {
     fn get_binding_descs() -> Vec<vk::VertexInputBindingDescription> {
         let vertex_size: u32 = std::mem::size_of::<Vertex>() as u32;
@@ -2050,3 +2093,7 @@ fn main() {
     };
     app.run(800.0, 600.0);
 }
+
+//TODO to expand
+//Put all buffers in one buffer with offsets for cache friendly design
+//
