@@ -575,11 +575,15 @@ struct VulkanContext {
     pipeline_layout: Option<vk::PipelineLayout>,
     render_pass: Option<vk::RenderPass>,
     graphics_pipelines: Vec<vk::Pipeline>,
+    //Buffers
     frame_buffers: Vec<vk::Framebuffer>,
     vertex_buffer: vk::Buffer,
     vertex_buffer_memory: vk::DeviceMemory,
     index_buffer: vk::Buffer,
     index_buffer_memory: vk::DeviceMemory,
+    uniform_buffers: Vec<vk::Buffer>,
+    uniform_buffers_memory: Vec<vk::DeviceMemory>,
+    uniform_buffers_mapped: Vec<*mut core::ffi::c_void>,
 
     //Command stuff
     command_pool: Option<vk::CommandPool>,
@@ -660,6 +664,7 @@ impl HelloTriangleApp {
         self.create_command_pool();
         self.create_vertex_buffer();
         self.create_index_buffer();
+        self.create_uniform_buffer();
         self.create_command_buffers();
         self.create_sync_object();
     }
@@ -721,6 +726,12 @@ impl HelloTriangleApp {
             }
 
             //Buffers
+            for i in 0..MAX_FRAMES_IN_FLIGHT {
+                logical_device
+                    .destroy_buffer(self.vulkan_context.uniform_buffers[i as usize], None);
+                logical_device
+                    .free_memory(self.vulkan_context.uniform_buffers_memory[i as usize], None);
+            }
             logical_device.destroy_buffer(self.vulkan_context.vertex_buffer, None);
             logical_device.free_memory(self.vulkan_context.vertex_buffer_memory, None);
 
@@ -1734,6 +1745,42 @@ impl HelloTriangleApp {
                     self.vulkan_context.command_buffers = command_buffer_vec;
                 }
                 Err(e) => panic!("{:?}", e),
+            }
+        }
+    }
+
+    fn create_uniform_buffer(&mut self) {
+        let Some(logical_device) = &self.vulkan_context.logical_device else {
+            panic!("No logical_device when calling create_uniform_buffer");
+        };
+        let buffer_size: vk::DeviceSize = size_of::<UniformBufferObject>() as u64;
+
+        for i in 0..MAX_FRAMES_IN_FLIGHT {
+            let (uniform_buffer, uniform_buffer_memory) = create_buffer(
+                buffer_size,
+                vk::BufferUsageFlags::UNIFORM_BUFFER,
+                vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
+                &self.vulkan_context,
+            );
+
+            self.vulkan_context.uniform_buffers.push(uniform_buffer);
+            self.vulkan_context
+                .uniform_buffers_memory
+                .push(uniform_buffer_memory);
+            unsafe {
+                match logical_device.map_memory(
+                    uniform_buffer_memory,
+                    0,
+                    buffer_size as u64,
+                    vk::MemoryMapFlags::empty(),
+                ) {
+                    Ok(memory_pointer) => {
+                        self.vulkan_context
+                            .uniform_buffers_mapped
+                            .push(memory_pointer);
+                    }
+                    Err(e) => panic!("{:?}", e),
+                }
             }
         }
     }
