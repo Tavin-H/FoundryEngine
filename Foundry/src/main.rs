@@ -1930,6 +1930,40 @@ impl HelloTriangleApp {
         }
     }
 
+    fn update_uniform_buffer(&mut self, current_image: u32) {
+        let Some(extent) = self.vulkan_context.swap_chain_extent_used else {
+            panic!("No swap_chain_extent_used when calling update_uniform_buffer");
+        };
+        let start_time = std::time::Instant::now();
+
+        let current_time = std::time::Instant::now();
+        let time = current_time.duration_since(start_time).as_secs_f32();
+
+        //I do not know this math and should really look into it...
+        let model = glm::rotate(
+            &glm::Mat4::identity(),
+            time * std::f32::consts::PI / 2.0,
+            &glm::vec3(0.0, 0.0, 1.0),
+        );
+        let view = glm::look_at(
+            &glm::vec3(2.0, 2.0, 2.0),
+            &glm::vec3(0.0, 0.0, 0.0),
+            &glm::vec3(0.0, 0.0, 1.0),
+        );
+        let mut proj = glm::perspective(
+            std::f32::consts::PI / 4.0,
+            extent.width as f32 / extent.height as f32,
+            0.1,
+            10.0,
+        );
+        proj[(1, 1)] += -1.0;
+        let ubo = UniformBufferObject {
+            model: model,
+            view: view,
+            proj: proj,
+        };
+    }
+
     fn draw_frame(&mut self) {
         if (self.vulkan_context.frame_buffers.is_empty()) {
             return;
