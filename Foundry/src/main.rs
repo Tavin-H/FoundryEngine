@@ -117,6 +117,48 @@ impl ApplicationHandler for HelloTriangleApp {
 
 //----------------Helper functions-----------------
 
+fn update_uniform_buffer(
+    current_image: u32,
+    extent: vk::Extent2D,
+    uniform_buffers_mapped: &Vec<*mut core::ffi::c_void>,
+) {
+    let start_time = std::time::Instant::now();
+
+    let current_time = std::time::Instant::now();
+    let time = current_time.duration_since(start_time).as_secs_f32();
+
+    //I do not know this math and should really look into it...
+    let model = glm::rotate(
+        &glm::Mat4::identity(),
+        time * std::f32::consts::PI / 2.0,
+        &glm::vec3(0.0, 0.0, 1.0),
+    );
+    let view = glm::look_at(
+        &glm::vec3(2.0, 2.0, 2.0),
+        &glm::vec3(0.0, 0.0, 0.0),
+        &glm::vec3(0.0, 0.0, 1.0),
+    );
+    let mut proj = glm::perspective(
+        std::f32::consts::PI / 4.0,
+        extent.width as f32 / extent.height as f32,
+        0.1,
+        10.0,
+    );
+    proj[(1, 1)] += -1.0;
+    let ubo = UniformBufferObject {
+        model: model,
+        view: view,
+        proj: proj,
+    };
+
+    unsafe {
+        ptr::copy_nonoverlapping(
+            &ubo,
+            uniform_buffers_mapped[current_image as usize] as *mut UniformBufferObject,
+            size_of::<UniformBufferObject>(),
+        );
+    }
+}
 //Takes creation info and returns a buffer as well as the device memory where the buffer is
 //located
 fn create_buffer(
@@ -1390,7 +1432,7 @@ impl HelloTriangleApp {
             polygon_mode: vk::PolygonMode::FILL,
             line_width: 1.0,
             cull_mode: vk::CullModeFlags::BACK,
-            front_face: vk::FrontFace::CLOCKWISE,
+            front_face: vk::FrontFace::COUNTER_CLOCKWISE,
             depth_bias_enable: vk::FALSE,
             depth_bias_constant_factor: 0.0,
             depth_bias_slope_factor: 0.0,
@@ -1862,6 +1904,9 @@ impl HelloTriangleApp {
                 p_buffer_info: &buffer_info,
                 ..Default::default()
             };
+            unsafe {
+                logical_device.update_descriptor_sets(&[descriptor_write], &[]);
+            }
         }
     }
 
@@ -1876,6 +1921,9 @@ impl HelloTriangleApp {
         vertex_buffer: vk::Buffer,
         index_buffer: vk::Buffer,
         indices_count: u32,
+        pipeline_layout: vk::PipelineLayout,
+        descriptor_sets: &Vec<vk::DescriptorSet>,
+        current_frame: usize,
     ) {
         let begin_info = vk::CommandBufferBeginInfo {
             ..Default::default()
@@ -1959,6 +2007,15 @@ impl HelloTriangleApp {
                 vk::IndexType::UINT32,
             );
 
+            logical_device.cmd_bind_descriptor_sets(
+                command_buffer,
+                vk::PipelineBindPoint::GRAPHICS,
+                pipeline_layout,
+                0,
+                &[descriptor_sets[current_frame]], //FIXME shoudl b current_frame but maybe this works?
+                &[],
+            );
+
             //logical_device.cmd_draw(command_buffer, 3, 1, 0, 0);
             logical_device.cmd_draw_indexed(command_buffer, indices_count, 1, 0, 0, 0);
             match logical_device.end_command_buffer(command_buffer) {
@@ -2007,49 +2064,6 @@ impl HelloTriangleApp {
                     Err(e) => panic!("{}", e),
                 }
             }
-        }
-    }
-
-    fn update_uniform_buffer(&mut self, current_image: u32) {
-        let Some(extent) = self.vulkan_context.swap_chain_extent_used else {
-            panic!("No swap_chain_extent_used when calling update_uniform_buffer");
-        };
-        let start_time = std::time::Instant::now();
-
-        let current_time = std::time::Instant::now();
-        let time = current_time.duration_since(start_time).as_secs_f32();
-
-        //I do not know this math and should really look into it...
-        let model = glm::rotate(
-            &glm::Mat4::identity(),
-            time * std::f32::consts::PI / 2.0,
-            &glm::vec3(0.0, 0.0, 1.0),
-        );
-        let view = glm::look_at(
-            &glm::vec3(2.0, 2.0, 2.0),
-            &glm::vec3(0.0, 0.0, 0.0),
-            &glm::vec3(0.0, 0.0, 1.0),
-        );
-        let mut proj = glm::perspective(
-            std::f32::consts::PI / 4.0,
-            extent.width as f32 / extent.height as f32,
-            0.1,
-            10.0,
-        );
-        proj[(1, 1)] += -1.0;
-        let ubo = UniformBufferObject {
-            model: model,
-            view: view,
-            proj: proj,
-        };
-
-        unsafe {
-            ptr::copy_nonoverlapping(
-                &ubo,
-                self.vulkan_context.uniform_buffers_mapped[current_image as usize]
-                    as *mut UniformBufferObject,
-                size_of::<UniformBufferObject>(),
-            );
         }
     }
 
@@ -2124,7 +2138,10 @@ impl HelloTriangleApp {
 
             logical_device
                 .reset_command_buffer(current_command_buffer, vk::CommandBufferResetFlags::empty()); //MIGHT
-            //ERROR
+
+            let Some(pipeline_layout) = self.vulkan_context.pipeline_layout else {
+                panic!("I need to stop making these enums");
+            };
             HelloTriangleApp::record_command_buffer(
                 logical_device,
                 current_command_buffer,
@@ -2136,10 +2153,23 @@ impl HelloTriangleApp {
                 self.vulkan_context.vertex_buffer,
                 self.vulkan_context.index_buffer,
                 self.indices.len() as u32,
+                pipeline_layout,
+                &self.vulkan_context.descriptor_sets,
+                current_frame,
             );
             let wait_semaphores = [current_image_available_semaphore];
             let wait_stages = [vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];
             let signal_semaphores = [current_render_finished_semaphore];
+
+            let Some(extent) = self.vulkan_context.swap_chain_extent_used else {
+                panic!("Really I should rework this");
+            };
+            update_uniform_buffer(
+                current_frame as u32,
+                extent,
+                &self.vulkan_context.uniform_buffers_mapped,
+            );
+
             let submit_info = vk::SubmitInfo {
                 wait_semaphore_count: 1,
                 p_wait_semaphores: wait_semaphores.as_ptr(), //CHECK
