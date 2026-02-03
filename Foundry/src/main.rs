@@ -36,7 +36,7 @@ use winit::window::{self, Window, WindowAttributes, WindowId};
 use ash::ext::{device_memory_report, surface_maintenance1};
 use ash::khr::get_physical_device_properties2;
 use ash::vk::{
-    CommandBufferUsageFlags, PFN_vkEnumeratePhysicalDevices,
+    CommandBufferUsageFlags, Handle, PFN_vkEnumeratePhysicalDevices,
     PipelineShaderStageRequiredSubgroupSizeCreateInfoEXT, PresentInfoKHR,
     SamplerCubicWeightsCreateInfoQCOM, SetLatencyMarkerInfoNV,
 };
@@ -572,6 +572,8 @@ struct VulkanContext {
 
     //Graphics pipleline
     descriptor_set_layout: vk::DescriptorSetLayout,
+    descriptor_pool: vk::DescriptorPool,
+    descriptor_sets: Vec<vk::DescriptorSet>,
     pipeline_layout: Option<vk::PipelineLayout>,
     render_pass: Option<vk::RenderPass>,
     graphics_pipelines: Vec<vk::Pipeline>,
@@ -665,6 +667,8 @@ impl HelloTriangleApp {
         self.create_vertex_buffer();
         self.create_index_buffer();
         self.create_uniform_buffer();
+        self.create_descriptor_pool();
+        self.create_descriptor_sets();
         self.create_command_buffers();
         self.create_sync_object();
     }
@@ -701,6 +705,11 @@ impl HelloTriangleApp {
                         };
                         logical_device.destroy_semaphore(render_semaphore, None);
             */
+
+            logical_device.destroy_descriptor_pool(self.vulkan_context.descriptor_pool, None);
+            //logical_device
+            //.destroy_descriptor_set_layout(self.vulkan_context.descriptor_set_layout, None);
+            //FIXME Idk why I don't need to destroy this but it's not giving an error;
 
             for i in 0..MAX_FRAMES_IN_FLIGHT {
                 logical_device.destroy_semaphore(
@@ -1785,6 +1794,77 @@ impl HelloTriangleApp {
         }
     }
 
+    fn create_descriptor_pool(&mut self) {
+        let Some(logical_device) = &self.vulkan_context.logical_device else {
+            panic!("No logical_device when calling create_descriptor_pool");
+        };
+        let pool_size = vk::DescriptorPoolSize {
+            descriptor_count: MAX_FRAMES_IN_FLIGHT,
+            ty: vk::DescriptorType::UNIFORM_BUFFER,
+        };
+        let pool_info = vk::DescriptorPoolCreateInfo {
+            s_type: vk::StructureType::DESCRIPTOR_POOL_CREATE_INFO,
+            pool_size_count: 1,
+            p_pool_sizes: &pool_size,
+            max_sets: MAX_FRAMES_IN_FLIGHT,
+            ..Default::default()
+        };
+        unsafe {
+            match logical_device.create_descriptor_pool(&pool_info, None) {
+                Ok(descriptor_pool) => {
+                    self.vulkan_context.descriptor_pool = descriptor_pool;
+                    println!("Created descriptor pool");
+                }
+                Err(e) => panic!("{:?}", e),
+            }
+        }
+    }
+
+    fn create_descriptor_sets(&mut self) {
+        let Some(logical_device) = &self.vulkan_context.logical_device else {
+            panic!("No logical_device when calling create_descriptor_pool");
+        };
+        let mut layouts: Vec<vk::DescriptorSetLayout> = Vec::new();
+        for i in 0..MAX_FRAMES_IN_FLIGHT {
+            layouts.push(self.vulkan_context.descriptor_set_layout);
+        }
+        let alloc_info = vk::DescriptorSetAllocateInfo {
+            descriptor_pool: self.vulkan_context.descriptor_pool,
+            descriptor_set_count: MAX_FRAMES_IN_FLIGHT,
+            p_set_layouts: layouts.as_ptr(),
+            ..Default::default()
+        };
+
+        unsafe {
+            match logical_device.allocate_descriptor_sets(&alloc_info) {
+                Ok(descriptor_sets) => {
+                    self.vulkan_context.descriptor_sets = descriptor_sets;
+                    println!("Created descriptor sets");
+                }
+                Err(e) => panic!("{:?}", e),
+            }
+        }
+
+        for i in 0..MAX_FRAMES_IN_FLIGHT {
+            let buffer_info = vk::DescriptorBufferInfo {
+                buffer: self.vulkan_context.uniform_buffers[i as usize],
+                offset: 0,
+                range: size_of::<UniformBufferObject>() as u64,
+                ..Default::default()
+            };
+            let descriptor_write = vk::WriteDescriptorSet {
+                s_type: vk::StructureType::WRITE_DESCRIPTOR_SET,
+                dst_set: self.vulkan_context.descriptor_sets[i as usize],
+                dst_binding: 0,
+                dst_array_element: 0,
+                descriptor_type: vk::DescriptorType::UNIFORM_BUFFER,
+                descriptor_count: 1,
+                p_buffer_info: &buffer_info,
+                ..Default::default()
+            };
+        }
+    }
+
     fn record_command_buffer(
         logical_device: &ash::Device,
         command_buffer: vk::CommandBuffer,
@@ -1962,6 +2042,15 @@ impl HelloTriangleApp {
             view: view,
             proj: proj,
         };
+
+        unsafe {
+            ptr::copy_nonoverlapping(
+                &ubo,
+                self.vulkan_context.uniform_buffers_mapped[current_image as usize]
+                    as *mut UniformBufferObject,
+                size_of::<UniformBufferObject>(),
+            );
+        }
     }
 
     fn draw_frame(&mut self) {
