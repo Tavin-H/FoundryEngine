@@ -120,12 +120,12 @@ impl ApplicationHandler for HelloTriangleApp {
 fn update_uniform_buffer(
     current_image: u32,
     extent: vk::Extent2D,
-    uniform_buffers_mapped: &Vec<*mut core::ffi::c_void>,
+    uniform_buffers_mapped: &Vec<*mut UniformBufferObject>,
+    start_time: std::time::Instant,
 ) {
-    let start_time = std::time::Instant::now();
-
     let current_time = std::time::Instant::now();
     let time = current_time.duration_since(start_time).as_secs_f32();
+    println!("{}", time);
 
     //I do not know this math and should really look into it...
     let model = glm::rotate(
@@ -154,8 +154,9 @@ fn update_uniform_buffer(
     unsafe {
         ptr::copy_nonoverlapping(
             &ubo,
-            uniform_buffers_mapped[current_image as usize] as *mut UniformBufferObject,
-            size_of::<UniformBufferObject>(),
+            uniform_buffers_mapped[current_image as usize],
+            1,
+            //size_of::<UniformBufferObject>(),
         );
     }
 }
@@ -583,6 +584,7 @@ struct HelloTriangleApp {
     indices: Vec<u32>,
     minimized: bool,
     window_resized: bool,
+    start_time: Option<std::time::Instant>,
 }
 //Holds all vulkan objects in a single struct to controll lifetimes more precisely
 #[derive(Default)]
@@ -614,6 +616,7 @@ struct VulkanContext {
 
     //Graphics pipleline
     descriptor_set_layout: vk::DescriptorSetLayout,
+    descriptor_set_layouts: Vec<vk::DescriptorSetLayout>, //Used for many images
     descriptor_pool: vk::DescriptorPool,
     descriptor_sets: Vec<vk::DescriptorSet>,
     pipeline_layout: Option<vk::PipelineLayout>,
@@ -627,7 +630,7 @@ struct VulkanContext {
     index_buffer_memory: vk::DeviceMemory,
     uniform_buffers: Vec<vk::Buffer>,
     uniform_buffers_memory: Vec<vk::DeviceMemory>,
-    uniform_buffers_mapped: Vec<*mut core::ffi::c_void>,
+    uniform_buffers_mapped: Vec<*mut UniformBufferObject>,
 
     //Command stuff
     command_pool: Option<vk::CommandPool>,
@@ -748,11 +751,6 @@ impl HelloTriangleApp {
                         logical_device.destroy_semaphore(render_semaphore, None);
             */
 
-            logical_device.destroy_descriptor_pool(self.vulkan_context.descriptor_pool, None);
-            //logical_device
-            //.destroy_descriptor_set_layout(self.vulkan_context.descriptor_set_layout, None);
-            //FIXME Idk why I don't need to destroy this but it's not giving an error;
-
             for i in 0..MAX_FRAMES_IN_FLIGHT {
                 logical_device.destroy_semaphore(
                     self.vulkan_context.render_finished_semaphores[i as usize],
@@ -805,6 +803,7 @@ impl HelloTriangleApp {
 
             logical_device
                 .destroy_descriptor_set_layout(self.vulkan_context.descriptor_set_layout, None);
+            logical_device.destroy_descriptor_pool(self.vulkan_context.descriptor_pool, None);
 
             //Graphics pipleline handles
             for image_view in self.vulkan_context.swap_chain_image_views.iter() {
@@ -1432,7 +1431,7 @@ impl HelloTriangleApp {
             polygon_mode: vk::PolygonMode::FILL,
             line_width: 1.0,
             cull_mode: vk::CullModeFlags::BACK,
-            front_face: vk::FrontFace::COUNTER_CLOCKWISE,
+            front_face: vk::FrontFace::CLOCKWISE,
             depth_bias_enable: vk::FALSE,
             depth_bias_constant_factor: 0.0,
             depth_bias_slope_factor: 0.0,
@@ -1814,10 +1813,6 @@ impl HelloTriangleApp {
                 &self.vulkan_context,
             );
 
-            self.vulkan_context.uniform_buffers.push(uniform_buffer);
-            self.vulkan_context
-                .uniform_buffers_memory
-                .push(uniform_buffer_memory);
             unsafe {
                 match logical_device.map_memory(
                     uniform_buffer_memory,
@@ -1828,11 +1823,15 @@ impl HelloTriangleApp {
                     Ok(memory_pointer) => {
                         self.vulkan_context
                             .uniform_buffers_mapped
-                            .push(memory_pointer);
+                            .push(memory_pointer as *mut UniformBufferObject);
                     }
                     Err(e) => panic!("{:?}", e),
                 }
             }
+            self.vulkan_context.uniform_buffers.push(uniform_buffer);
+            self.vulkan_context
+                .uniform_buffers_memory
+                .push(uniform_buffer_memory);
         }
     }
 
@@ -1866,14 +1865,16 @@ impl HelloTriangleApp {
         let Some(logical_device) = &self.vulkan_context.logical_device else {
             panic!("No logical_device when calling create_descriptor_pool");
         };
-        let mut layouts: Vec<vk::DescriptorSetLayout> = Vec::new();
+        self.vulkan_context.descriptor_set_layouts.clear();
         for i in 0..MAX_FRAMES_IN_FLIGHT {
-            layouts.push(self.vulkan_context.descriptor_set_layout);
+            self.vulkan_context
+                .descriptor_set_layouts
+                .push(self.vulkan_context.descriptor_set_layout);
         }
         let alloc_info = vk::DescriptorSetAllocateInfo {
             descriptor_pool: self.vulkan_context.descriptor_pool,
             descriptor_set_count: MAX_FRAMES_IN_FLIGHT,
-            p_set_layouts: layouts.as_ptr(),
+            p_set_layouts: self.vulkan_context.descriptor_set_layouts.as_ptr(),
             ..Default::default()
         };
 
@@ -2164,14 +2165,17 @@ impl HelloTriangleApp {
             let Some(extent) = self.vulkan_context.swap_chain_extent_used else {
                 panic!("Really I should rework this");
             };
+
             update_uniform_buffer(
                 current_frame as u32,
                 extent,
                 &self.vulkan_context.uniform_buffers_mapped,
+                self.start_time.expect("Nope"),
             );
 
             let submit_info = vk::SubmitInfo {
                 wait_semaphore_count: 1,
+                s_type: vk::StructureType::SUBMIT_INFO,
                 p_wait_semaphores: wait_semaphores.as_ptr(), //CHECK
                 //was wait_semaphores
                 p_wait_dst_stage_mask: wait_stages.as_ptr(),
@@ -2263,6 +2267,7 @@ impl Vertex {
 }
 
 fn main() {
+    let start_time = std::time::Instant::now();
     let vertecies: Vec<Vertex> = vec![
         Vertex {
             pos: glm::vec2(-0.5, -0.5),
@@ -2274,7 +2279,7 @@ fn main() {
         },
         Vertex {
             pos: glm::vec2(0.5, 0.5),
-            colour: glm::vec3(0.0, 0.0, 1.0),
+            colour: glm::vec3(1.0, 1.0, 1.0),
         },
         Vertex {
             pos: glm::vec2(-0.5, 0.5),
@@ -2287,6 +2292,7 @@ fn main() {
 
     //Vulkan Setup
     let mut app: HelloTriangleApp = HelloTriangleApp {
+        start_time: Some(start_time),
         indices: indices,
         vertices: vertecies,
         ..Default::default()
