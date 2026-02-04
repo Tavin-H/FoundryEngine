@@ -125,14 +125,17 @@ fn update_uniform_buffer(
 ) {
     let current_time = std::time::Instant::now();
     let time = current_time.duration_since(start_time).as_secs_f32();
-    println!("{}", time);
+
+    let mut transform = glm::Mat4::identity();
+    transform[(0, 3)] = 1.0;
 
     //I do not know this math and should really look into it...
-    let model = glm::rotate(
-        &glm::Mat4::identity(),
-        time * std::f32::consts::PI / 2.0,
-        &glm::vec3(0.0, 0.0, 1.0),
-    );
+    let model = transform
+        * glm::rotate(
+            &glm::Mat4::identity(),
+            time * 0.3 * std::f32::consts::PI / 2.0,
+            &glm::vec3(0.0, 0.0, 1.0),
+        );
     let view = glm::look_at(
         &glm::vec3(2.0, 2.0, 2.0),
         &glm::vec3(0.0, 0.0, 0.0),
@@ -144,7 +147,7 @@ fn update_uniform_buffer(
         0.1,
         10.0,
     );
-    proj[(1, 1)] += -1.0;
+    proj[(1, 1)] *= -1.0;
     let ubo = UniformBufferObject {
         model: model,
         view: view,
@@ -585,6 +588,7 @@ struct HelloTriangleApp {
     minimized: bool,
     window_resized: bool,
     start_time: Option<std::time::Instant>,
+    frame_count: u64,
 }
 //Holds all vulkan objects in a single struct to controll lifetimes more precisely
 #[derive(Default)]
@@ -1431,7 +1435,7 @@ impl HelloTriangleApp {
             polygon_mode: vk::PolygonMode::FILL,
             line_width: 1.0,
             cull_mode: vk::CullModeFlags::BACK,
-            front_face: vk::FrontFace::CLOCKWISE,
+            front_face: vk::FrontFace::COUNTER_CLOCKWISE,
             depth_bias_enable: vk::FALSE,
             depth_bias_constant_factor: 0.0,
             depth_bias_slope_factor: 0.0,
