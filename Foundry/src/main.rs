@@ -129,7 +129,6 @@ fn update_uniform_buffer(
     let mut transform = glm::Mat4::identity();
     transform[(0, 3)] = 1.0;
 
-    //I do not know this math and should really look into it...
     let model = transform
         * glm::rotate(
             &glm::Mat4::identity(),
