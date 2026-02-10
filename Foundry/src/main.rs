@@ -53,10 +53,15 @@ use std::fs;
 use std::hash::Hash;
 use std::mem::swap;
 use std::panic;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::ptr;
 use std::sync::Arc;
 use std::thread::current;
+
+//Image
+use stb_image;
+use stb_image::image::LoadResult;
+use std::path;
 
 //Setup winit boilerplate
 #[derive(Default)]
@@ -151,6 +156,7 @@ fn update_uniform_buffer(
         model: model,
         view: view,
         proj: proj,
+        ..Default::default()
     };
 
     unsafe {
@@ -712,6 +718,7 @@ impl HelloTriangleApp {
         self.create_graphics_pipeline();
         self.create_frame_buffers();
         self.create_command_pool();
+        self.create_texture_image();
         self.create_vertex_buffer();
         self.create_index_buffer();
         self.create_uniform_buffer();
@@ -1642,6 +1649,7 @@ impl HelloTriangleApp {
             }
         }
     }
+
     fn create_command_pool(&mut self) {
         let Some(logical_device) = &self.vulkan_context.logical_device else {
             panic!("No logical_device when calling create_command_buffers");
@@ -1659,6 +1667,54 @@ impl HelloTriangleApp {
                 }
                 Err(e) => panic!("{}", e),
             };
+        }
+    }
+
+    fn create_texture_image(&mut self) {
+        let Some(logical_device) = &self.vulkan_context.logical_device else {
+            panic!("No logical_device when calling create_texture_image");
+        };
+        let path_name = "textures/sunset.jpg";
+        let path = Path::new(path_name);
+        let mut image_size: vk::DeviceSize = 0;
+        let mut data: Vec<u8> = Vec::new();
+        match stb_image::image::load(path) {
+            LoadResult::Error(e) => panic!("{}", e),
+            LoadResult::ImageU8(image) => {
+                println!("Loaded texture Successfully");
+                image_size = (image.width * image.height) as u64 * 4;
+                data = image.data;
+            }
+            LoadResult::ImageF32(some) => println!("loaded image again?"),
+        }
+        if (image_size == 0) {
+            panic!("Erro: No image size");
+        }
+        let (staging_buffer, staging_buffer_memory) = create_buffer(
+            image_size,
+            vk::BufferUsageFlags::TRANSFER_SRC,
+            vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
+            &self.vulkan_context,
+        );
+        unsafe {
+            let staging_map_memory_result = logical_device.map_memory(
+                staging_buffer_memory,
+                0,
+                image_size as u64,
+                vk::MemoryMapFlags::empty(),
+            );
+
+            let Ok(staging_memory_pointer) = staging_map_memory_result else {
+                panic!("Failed to map memory for vertex buffer");
+            };
+
+            ptr::copy_nonoverlapping(
+                data.as_ptr(),
+                staging_memory_pointer as *mut u8, //Cast void to Vertex Data Type
+                1,
+            );
+            logical_device.unmap_memory(staging_buffer_memory);
+            //up to page 145 now
         }
     }
 
@@ -2230,6 +2286,8 @@ struct Vertex {
     colour: glm::Vec3,
 }
 
+#[repr(C)]
+#[repr(align(16))]
 #[derive(Default)]
 struct UniformBufferObject {
     model: glm::Mat4,

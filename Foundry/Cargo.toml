@@ -12,6 +12,8 @@ raw-window-handle = "0.6"
 num = "0.4.3"
 bytemuck = "1.24.0"
 image = "0.25.9"
+glam = "0.31.0"
+stb_image = "0.3.0"
 
 [dependencies.vulkan-headers]
 version = "0.1.1+1.4.336"

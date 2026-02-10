@@ -9,10 +9,12 @@ dependencies = [
  "ash",
  "ash-window",
  "bytemuck",
+ "glam",
  "image",
  "nalgebra-glm",
  "num",
  "raw-window-handle",
+ "stb_image",
  "vulkan-headers",
  "winit",
 ]
@@ -696,6 +698,12 @@ dependencies = [
  "color_quant",
  "weezl",
 ]
+
+[[package]]
+name = "glam"
+version = "0.31.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "74a4d85559e2637d3d839438b5b3d75c31e655276f9544d72475c36b92fabbed"
 
 [[package]]
 name = "half"
@@ -1887,6 +1895,16 @@ name = "stable_deref_trait"
 version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6ce2be8dc25455e1f91df71bfa12ad37d7af1092ae736f3a6cd0e37bc7810596"
+
+[[package]]
+name = "stb_image"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bfdaa89eb7dd3362e4abb16c4a8acf04786755882b38ff00714f2f1de0f4fcd3"
+dependencies = [
+ "cc",
+ "libc",
+]
 
 [[package]]
 name = "strict-num"
