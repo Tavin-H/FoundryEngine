@@ -1713,6 +1713,8 @@ impl HelloTriangleApp {
             array_layers: 1,
             format: vk::Format::R8G8B8_SRGB,
             tiling: vk::ImageTiling::OPTIMAL,
+            initial_layout: vk::ImageLayout::UNDEFINED,
+
             ..Default::default()
         };
         unsafe {
