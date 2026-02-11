@@ -15,7 +15,10 @@ Current supported OS:
 - MacOS (only intel tested)
 - Linux support coming soon
 
-The biggest recent change was drawing a shaded triangle on the screen as seen below (Jan 15, 2026).
+Recent milestone: Made a rotating 3d square thats off-center of the origin with a transformation matrix
+<img width="790" height="622" alt="Screenshot 2026-02-10 at 7 17 31 PM" src="https://github.com/user-attachments/assets/874bf82d-f00c-49e6-8159-48ba24f8f0c0" />
+
+Past milestone: Drawing a shaded triangle on the screen as seen below (Jan 15, 2026).
 <img width="995" height="778" alt="foundry" src="https://github.com/user-attachments/assets/f8d3799e-a5ca-4a49-83db-b6776b08c7fc" />
 
 I've chosen each of my tools for specific reasons as stated below.
