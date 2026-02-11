@@ -1679,6 +1679,12 @@ impl HelloTriangleApp {
         let Some(logical_device) = &self.vulkan_context.logical_device else {
             panic!("No logical_device when calling create_texture_image");
         };
+        let Some(physical_device) = &self.vulkan_context.physical_device else {
+            panic!("No physical_device when calling create_texture_image");
+        };
+        let Some(instance) = &self.vulkan_context.instance else {
+            panic!("No instance when calling create_texture_image");
+        };
         let path_name = "textures/sunset.jpg";
         let path = Path::new(path_name);
         let (mut height, mut width) = (0, 0);
@@ -1703,6 +1709,8 @@ impl HelloTriangleApp {
             vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
             &self.vulkan_context,
         );
+
+        //Create the VK Image
         let image_create_info = vk::ImageCreateInfo {
             image_type: vk::ImageType::TYPE_2D,
             extent: vk::Extent2D {
@@ -1712,12 +1720,43 @@ impl HelloTriangleApp {
             .into(),
             mip_levels: 1,
             array_layers: 1,
-            format: vk::Format::R8G8B8_SRGB,
+            format: vk::Format::R8G8B8A8_SRGB,
             tiling: vk::ImageTiling::OPTIMAL,
             initial_layout: vk::ImageLayout::UNDEFINED,
+            usage: vk::ImageUsageFlags::TRANSFER_DST | vk::ImageUsageFlags::SAMPLED,
+            sharing_mode: vk::SharingMode::EXCLUSIVE,
+            samples: vk::SampleCountFlags::TYPE_1,
 
             ..Default::default()
         };
+        unsafe {
+            match logical_device.create_image(&image_create_info, None) {
+                Ok(image) => {
+                    self.vulkan_context.texture_image = image;
+                    println!("Created Texture Successfully");
+                }
+                Err(e) => panic!("{}", e),
+            }
+        }
+
+        //Load image into memory
+        unsafe {
+            let device_memory_properties =
+                instance.get_physical_device_memory_properties(*physical_device);
+
+            let memory_requirements =
+                logical_device.get_image_memory_requirements(self.vulkan_context.texture_image);
+            let alloc_info = vk::MemoryAllocateInfo {
+                allocation_size: memory_requirements.size,
+                memory_type_index: find_memory_type(
+                    memory_requirements.memory_type_bits,
+                    vk::MemoryPropertyFlags::DEVICE_LOCAL,
+                    device_memory_properties,
+                ),
+                ..Default::default()
+            };
+        }
+
         unsafe {
             let staging_map_memory_result = logical_device.map_memory(
                 staging_buffer_memory,
