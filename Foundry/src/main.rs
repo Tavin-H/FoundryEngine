@@ -123,6 +123,80 @@ impl ApplicationHandler for HelloTriangleApp {
 
 //----------------Helper functions-----------------
 
+fn create_image(
+    logical_device: &ash::Device,
+    instance: &ash::Instance,
+    physical_device: &vk::PhysicalDevice,
+    height: u32,
+    width: u32,
+    format: vk::Format,
+    tiling: vk::ImageTiling,
+    usage: vk::ImageUsageFlags,
+    properties: vk::PhysicalDeviceMemoryProperties,
+    image_memory: &vk::DeviceMemory,
+) -> vk::Image {
+    let mut image: Option<vk::Image> = None;
+
+    let image_create_info = vk::ImageCreateInfo {
+        image_type: vk::ImageType::TYPE_2D,
+        extent: vk::Extent2D {
+            width: width,
+            height: height,
+        }
+        .into(),
+        mip_levels: 1,
+        array_layers: 1,
+        format: format,
+        tiling: tiling,
+        initial_layout: vk::ImageLayout::UNDEFINED,
+        usage: usage,
+        sharing_mode: vk::SharingMode::EXCLUSIVE,
+        samples: vk::SampleCountFlags::TYPE_1,
+
+        ..Default::default()
+    };
+    unsafe {
+        match logical_device.create_image(&image_create_info, None) {
+            Ok(created_image) => {
+                image = Some(created_image);
+                println!("Created Texture Successfully");
+            }
+            Err(e) => panic!("{}", e),
+        }
+    }
+
+    //Load image into memory
+    unsafe {
+        let device_memory_properties =
+            instance.get_physical_device_memory_properties(*physical_device);
+
+        let Some(image_value) = image else {
+            panic!("Image is not a value");
+        };
+        let memory_requirements = logical_device.get_image_memory_requirements(image_value);
+        let alloc_info = vk::MemoryAllocateInfo {
+            allocation_size: memory_requirements.size,
+            memory_type_index: find_memory_type(
+                memory_requirements.memory_type_bits,
+                vk::MemoryPropertyFlags::DEVICE_LOCAL,
+                device_memory_properties,
+            ),
+            ..Default::default()
+        };
+
+        match logical_device.allocate_memory(&alloc_info, None) {
+            Ok(memory_pointer) => {
+                println!("Yay");
+                logical_device.bind_image_memory(image_value, memory_pointer, 0);
+            }
+            Err(e) => panic!("{}", e),
+        }
+    }
+    let Some(image_value) = image else {
+        panic!("");
+    };
+    return image_value;
+}
 fn update_uniform_buffer(
     current_image: u32,
     extent: vk::Extent2D,
@@ -1709,54 +1783,6 @@ impl HelloTriangleApp {
             vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
             &self.vulkan_context,
         );
-
-        //Create the VK Image
-        let image_create_info = vk::ImageCreateInfo {
-            image_type: vk::ImageType::TYPE_2D,
-            extent: vk::Extent2D {
-                width: width as u32,
-                height: height as u32,
-            }
-            .into(),
-            mip_levels: 1,
-            array_layers: 1,
-            format: vk::Format::R8G8B8A8_SRGB,
-            tiling: vk::ImageTiling::OPTIMAL,
-            initial_layout: vk::ImageLayout::UNDEFINED,
-            usage: vk::ImageUsageFlags::TRANSFER_DST | vk::ImageUsageFlags::SAMPLED,
-            sharing_mode: vk::SharingMode::EXCLUSIVE,
-            samples: vk::SampleCountFlags::TYPE_1,
-
-            ..Default::default()
-        };
-        unsafe {
-            match logical_device.create_image(&image_create_info, None) {
-                Ok(image) => {
-                    self.vulkan_context.texture_image = image;
-                    println!("Created Texture Successfully");
-                }
-                Err(e) => panic!("{}", e),
-            }
-        }
-
-        //Load image into memory
-        unsafe {
-            let device_memory_properties =
-                instance.get_physical_device_memory_properties(*physical_device);
-
-            let memory_requirements =
-                logical_device.get_image_memory_requirements(self.vulkan_context.texture_image);
-            let alloc_info = vk::MemoryAllocateInfo {
-                allocation_size: memory_requirements.size,
-                memory_type_index: find_memory_type(
-                    memory_requirements.memory_type_bits,
-                    vk::MemoryPropertyFlags::DEVICE_LOCAL,
-                    device_memory_properties,
-                ),
-                ..Default::default()
-            };
-        }
-
         unsafe {
             let staging_map_memory_result = logical_device.map_memory(
                 staging_buffer_memory,
@@ -1775,7 +1801,21 @@ impl HelloTriangleApp {
                 1,
             );
             logical_device.unmap_memory(staging_buffer_memory);
-            //up to page 145 now
+
+            let device_memory_properties =
+                instance.get_physical_device_memory_properties(*physical_device);
+            create_image(
+                logical_device,
+                instance,
+                physical_device,
+                height as u32,
+                width as u32,
+                vk::Format::R8G8B8A8_SRGB,
+                vk::ImageTiling::OPTIMAL,
+                vk::ImageUsageFlags::TRANSFER_DST | vk::ImageUsageFlags::SAMPLED,
+                device_memory_properties,
+                &self.vulkan_context.texture_image_memory,
+            );
         }
     }
 
