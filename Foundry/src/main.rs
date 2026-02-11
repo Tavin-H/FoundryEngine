@@ -620,6 +620,10 @@ struct VulkanContext {
     swap_chain_extent_used: Option<vk::Extent2D>,
     swap_chain_image_views: Vec<vk::ImageView>,
 
+    //textures
+    texture_image: vk::Image,
+    texture_image_memory: vk::DeviceMemory,
+
     //Shader Info
     shader_list: Vec<vk::ShaderModule>,
 
@@ -1676,12 +1680,14 @@ impl HelloTriangleApp {
         };
         let path_name = "textures/sunset.jpg";
         let path = Path::new(path_name);
+        let (mut height, mut width) = (0, 0);
         let mut image_size: vk::DeviceSize = 0;
         let mut data: Vec<u8> = Vec::new();
         match stb_image::image::load(path) {
             LoadResult::Error(e) => panic!("{}", e),
             LoadResult::ImageU8(image) => {
                 println!("Loaded texture Successfully");
+                (height, width) = (image.height, image.width);
                 image_size = (image.width * image.height) as u64 * 4;
                 data = image.data;
             }
@@ -1696,6 +1702,19 @@ impl HelloTriangleApp {
             vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
             &self.vulkan_context,
         );
+        let image_create_info = vk::ImageCreateInfo {
+            image_type: vk::ImageType::TYPE_2D,
+            extent: vk::Extent2D {
+                width: width as u32,
+                height: height as u32,
+            }
+            .into(),
+            mip_levels: 1,
+            array_layers: 1,
+            format: vk::Format::R8G8B8_SRGB,
+            tiling: vk::ImageTiling::OPTIMAL,
+            ..Default::default()
+        };
         unsafe {
             let staging_map_memory_result = logical_device.map_memory(
                 staging_buffer_memory,
