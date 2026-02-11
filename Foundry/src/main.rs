@@ -16,6 +16,8 @@ const WANTED_EXTENSION_NAMES: &[&CStr] = &[vk::KHR_SWAPCHAIN_NAME];
 const FIRST_PRIORITY: f32 = 1.0;
 const MAX_FRAMES_IN_FLIGHT: u32 = 2;
 //static vertices: [Vertex 3];
+//
+//Testing Git branching
 
 //const main_name: CString = CString::new("main").expect("failed to load c string");
 //const MAIN_NAME: &[i8] = &[109, 97, 105, 110, 0];
