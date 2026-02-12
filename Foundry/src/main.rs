@@ -408,6 +408,50 @@ fn find_memory_type(
     panic!("Failed to find suitible memory type!");
 }
 
+fn transition_image_layout(
+    logical_device: &ash::Device,
+    command_pool: vk::CommandPool,
+    image: vk::Image,
+    graphics_queue: vk::Queue,
+    format: vk::Format,
+    old_layout: vk::ImageLayout,
+    new_layout: vk::ImageLayout,
+) {
+    let command_buffer: vk::CommandBuffer =
+        begin_single_time_commands(logical_device, command_pool);
+
+    let barrier = vk::ImageMemoryBarrier {
+        old_layout: old_layout,
+        new_layout: new_layout,
+        src_queue_family_index: vk::QUEUE_FAMILY_IGNORED,
+        dst_queue_family_index: vk::QUEUE_FAMILY_IGNORED,
+        image: image,
+        subresource_range: vk::ImageSubresourceRange {
+            aspect_mask: vk::ImageAspectFlags::COLOR,
+            base_mip_level: 0,
+            level_count: 1,
+            base_array_layer: 0,
+            layer_count: 1,
+        },
+        src_access_mask: vk::AccessFlags::empty(), //TODO
+        dst_access_mask: vk::AccessFlags::empty(), //TODO
+        ..Default::default()
+    };
+    unsafe {
+        logical_device.cmd_pipeline_barrier(
+            command_buffer,
+            vk::PipelineStageFlags::empty(),
+            vk::PipelineStageFlags::empty(),
+            vk::DependencyFlags::empty(),
+            &[], //Memory Barriers
+            &[], //buffer_memory_barriers
+            &[barrier],
+        );
+    }
+
+    end_single_time_commands(logical_device, command_buffer, command_pool, graphics_queue);
+}
+
 fn debug_call_back(
     message_severity: vk::DebugUtilsMessageSeverityFlagsEXT,
     message_type: vk::DebugUtilsMessageTypeFlagsEXT,
