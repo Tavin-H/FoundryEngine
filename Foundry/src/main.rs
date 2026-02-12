@@ -197,6 +197,58 @@ fn create_image(
     };
     return image_value;
 }
+
+fn begin_single_time_commands(
+    logical_device: &ash::Device,
+    command_pool: vk::CommandPool,
+) -> vk::CommandBuffer {
+    let alloc_info = vk::CommandBufferAllocateInfo {
+        level: vk::CommandBufferLevel::PRIMARY,
+        command_pool: command_pool,
+        command_buffer_count: 1,
+        ..Default::default()
+    };
+    let begin_info = vk::CommandBufferBeginInfo {
+        flags: vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT,
+        ..Default::default()
+    };
+    unsafe {
+        match logical_device.allocate_command_buffers(&alloc_info) {
+            Ok(command_buffers) => {
+                println!("allocated command buffer thingy");
+                logical_device.begin_command_buffer(command_buffers[0], &begin_info);
+                return command_buffers[0]; //FIXME potential dangling pointer if indexing returns a
+                //reference and not the value
+            }
+            Err(e) => panic!("{}", e),
+        }
+    }
+}
+
+fn end_single_time_commands(
+    logical_device: &ash::Device,
+    command_buffer: vk::CommandBuffer,
+    command_pool: vk::CommandPool,
+    graphics_queue: vk::Queue,
+) {
+    unsafe {
+        logical_device.end_command_buffer(command_buffer);
+    }
+
+    let submit_info = vk::SubmitInfo {
+        command_buffer_count: 1,
+        p_command_buffers: &command_buffer,
+        ..Default::default()
+    };
+
+    unsafe {
+        logical_device.queue_submit(graphics_queue, &[submit_info], vk::Fence::null());
+        logical_device.device_wait_idle();
+
+        logical_device.free_command_buffers(command_pool, &[command_buffer]);
+    }
+}
+
 fn update_uniform_buffer(
     current_image: u32,
     extent: vk::Extent2D,
@@ -324,45 +376,17 @@ fn copy_buffer(
     let Some(graphics_queue) = context.graphics_queue else {
         panic!("No graphics_queue when calling copy_region");
     };
-    let alloc_info = vk::CommandBufferAllocateInfo {
-        level: vk::CommandBufferLevel::PRIMARY,
-        command_pool: command_pool,
-        command_buffer_count: 1,
+
+    let command_buffer = begin_single_time_commands(logical_device, command_pool);
+
+    let copy_region = vk::BufferCopy {
+        size: size,
         ..Default::default()
     };
-
     unsafe {
-        let command_buffer_result = logical_device.allocate_command_buffers(&alloc_info);
-
-        let Ok(command_buffers) = command_buffer_result else {
-            panic!("Failed to create command_buffer");
-        };
-
-        let begin_info = vk::CommandBufferBeginInfo {
-            ..Default::default()
-        };
-
-        logical_device.begin_command_buffer(command_buffers[0], &begin_info);
-        let copy_region = vk::BufferCopy {
-            src_offset: 0,
-            dst_offset: 0,
-            size: size,
-            ..Default::default()
-        };
-        let copy_regions = [copy_region];
-        logical_device.cmd_copy_buffer(command_buffers[0], src_buffer, dst_buffer, &copy_regions);
-        logical_device.end_command_buffer(command_buffers[0]);
-
-        let submit_info = vk::SubmitInfo {
-            command_buffer_count: 1,
-            p_command_buffers: command_buffers.as_ptr(),
-            ..Default::default()
-        };
-
-        logical_device.queue_submit(graphics_queue, &[submit_info], vk::Fence::null());
-        logical_device.queue_wait_idle(graphics_queue);
-        logical_device.free_command_buffers(command_pool, &command_buffers);
+        logical_device.cmd_copy_buffer(command_buffer, src_buffer, dst_buffer, &[copy_region]);
     }
+    end_single_time_commands(logical_device, command_buffer, command_pool, graphics_queue);
 }
 
 fn find_memory_type(
