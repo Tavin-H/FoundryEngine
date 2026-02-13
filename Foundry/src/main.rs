@@ -123,6 +123,50 @@ impl ApplicationHandler for HelloTriangleApp {
 
 //----------------Helper functions-----------------
 
+fn copy_buffer_to_image(
+    logical_device: &ash::Device,
+    instance: &Instance,
+    buffer: vk::Buffer,
+    image: vk::Image,
+    width: u32,
+    height: u32,
+    command_pool: vk::CommandPool,
+    graphics_queue: vk::Queue,
+) {
+    let command_buffer = begin_single_time_commands(logical_device, command_pool);
+
+    let region = vk::BufferImageCopy {
+        buffer_offset: 0,
+        buffer_row_length: 0,
+        buffer_image_height: 0,
+        image_subresource: vk::ImageSubresourceLayers {
+            aspect_mask: vk::ImageAspectFlags::COLOR,
+            mip_level: 0,
+            base_array_layer: 0,
+            layer_count: 1,
+        },
+        image_offset: vk::Offset3D {
+            ..Default::default()
+        },
+        image_extent: vk::Extent3D {
+            width: width,
+            height: height,
+            depth: 1,
+        },
+        ..Default::default()
+    };
+    unsafe {
+        logical_device.cmd_copy_buffer_to_image(
+            command_buffer,
+            buffer,
+            image,
+            vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+            &[region],
+        );
+    }
+    end_single_time_commands(logical_device, command_buffer, command_pool, graphics_queue);
+}
+
 fn create_image(
     logical_device: &ash::Device,
     instance: &ash::Instance,
