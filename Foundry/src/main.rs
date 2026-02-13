@@ -178,6 +178,8 @@ fn create_image(
     usage: vk::ImageUsageFlags,
     properties: vk::PhysicalDeviceMemoryProperties,
     image_memory: &vk::DeviceMemory,
+    command_pool: vk::CommandPool,
+    graphics_queue: vk::Queue,
 ) -> vk::Image {
     let mut image: Option<vk::Image> = None;
 
@@ -239,6 +241,7 @@ fn create_image(
     let Some(image_value) = image else {
         panic!("");
     };
+
     return image_value;
 }
 
@@ -464,7 +467,7 @@ fn transition_image_layout(
     let command_buffer: vk::CommandBuffer =
         begin_single_time_commands(logical_device, command_pool);
 
-    let barrier = vk::ImageMemoryBarrier {
+    let mut barrier = vk::ImageMemoryBarrier {
         old_layout: old_layout,
         new_layout: new_layout,
         src_queue_family_index: vk::QUEUE_FAMILY_IGNORED,
@@ -481,11 +484,34 @@ fn transition_image_layout(
         dst_access_mask: vk::AccessFlags::empty(), //TODO
         ..Default::default()
     };
+
+    //Optimize Transition Cases:
+
+    let mut source_stage = vk::PipelineStageFlags::empty();
+    let mut destination_stage = vk::PipelineStageFlags::empty();
+    if (old_layout == vk::ImageLayout::UNDEFINED
+        && new_layout == vk::ImageLayout::TRANSFER_DST_OPTIMAL)
+    {
+        barrier.src_access_mask = vk::AccessFlags::empty();
+        barrier.dst_access_mask = vk::AccessFlags::TRANSFER_WRITE;
+
+        source_stage = vk::PipelineStageFlags::TOP_OF_PIPE;
+        destination_stage = vk::PipelineStageFlags::TRANSFER;
+    }
+    if (old_layout == vk::ImageLayout::TRANSFER_DST_OPTIMAL
+        && new_layout == vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+    {
+        barrier.src_access_mask = vk::AccessFlags::TRANSFER_WRITE;
+        barrier.dst_access_mask = vk::AccessFlags::SHADER_READ;
+
+        source_stage = vk::PipelineStageFlags::TRANSFER;
+        destination_stage = vk::PipelineStageFlags::FRAGMENT_SHADER;
+    }
     unsafe {
         logical_device.cmd_pipeline_barrier(
             command_buffer,
-            vk::PipelineStageFlags::empty(),
-            vk::PipelineStageFlags::empty(),
+            source_stage,
+            destination_stage,
             vk::DependencyFlags::empty(),
             &[], //Memory Barriers
             &[], //buffer_memory_barriers
@@ -1916,7 +1942,13 @@ impl HelloTriangleApp {
 
             let device_memory_properties =
                 instance.get_physical_device_memory_properties(*physical_device);
-            create_image(
+
+            let command_pool = self.vulkan_context.command_pool.expect("No command pool");
+            let graphics_queue = self
+                .vulkan_context
+                .graphics_queue
+                .expect("No graphics queue");
+            let image = create_image(
                 logical_device,
                 instance,
                 physical_device,
@@ -1927,7 +1959,40 @@ impl HelloTriangleApp {
                 vk::ImageUsageFlags::TRANSFER_DST | vk::ImageUsageFlags::SAMPLED,
                 device_memory_properties,
                 &self.vulkan_context.texture_image_memory,
+                command_pool,
+                graphics_queue,
             );
+            //Copy buffer to image
+            transition_image_layout(
+                logical_device,
+                command_pool,
+                image,
+                graphics_queue,
+                vk::Format::R8G8B8A8_SRGB,
+                vk::ImageLayout::UNDEFINED,
+                vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+            );
+            copy_buffer_to_image(
+                logical_device,
+                instance,
+                staging_buffer,
+                image,
+                width as u32,
+                height as u32,
+                command_pool,
+                graphics_queue,
+            );
+            transition_image_layout(
+                logical_device,
+                command_pool,
+                image,
+                graphics_queue,
+                vk::Format::R8G8B8A8_SRGB,
+                vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+                vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+            );
+            println!("No errors?");
+            //DST stage mask must not be 0?
         }
     }
 
