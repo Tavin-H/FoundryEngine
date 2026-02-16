@@ -877,6 +877,7 @@ struct VulkanContext {
     texture_image: vk::Image,
     texture_image_view: vk::ImageView,
     texture_image_memory: vk::DeviceMemory,
+    texture_sampler: vk::Sampler,
 
     //Shader Info
     shader_list: Vec<vk::ShaderModule>,
@@ -977,6 +978,8 @@ impl HelloTriangleApp {
         self.create_frame_buffers();
         self.create_command_pool();
         self.create_texture_image();
+        self.create_texture_image_view();
+        self.create_texture_sampler();
         self.create_vertex_buffer();
         self.create_index_buffer();
         self.create_uniform_buffer();
@@ -1002,6 +1005,7 @@ impl HelloTriangleApp {
         let surface_instance = ash::khr::surface::Instance::new(entry, instance);
 
         unsafe {
+            logical_device.destroy_sampler(self.vulkan_context.texture_sampler, None);
             logical_device.destroy_image_view(self.vulkan_context.texture_image_view, None);
             logical_device.destroy_image(self.vulkan_context.texture_image, None);
             logical_device.free_memory(self.vulkan_context.texture_image_memory, None);
@@ -2023,6 +2027,48 @@ impl HelloTriangleApp {
             vk::Format::R8G8B8A8_SRGB,
             logical_device,
         );
+    }
+
+    fn create_texture_sampler(&mut self) {
+        let Some(instance) = &self.vulkan_context.instance else {
+            panic!("No instance when calling create_texture_sampler");
+        };
+        let Some(logical_device) = &self.vulkan_context.logical_device else {
+            panic!("No logical_device when calling create_texture_sampler");
+        };
+        let Some(physical_device) = self.vulkan_context.physical_device else {
+            panic!("No physical_device when calling create_texture_sampler");
+        };
+
+        unsafe {
+            let properties = instance.get_physical_device_properties(physical_device);
+
+            let sampler_info = vk::SamplerCreateInfo {
+                mag_filter: vk::Filter::LINEAR,
+                min_filter: vk::Filter::LINEAR,
+                address_mode_u: vk::SamplerAddressMode::REPEAT,
+                address_mode_v: vk::SamplerAddressMode::REPEAT,
+                address_mode_w: vk::SamplerAddressMode::REPEAT,
+                anisotropy_enable: vk::TRUE,
+                max_anisotropy: properties.limits.max_sampler_anisotropy,
+                border_color: vk::BorderColor::INT_OPAQUE_BLACK,
+                unnormalized_coordinates: vk::FALSE, //False means [0, 1) True means [0, tex_width)
+                compare_enable: vk::FALSE,
+                compare_op: vk::CompareOp::ALWAYS,
+                mipmap_mode: vk::SamplerMipmapMode::LINEAR,
+                mip_lod_bias: 0.0,
+                min_lod: 0.0,
+                max_lod: 0.0,
+                ..Default::default()
+            };
+
+            match logical_device.create_sampler(&sampler_info, None) {
+                Ok(sampler) => {
+                    self.vulkan_context.texture_sampler = sampler;
+                }
+                Err(e) => panic!("{}", e),
+            }
+        }
     }
 
     fn create_vertex_buffer(&mut self) {
