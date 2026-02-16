@@ -21,6 +21,7 @@ const MAX_FRAMES_IN_FLIGHT: u32 = 2;
 //const main_name: CString = CString::new("main").expect("failed to load c string");
 //const MAIN_NAME: &[i8] = &[109, 97, 105, 110, 0];
 const MAIN_NAME: *const i8 = [109 as i8, 97 as i8, 105 as i8, 110 as i8, 0 as i8].as_ptr();
+use ash::amd::texture_gather_bias_lod;
 //Window
 use ash_window;
 use image;
@@ -180,8 +181,9 @@ fn create_image(
     image_memory: &vk::DeviceMemory,
     command_pool: vk::CommandPool,
     graphics_queue: vk::Queue,
-) -> vk::Image {
+) -> (vk::Image, vk::DeviceMemory) {
     let mut image: Option<vk::Image> = None;
+    let mut image_memory: Option<vk::DeviceMemory> = None;
 
     let image_create_info = vk::ImageCreateInfo {
         image_type: vk::ImageType::TYPE_2D,
@@ -232,8 +234,8 @@ fn create_image(
 
         match logical_device.allocate_memory(&alloc_info, None) {
             Ok(memory_pointer) => {
-                println!("Yay");
                 logical_device.bind_image_memory(image_value, memory_pointer, 0);
+                image_memory = Some(memory_pointer);
             }
             Err(e) => panic!("{}", e),
         }
@@ -241,8 +243,46 @@ fn create_image(
     let Some(image_value) = image else {
         panic!("");
     };
+    let Some(image_memory_value) = image_memory else {
+        panic!("");
+    };
 
-    return image_value;
+    return (image_value, image_memory_value);
+}
+
+fn create_image_view(
+    image: vk::Image,
+    format: vk::Format,
+    logical_device: &ash::Device,
+) -> vk::ImageView {
+    let view_info = vk::ImageViewCreateInfo {
+        image: image,
+        view_type: vk::ImageViewType::TYPE_2D,
+        format: format,
+        subresource_range: vk::ImageSubresourceRange {
+            aspect_mask: vk::ImageAspectFlags::COLOR,
+            base_mip_level: 0,
+            base_array_layer: 0,
+            level_count: 1,
+            layer_count: 1,
+            ..Default::default()
+        },
+        components: vk::ComponentMapping {
+            r: vk::ComponentSwizzle::IDENTITY,
+            g: vk::ComponentSwizzle::IDENTITY,
+            b: vk::ComponentSwizzle::IDENTITY,
+            a: vk::ComponentSwizzle::IDENTITY,
+        },
+        ..Default::default()
+    };
+    unsafe {
+        match logical_device.create_image_view(&view_info, None) {
+            Ok(image_view) => {
+                return image_view;
+            }
+            Err(e) => panic!("{}", e),
+        }
+    }
 }
 
 fn begin_single_time_commands(
@@ -496,8 +536,7 @@ fn transition_image_layout(
 
         source_stage = vk::PipelineStageFlags::TOP_OF_PIPE;
         destination_stage = vk::PipelineStageFlags::TRANSFER;
-    }
-    if (old_layout == vk::ImageLayout::TRANSFER_DST_OPTIMAL
+    } else if (old_layout == vk::ImageLayout::TRANSFER_DST_OPTIMAL
         && new_layout == vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
     {
         barrier.src_access_mask = vk::AccessFlags::TRANSFER_WRITE;
@@ -505,6 +544,8 @@ fn transition_image_layout(
 
         source_stage = vk::PipelineStageFlags::TRANSFER;
         destination_stage = vk::PipelineStageFlags::FRAGMENT_SHADER;
+    } else {
+        panic!("Unsupported Image type when transitioning");
     }
     unsafe {
         logical_device.cmd_pipeline_barrier(
@@ -834,6 +875,7 @@ struct VulkanContext {
 
     //textures
     texture_image: vk::Image,
+    texture_image_view: vk::ImageView,
     texture_image_memory: vk::DeviceMemory,
 
     //Shader Info
@@ -960,6 +1002,9 @@ impl HelloTriangleApp {
         let surface_instance = ash::khr::surface::Instance::new(entry, instance);
 
         unsafe {
+            logical_device.destroy_image_view(self.vulkan_context.texture_image_view, None);
+            logical_device.destroy_image(self.vulkan_context.texture_image, None);
+            logical_device.free_memory(self.vulkan_context.texture_image_memory, None);
             //Syncronization
             /*
                         let Some(fence) = self.vulkan_context.in_flight_fence else {
@@ -1012,9 +1057,6 @@ impl HelloTriangleApp {
 
             logical_device.destroy_buffer(self.vulkan_context.index_buffer, None);
             logical_device.free_memory(self.vulkan_context.index_buffer_memory, None);
-
-            logical_device.destroy_image(self.vulkan_context.texture_image, None);
-            logical_device.free_memory(self.vulkan_context.texture_image_memory, None);
 
             for graphics_pipeline in self.vulkan_context.graphics_pipelines.iter() {
                 logical_device.destroy_pipeline(*graphics_pipeline, None);
@@ -1469,38 +1511,9 @@ impl HelloTriangleApp {
             panic!("No logical_device when calling create_image_views");
         };
         let mut swap_chain_image_views: Vec<vk::ImageView> = Vec::new();
-        let image_components = vk::ComponentMapping {
-            r: vk::ComponentSwizzle::IDENTITY,
-            g: vk::ComponentSwizzle::IDENTITY,
-            b: vk::ComponentSwizzle::IDENTITY,
-            a: vk::ComponentSwizzle::IDENTITY,
-        };
-        let image_subresource_range = vk::ImageSubresourceRange {
-            aspect_mask: vk::ImageAspectFlags::COLOR,
-            base_mip_level: 0,
-            level_count: 1,
-            base_array_layer: 0,
-            layer_count: 1,
-        };
         for image in swap_chain_images.iter() {
-            let create_info = vk::ImageViewCreateInfo {
-                image: *image,
-                format: surface_format.format,
-                view_type: vk::ImageViewType::TYPE_2D,
-                components: image_components,
-                subresource_range: image_subresource_range,
-                ..Default::default()
-            };
-            unsafe {
-                match logical_device.create_image_view(&create_info, None) {
-                    Ok(image_view) => {
-                        swap_chain_image_views.push(image_view);
-                    }
-                    Err(e) => {
-                        panic!("{}", e);
-                    }
-                }
-            }
+            let image = create_image_view(*image, surface_format.format, logical_device);
+            swap_chain_image_views.push(image);
         }
         self.vulkan_context.swap_chain_image_views = swap_chain_image_views;
     }
@@ -1950,7 +1963,7 @@ impl HelloTriangleApp {
                 .vulkan_context
                 .graphics_queue
                 .expect("No graphics queue");
-            let image = create_image(
+            let (image, image_memory) = create_image(
                 logical_device,
                 instance,
                 physical_device,
@@ -1993,10 +2006,23 @@ impl HelloTriangleApp {
                 vk::ImageLayout::TRANSFER_DST_OPTIMAL,
                 vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
             );
+            self.vulkan_context.texture_image = image;
+            self.vulkan_context.texture_image_memory = image_memory;
 
             logical_device.destroy_buffer(staging_buffer, None);
             logical_device.free_memory(staging_buffer_memory, None);
         }
+    }
+
+    fn create_texture_image_view(&mut self) {
+        let Some(logical_device) = &self.vulkan_context.logical_device else {
+            panic!("No logical_device when calling create_texture_image");
+        };
+        self.vulkan_context.texture_image_view = create_image_view(
+            self.vulkan_context.texture_image,
+            vk::Format::R8G8B8A8_SRGB,
+            logical_device,
+        );
     }
 
     fn create_vertex_buffer(&mut self) {
