@@ -486,7 +486,6 @@ fn transition_image_layout(
     };
 
     //Optimize Transition Cases:
-
     let mut source_stage = vk::PipelineStageFlags::empty();
     let mut destination_stage = vk::PipelineStageFlags::empty();
     if (old_layout == vk::ImageLayout::UNDEFINED
@@ -1013,6 +1012,9 @@ impl HelloTriangleApp {
 
             logical_device.destroy_buffer(self.vulkan_context.index_buffer, None);
             logical_device.free_memory(self.vulkan_context.index_buffer_memory, None);
+
+            logical_device.destroy_image(self.vulkan_context.texture_image, None);
+            logical_device.free_memory(self.vulkan_context.texture_image_memory, None);
 
             for graphics_pipeline in self.vulkan_context.graphics_pipelines.iter() {
                 logical_device.destroy_pipeline(*graphics_pipeline, None);
@@ -1991,8 +1993,9 @@ impl HelloTriangleApp {
                 vk::ImageLayout::TRANSFER_DST_OPTIMAL,
                 vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
             );
-            println!("No errors?");
-            //DST stage mask must not be 0?
+
+            logical_device.destroy_buffer(staging_buffer, None);
+            logical_device.free_memory(staging_buffer_memory, None);
         }
     }
 
