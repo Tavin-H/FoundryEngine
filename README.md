@@ -15,7 +15,10 @@ Current supported OS:
 - MacOS (only intel tested)
 - Linux support coming soon
 
-Recent milestone: Made a rotating 3d square thats off-center of the origin with a transformation matrix
+Recent Mileston: Added a texture image to the rotating plane (Feb 17)
+<img width="1003" height="784" alt="Texture Image Example" src="https://github.com/user-attachments/assets/84a99227-8666-4e55-b28d-171da7501a54" />
+
+Past Milestone: Made a rotating 3d square thats off-center of the origin with a transformation matrix (Feb 4, 2025)
 <img width="790" height="622" alt="Screenshot 2026-02-10 at 7 17 31 PM" src="https://github.com/user-attachments/assets/874bf82d-f00c-49e6-8159-48ba24f8f0c0" />
 
 Past milestone: Drawing a shaded triangle on the screen as seen below (Jan 15, 2026).
