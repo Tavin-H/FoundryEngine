@@ -1933,13 +1933,14 @@ impl HelloTriangleApp {
         let (mut height, mut width) = (0, 0);
         let mut image_size: vk::DeviceSize = 0;
         let mut data: Vec<u8> = Vec::new();
-        match stb_image::image::load(path) {
+        match stb_image::image::load_with_depth(path, 4, false) {
             LoadResult::Error(e) => panic!("{}", e),
             LoadResult::ImageU8(image) => {
                 println!("Loaded texture Successfully");
                 (height, width) = (image.height, image.width);
-                image_size = (image.width * image.height) as u64 * 4;
+                //image_size = (image.width * image.height) as u64 * 3;
                 data = image.data;
+                image_size = data.len() as u64;
             }
             LoadResult::ImageF32(some) => println!("loaded image again?"),
         }
@@ -1964,11 +1965,8 @@ impl HelloTriangleApp {
                 panic!("Failed to map memory for vertex buffer");
             };
 
-            ptr::copy_nonoverlapping(
-                data.as_ptr(),
-                staging_memory_pointer as *mut u8, //Cast void to Vertex Data Type
-                1,
-            );
+            println!("Copying image to buffer");
+            ptr::copy_nonoverlapping(data.as_ptr(), staging_memory_pointer as *mut u8, data.len());
             logical_device.unmap_memory(staging_buffer_memory);
 
             let device_memory_properties =
@@ -2076,6 +2074,7 @@ impl HelloTriangleApp {
 
             match logical_device.create_sampler(&sampler_info, None) {
                 Ok(sampler) => {
+                    println!("CREATED SAMPLER");
                     self.vulkan_context.texture_sampler = sampler;
                 }
                 Err(e) => panic!("{}", e),
@@ -2699,17 +2698,9 @@ impl HelloTriangleApp {
 struct Vertex {
     pos: glm::Vec2,
     colour: glm::Vec3,
+    _pad: f32,
+    tex_coord: glm::Vec2,
 }
-
-#[repr(C)]
-#[repr(align(16))]
-#[derive(Default)]
-struct UniformBufferObject {
-    model: glm::Mat4,
-    view: glm::Mat4,
-    proj: glm::Mat4,
-}
-
 impl Vertex {
     fn get_binding_descs() -> Vec<vk::VertexInputBindingDescription> {
         let vertex_size: u32 = std::mem::size_of::<Vertex>() as u32;
@@ -2737,9 +2728,29 @@ impl Vertex {
             offset: offset_of!(Vertex, colour) as u32,
             ..Default::default()
         };
-        let attributes = vec![position_attribute_desc, colour_attribute_desc];
+        let tex_attribute_desc = vk::VertexInputAttributeDescription {
+            binding: 0,
+            location: 2,
+            format: vk::Format::R32G32_SFLOAT,
+            offset: offset_of!(Vertex, tex_coord) as u32,
+            ..Default::default()
+        };
+        let attributes = vec![
+            position_attribute_desc,
+            colour_attribute_desc,
+            tex_attribute_desc,
+        ];
         attributes
     }
+}
+
+#[repr(C)]
+#[repr(align(16))]
+#[derive(Default)]
+struct UniformBufferObject {
+    model: glm::Mat4,
+    view: glm::Mat4,
+    proj: glm::Mat4,
 }
 
 fn main() {
@@ -2748,18 +2759,26 @@ fn main() {
         Vertex {
             pos: glm::vec2(-0.5, -0.5),
             colour: glm::vec3(1.0, 0.0, 0.0),
+            tex_coord: glm::vec2(1.0, 0.0),
+            _pad: 0.0,
         },
         Vertex {
             pos: glm::vec2(0.5, -0.5),
             colour: glm::vec3(0.0, 1.0, 0.0),
+            tex_coord: glm::vec2(0.0, 0.0),
+            _pad: 0.0,
         },
         Vertex {
             pos: glm::vec2(0.5, 0.5),
             colour: glm::vec3(1.0, 1.0, 1.0),
+            tex_coord: glm::vec2(0.0, 1.0),
+            _pad: 0.0,
         },
         Vertex {
             pos: glm::vec2(-0.5, 0.5),
             colour: glm::vec3(0.0, 0.0, 1.0),
+            tex_coord: glm::vec2(1.0, 1.0),
+            _pad: 0.0,
         },
     ];
 
