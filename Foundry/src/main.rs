@@ -701,7 +701,8 @@ fn is_device_stable(
         }
         return (properties.device_type == vk::PhysicalDeviceType::DISCRETE_GPU
             && extension_supported
-            && swapchain_supported);
+            && swapchain_supported
+            && features.sampler_anisotropy == 1);
     };
 }
 
@@ -1260,6 +1261,7 @@ impl HelloTriangleApp {
         }
 
         let device_features: vk::PhysicalDeviceFeatures = vk::PhysicalDeviceFeatures {
+            sampler_anisotropy: vk::TRUE,
             ..Default::default()
         };
         let mut device_extensions: Vec<*const i8> = Vec::new();
@@ -1552,9 +1554,19 @@ impl HelloTriangleApp {
             ..Default::default()
         };
 
+        let sampler_layout_binding = vk::DescriptorSetLayoutBinding {
+            binding: 1,
+            descriptor_count: 1,
+            descriptor_type: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
+            stage_flags: vk::ShaderStageFlags::FRAGMENT,
+            ..Default::default()
+        };
+
+        let bindings = [sampler_layout_binding, ubo_layout_binding];
+
         let layout_info = vk::DescriptorSetLayoutCreateInfo {
-            binding_count: 1,
-            p_bindings: &ubo_layout_binding,
+            binding_count: bindings.len() as u32,
+            p_bindings: bindings.as_ptr(),
             ..Default::default()
         };
 
@@ -2251,14 +2263,30 @@ impl HelloTriangleApp {
         let Some(logical_device) = &self.vulkan_context.logical_device else {
             panic!("No logical_device when calling create_descriptor_pool");
         };
-        let pool_size = vk::DescriptorPoolSize {
-            descriptor_count: MAX_FRAMES_IN_FLIGHT,
-            ty: vk::DescriptorType::UNIFORM_BUFFER,
-        };
+        /*
+                let pool_size = vk::DescriptorPoolSize {
+                    descriptor_count: MAX_FRAMES_IN_FLIGHT,
+                    ty: vk::DescriptorType::UNIFORM_BUFFER,
+                };
+        */
+
+        let mut pool_sizes = [
+            //[0]
+            vk::DescriptorPoolSize {
+                ty: vk::DescriptorType::UNIFORM_BUFFER,
+                descriptor_count: MAX_FRAMES_IN_FLIGHT,
+            },
+            //[1]
+            vk::DescriptorPoolSize {
+                ty: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
+                descriptor_count: MAX_FRAMES_IN_FLIGHT,
+            },
+        ];
+
         let pool_info = vk::DescriptorPoolCreateInfo {
             s_type: vk::StructureType::DESCRIPTOR_POOL_CREATE_INFO,
-            pool_size_count: 1,
-            p_pool_sizes: &pool_size,
+            pool_size_count: pool_sizes.len() as u32,
+            p_pool_sizes: pool_sizes.as_ptr(),
             max_sets: MAX_FRAMES_IN_FLIGHT,
             ..Default::default()
         };
@@ -2307,18 +2335,52 @@ impl HelloTriangleApp {
                 range: size_of::<UniformBufferObject>() as u64,
                 ..Default::default()
             };
-            let descriptor_write = vk::WriteDescriptorSet {
-                s_type: vk::StructureType::WRITE_DESCRIPTOR_SET,
-                dst_set: self.vulkan_context.descriptor_sets[i as usize],
-                dst_binding: 0,
-                dst_array_element: 0,
-                descriptor_type: vk::DescriptorType::UNIFORM_BUFFER,
-                descriptor_count: 1,
-                p_buffer_info: &buffer_info,
+
+            //FIXME (if something goes wrong)
+            let image_info = vk::DescriptorImageInfo {
+                image_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+                image_view: self.vulkan_context.texture_image_view,
+                sampler: self.vulkan_context.texture_sampler,
                 ..Default::default()
             };
+
+            /*
+                        let descriptor_write = vk::WriteDescriptorSet {
+                            s_type: vk::StructureType::WRITE_DESCRIPTOR_SET,
+                            dst_set: self.vulkan_context.descriptor_sets[i as usize],
+                            dst_binding: 0,
+                            dst_array_element: 0,
+                            descriptor_type: vk::DescriptorType::UNIFORM_BUFFER,
+                            descriptor_count: 1,
+                            p_buffer_info: &buffer_info,
+                            ..Default::default()
+                        };
+            */
+
+            let descriptor_writes = [
+                vk::WriteDescriptorSet {
+                    s_type: vk::StructureType::WRITE_DESCRIPTOR_SET,
+                    dst_set: self.vulkan_context.descriptor_sets[i as usize],
+                    dst_binding: 0,
+                    dst_array_element: 0,
+                    descriptor_type: vk::DescriptorType::UNIFORM_BUFFER,
+                    descriptor_count: 1,
+                    p_buffer_info: &buffer_info,
+                    ..Default::default()
+                },
+                vk::WriteDescriptorSet {
+                    s_type: vk::StructureType::WRITE_DESCRIPTOR_SET,
+                    dst_set: self.vulkan_context.descriptor_sets[i as usize],
+                    dst_binding: 1,
+                    dst_array_element: 0,
+                    descriptor_type: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
+                    descriptor_count: 1,
+                    p_image_info: &image_info,
+                    ..Default::default()
+                },
+            ];
             unsafe {
-                logical_device.update_descriptor_sets(&[descriptor_write], &[]);
+                logical_device.update_descriptor_sets(&descriptor_writes, &[]);
             }
         }
     }
