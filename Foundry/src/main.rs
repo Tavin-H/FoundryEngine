@@ -17,11 +17,11 @@ const FIRST_PRIORITY: f32 = 1.0;
 const MAX_FRAMES_IN_FLIGHT: u32 = 2;
 //static vertices: [Vertex 3];
 //
-//Testing Git branching
 
 //const main_name: CString = CString::new("main").expect("failed to load c string");
 //const MAIN_NAME: &[i8] = &[109, 97, 105, 110, 0];
 const MAIN_NAME: *const i8 = [109 as i8, 97 as i8, 105 as i8, 110 as i8, 0 as i8].as_ptr();
+use ash::amd::texture_gather_bias_lod;
 //Window
 use ash_window;
 use image;
@@ -123,6 +123,218 @@ impl ApplicationHandler for HelloTriangleApp {
 }
 
 //----------------Helper functions-----------------
+
+fn copy_buffer_to_image(
+    logical_device: &ash::Device,
+    instance: &Instance,
+    buffer: vk::Buffer,
+    image: vk::Image,
+    width: u32,
+    height: u32,
+    command_pool: vk::CommandPool,
+    graphics_queue: vk::Queue,
+) {
+    let command_buffer = begin_single_time_commands(logical_device, command_pool);
+
+    let region = vk::BufferImageCopy {
+        buffer_offset: 0,
+        buffer_row_length: 0,
+        buffer_image_height: 0,
+        image_subresource: vk::ImageSubresourceLayers {
+            aspect_mask: vk::ImageAspectFlags::COLOR,
+            mip_level: 0,
+            base_array_layer: 0,
+            layer_count: 1,
+        },
+        image_offset: vk::Offset3D {
+            ..Default::default()
+        },
+        image_extent: vk::Extent3D {
+            width: width,
+            height: height,
+            depth: 1,
+        },
+        ..Default::default()
+    };
+    unsafe {
+        logical_device.cmd_copy_buffer_to_image(
+            command_buffer,
+            buffer,
+            image,
+            vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+            &[region],
+        );
+    }
+    end_single_time_commands(logical_device, command_buffer, command_pool, graphics_queue);
+}
+
+fn create_image(
+    logical_device: &ash::Device,
+    instance: &ash::Instance,
+    physical_device: &vk::PhysicalDevice,
+    height: u32,
+    width: u32,
+    format: vk::Format,
+    tiling: vk::ImageTiling,
+    usage: vk::ImageUsageFlags,
+    properties: vk::PhysicalDeviceMemoryProperties,
+    image_memory: &vk::DeviceMemory,
+    command_pool: vk::CommandPool,
+    graphics_queue: vk::Queue,
+) -> (vk::Image, vk::DeviceMemory) {
+    let mut image: Option<vk::Image> = None;
+    let mut image_memory: Option<vk::DeviceMemory> = None;
+
+    let image_create_info = vk::ImageCreateInfo {
+        image_type: vk::ImageType::TYPE_2D,
+        extent: vk::Extent2D {
+            width: width,
+            height: height,
+        }
+        .into(),
+        mip_levels: 1,
+        array_layers: 1,
+        format: format,
+        tiling: tiling,
+        initial_layout: vk::ImageLayout::UNDEFINED,
+        usage: usage,
+        sharing_mode: vk::SharingMode::EXCLUSIVE,
+        samples: vk::SampleCountFlags::TYPE_1,
+
+        ..Default::default()
+    };
+    unsafe {
+        match logical_device.create_image(&image_create_info, None) {
+            Ok(created_image) => {
+                image = Some(created_image);
+                println!("Created Texture Successfully");
+            }
+            Err(e) => panic!("{}", e),
+        }
+    }
+
+    //Load image into memory
+    unsafe {
+        let device_memory_properties =
+            instance.get_physical_device_memory_properties(*physical_device);
+
+        let Some(image_value) = image else {
+            panic!("Image is not a value");
+        };
+        let memory_requirements = logical_device.get_image_memory_requirements(image_value);
+        let alloc_info = vk::MemoryAllocateInfo {
+            allocation_size: memory_requirements.size,
+            memory_type_index: find_memory_type(
+                memory_requirements.memory_type_bits,
+                vk::MemoryPropertyFlags::DEVICE_LOCAL,
+                device_memory_properties,
+            ),
+            ..Default::default()
+        };
+
+        match logical_device.allocate_memory(&alloc_info, None) {
+            Ok(memory_pointer) => {
+                logical_device.bind_image_memory(image_value, memory_pointer, 0);
+                image_memory = Some(memory_pointer);
+            }
+            Err(e) => panic!("{}", e),
+        }
+    }
+    let Some(image_value) = image else {
+        panic!("");
+    };
+    let Some(image_memory_value) = image_memory else {
+        panic!("");
+    };
+
+    return (image_value, image_memory_value);
+}
+
+fn create_image_view(
+    image: vk::Image,
+    format: vk::Format,
+    logical_device: &ash::Device,
+) -> vk::ImageView {
+    let view_info = vk::ImageViewCreateInfo {
+        image: image,
+        view_type: vk::ImageViewType::TYPE_2D,
+        format: format,
+        subresource_range: vk::ImageSubresourceRange {
+            aspect_mask: vk::ImageAspectFlags::COLOR,
+            base_mip_level: 0,
+            base_array_layer: 0,
+            level_count: 1,
+            layer_count: 1,
+            ..Default::default()
+        },
+        components: vk::ComponentMapping {
+            r: vk::ComponentSwizzle::IDENTITY,
+            g: vk::ComponentSwizzle::IDENTITY,
+            b: vk::ComponentSwizzle::IDENTITY,
+            a: vk::ComponentSwizzle::IDENTITY,
+        },
+        ..Default::default()
+    };
+    unsafe {
+        match logical_device.create_image_view(&view_info, None) {
+            Ok(image_view) => {
+                return image_view;
+            }
+            Err(e) => panic!("{}", e),
+        }
+    }
+}
+
+fn begin_single_time_commands(
+    logical_device: &ash::Device,
+    command_pool: vk::CommandPool,
+) -> vk::CommandBuffer {
+    let alloc_info = vk::CommandBufferAllocateInfo {
+        level: vk::CommandBufferLevel::PRIMARY,
+        command_pool: command_pool,
+        command_buffer_count: 1,
+        ..Default::default()
+    };
+    let begin_info = vk::CommandBufferBeginInfo {
+        flags: vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT,
+        ..Default::default()
+    };
+    unsafe {
+        match logical_device.allocate_command_buffers(&alloc_info) {
+            Ok(command_buffers) => {
+                println!("allocated command buffer thingy");
+                logical_device.begin_command_buffer(command_buffers[0], &begin_info);
+                return command_buffers[0]; //FIXME potential dangling pointer if indexing returns a
+                //reference and not the value
+            }
+            Err(e) => panic!("{}", e),
+        }
+    }
+}
+
+fn end_single_time_commands(
+    logical_device: &ash::Device,
+    command_buffer: vk::CommandBuffer,
+    command_pool: vk::CommandPool,
+    graphics_queue: vk::Queue,
+) {
+    unsafe {
+        logical_device.end_command_buffer(command_buffer);
+    }
+
+    let submit_info = vk::SubmitInfo {
+        command_buffer_count: 1,
+        p_command_buffers: &command_buffer,
+        ..Default::default()
+    };
+
+    unsafe {
+        logical_device.queue_submit(graphics_queue, &[submit_info], vk::Fence::null());
+        logical_device.device_wait_idle();
+
+        logical_device.free_command_buffers(command_pool, &[command_buffer]);
+    }
+}
 
 fn update_uniform_buffer(
     current_image: u32,
@@ -251,45 +463,17 @@ fn copy_buffer(
     let Some(graphics_queue) = context.graphics_queue else {
         panic!("No graphics_queue when calling copy_region");
     };
-    let alloc_info = vk::CommandBufferAllocateInfo {
-        level: vk::CommandBufferLevel::PRIMARY,
-        command_pool: command_pool,
-        command_buffer_count: 1,
+
+    let command_buffer = begin_single_time_commands(logical_device, command_pool);
+
+    let copy_region = vk::BufferCopy {
+        size: size,
         ..Default::default()
     };
-
     unsafe {
-        let command_buffer_result = logical_device.allocate_command_buffers(&alloc_info);
-
-        let Ok(command_buffers) = command_buffer_result else {
-            panic!("Failed to create command_buffer");
-        };
-
-        let begin_info = vk::CommandBufferBeginInfo {
-            ..Default::default()
-        };
-
-        logical_device.begin_command_buffer(command_buffers[0], &begin_info);
-        let copy_region = vk::BufferCopy {
-            src_offset: 0,
-            dst_offset: 0,
-            size: size,
-            ..Default::default()
-        };
-        let copy_regions = [copy_region];
-        logical_device.cmd_copy_buffer(command_buffers[0], src_buffer, dst_buffer, &copy_regions);
-        logical_device.end_command_buffer(command_buffers[0]);
-
-        let submit_info = vk::SubmitInfo {
-            command_buffer_count: 1,
-            p_command_buffers: command_buffers.as_ptr(),
-            ..Default::default()
-        };
-
-        logical_device.queue_submit(graphics_queue, &[submit_info], vk::Fence::null());
-        logical_device.queue_wait_idle(graphics_queue);
-        logical_device.free_command_buffers(command_pool, &command_buffers);
+        logical_device.cmd_copy_buffer(command_buffer, src_buffer, dst_buffer, &[copy_region]);
     }
+    end_single_time_commands(logical_device, command_buffer, command_pool, graphics_queue);
 }
 
 fn find_memory_type(
@@ -309,6 +493,73 @@ fn find_memory_type(
         }
     }
     panic!("Failed to find suitible memory type!");
+}
+
+fn transition_image_layout(
+    logical_device: &ash::Device,
+    command_pool: vk::CommandPool,
+    image: vk::Image,
+    graphics_queue: vk::Queue,
+    format: vk::Format,
+    old_layout: vk::ImageLayout,
+    new_layout: vk::ImageLayout,
+) {
+    let command_buffer: vk::CommandBuffer =
+        begin_single_time_commands(logical_device, command_pool);
+
+    let mut barrier = vk::ImageMemoryBarrier {
+        old_layout: old_layout,
+        new_layout: new_layout,
+        src_queue_family_index: vk::QUEUE_FAMILY_IGNORED,
+        dst_queue_family_index: vk::QUEUE_FAMILY_IGNORED,
+        image: image,
+        subresource_range: vk::ImageSubresourceRange {
+            aspect_mask: vk::ImageAspectFlags::COLOR,
+            base_mip_level: 0,
+            level_count: 1,
+            base_array_layer: 0,
+            layer_count: 1,
+        },
+        src_access_mask: vk::AccessFlags::empty(), //TODO
+        dst_access_mask: vk::AccessFlags::empty(), //TODO
+        ..Default::default()
+    };
+
+    //Optimize Transition Cases:
+    let mut source_stage = vk::PipelineStageFlags::empty();
+    let mut destination_stage = vk::PipelineStageFlags::empty();
+    if (old_layout == vk::ImageLayout::UNDEFINED
+        && new_layout == vk::ImageLayout::TRANSFER_DST_OPTIMAL)
+    {
+        barrier.src_access_mask = vk::AccessFlags::empty();
+        barrier.dst_access_mask = vk::AccessFlags::TRANSFER_WRITE;
+
+        source_stage = vk::PipelineStageFlags::TOP_OF_PIPE;
+        destination_stage = vk::PipelineStageFlags::TRANSFER;
+    } else if (old_layout == vk::ImageLayout::TRANSFER_DST_OPTIMAL
+        && new_layout == vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+    {
+        barrier.src_access_mask = vk::AccessFlags::TRANSFER_WRITE;
+        barrier.dst_access_mask = vk::AccessFlags::SHADER_READ;
+
+        source_stage = vk::PipelineStageFlags::TRANSFER;
+        destination_stage = vk::PipelineStageFlags::FRAGMENT_SHADER;
+    } else {
+        panic!("Unsupported Image type when transitioning");
+    }
+    unsafe {
+        logical_device.cmd_pipeline_barrier(
+            command_buffer,
+            source_stage,
+            destination_stage,
+            vk::DependencyFlags::empty(),
+            &[], //Memory Barriers
+            &[], //buffer_memory_barriers
+            &[barrier],
+        );
+    }
+
+    end_single_time_commands(logical_device, command_buffer, command_pool, graphics_queue);
 }
 
 fn debug_call_back(
@@ -450,7 +701,8 @@ fn is_device_stable(
         }
         return (properties.device_type == vk::PhysicalDeviceType::DISCRETE_GPU
             && extension_supported
-            && swapchain_supported);
+            && swapchain_supported
+            && features.sampler_anisotropy == 1);
     };
 }
 
@@ -624,7 +876,9 @@ struct VulkanContext {
 
     //textures
     texture_image: vk::Image,
+    texture_image_view: vk::ImageView,
     texture_image_memory: vk::DeviceMemory,
+    texture_sampler: vk::Sampler,
 
     //Shader Info
     shader_list: Vec<vk::ShaderModule>,
@@ -725,6 +979,8 @@ impl HelloTriangleApp {
         self.create_frame_buffers();
         self.create_command_pool();
         self.create_texture_image();
+        self.create_texture_image_view();
+        self.create_texture_sampler();
         self.create_vertex_buffer();
         self.create_index_buffer();
         self.create_uniform_buffer();
@@ -750,6 +1006,10 @@ impl HelloTriangleApp {
         let surface_instance = ash::khr::surface::Instance::new(entry, instance);
 
         unsafe {
+            logical_device.destroy_sampler(self.vulkan_context.texture_sampler, None);
+            logical_device.destroy_image_view(self.vulkan_context.texture_image_view, None);
+            logical_device.destroy_image(self.vulkan_context.texture_image, None);
+            logical_device.free_memory(self.vulkan_context.texture_image_memory, None);
             //Syncronization
             /*
                         let Some(fence) = self.vulkan_context.in_flight_fence else {
@@ -1001,6 +1261,7 @@ impl HelloTriangleApp {
         }
 
         let device_features: vk::PhysicalDeviceFeatures = vk::PhysicalDeviceFeatures {
+            sampler_anisotropy: vk::TRUE,
             ..Default::default()
         };
         let mut device_extensions: Vec<*const i8> = Vec::new();
@@ -1256,38 +1517,9 @@ impl HelloTriangleApp {
             panic!("No logical_device when calling create_image_views");
         };
         let mut swap_chain_image_views: Vec<vk::ImageView> = Vec::new();
-        let image_components = vk::ComponentMapping {
-            r: vk::ComponentSwizzle::IDENTITY,
-            g: vk::ComponentSwizzle::IDENTITY,
-            b: vk::ComponentSwizzle::IDENTITY,
-            a: vk::ComponentSwizzle::IDENTITY,
-        };
-        let image_subresource_range = vk::ImageSubresourceRange {
-            aspect_mask: vk::ImageAspectFlags::COLOR,
-            base_mip_level: 0,
-            level_count: 1,
-            base_array_layer: 0,
-            layer_count: 1,
-        };
         for image in swap_chain_images.iter() {
-            let create_info = vk::ImageViewCreateInfo {
-                image: *image,
-                format: surface_format.format,
-                view_type: vk::ImageViewType::TYPE_2D,
-                components: image_components,
-                subresource_range: image_subresource_range,
-                ..Default::default()
-            };
-            unsafe {
-                match logical_device.create_image_view(&create_info, None) {
-                    Ok(image_view) => {
-                        swap_chain_image_views.push(image_view);
-                    }
-                    Err(e) => {
-                        panic!("{}", e);
-                    }
-                }
-            }
+            let image = create_image_view(*image, surface_format.format, logical_device);
+            swap_chain_image_views.push(image);
         }
         self.vulkan_context.swap_chain_image_views = swap_chain_image_views;
     }
@@ -1322,9 +1554,19 @@ impl HelloTriangleApp {
             ..Default::default()
         };
 
+        let sampler_layout_binding = vk::DescriptorSetLayoutBinding {
+            binding: 1,
+            descriptor_count: 1,
+            descriptor_type: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
+            stage_flags: vk::ShaderStageFlags::FRAGMENT,
+            ..Default::default()
+        };
+
+        let bindings = [sampler_layout_binding, ubo_layout_binding];
+
         let layout_info = vk::DescriptorSetLayoutCreateInfo {
-            binding_count: 1,
-            p_bindings: &ubo_layout_binding,
+            binding_count: bindings.len() as u32,
+            p_bindings: bindings.as_ptr(),
             ..Default::default()
         };
 
@@ -1680,18 +1922,25 @@ impl HelloTriangleApp {
         let Some(logical_device) = &self.vulkan_context.logical_device else {
             panic!("No logical_device when calling create_texture_image");
         };
+        let Some(physical_device) = &self.vulkan_context.physical_device else {
+            panic!("No physical_device when calling create_texture_image");
+        };
+        let Some(instance) = &self.vulkan_context.instance else {
+            panic!("No instance when calling create_texture_image");
+        };
         let path_name = "textures/sunset.jpg";
         let path = Path::new(path_name);
         let (mut height, mut width) = (0, 0);
         let mut image_size: vk::DeviceSize = 0;
         let mut data: Vec<u8> = Vec::new();
-        match stb_image::image::load(path) {
+        match stb_image::image::load_with_depth(path, 4, false) {
             LoadResult::Error(e) => panic!("{}", e),
             LoadResult::ImageU8(image) => {
                 println!("Loaded texture Successfully");
                 (height, width) = (image.height, image.width);
-                image_size = (image.width * image.height) as u64 * 4;
+                //image_size = (image.width * image.height) as u64 * 3;
                 data = image.data;
+                image_size = data.len() as u64;
             }
             LoadResult::ImageF32(some) => println!("loaded image again?"),
         }
@@ -1704,21 +1953,6 @@ impl HelloTriangleApp {
             vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
             &self.vulkan_context,
         );
-        let image_create_info = vk::ImageCreateInfo {
-            image_type: vk::ImageType::TYPE_2D,
-            extent: vk::Extent2D {
-                width: width as u32,
-                height: height as u32,
-            }
-            .into(),
-            mip_levels: 1,
-            array_layers: 1,
-            format: vk::Format::R8G8B8_SRGB,
-            tiling: vk::ImageTiling::OPTIMAL,
-            initial_layout: vk::ImageLayout::UNDEFINED,
-
-            ..Default::default()
-        };
         unsafe {
             let staging_map_memory_result = logical_device.map_memory(
                 staging_buffer_memory,
@@ -1731,13 +1965,120 @@ impl HelloTriangleApp {
                 panic!("Failed to map memory for vertex buffer");
             };
 
-            ptr::copy_nonoverlapping(
-                data.as_ptr(),
-                staging_memory_pointer as *mut u8, //Cast void to Vertex Data Type
-                1,
-            );
+            println!("Copying image to buffer");
+            ptr::copy_nonoverlapping(data.as_ptr(), staging_memory_pointer as *mut u8, data.len());
             logical_device.unmap_memory(staging_buffer_memory);
-            //up to page 145 now
+
+            let device_memory_properties =
+                instance.get_physical_device_memory_properties(*physical_device);
+
+            let command_pool = self.vulkan_context.command_pool.expect("No command pool");
+            let graphics_queue = self
+                .vulkan_context
+                .graphics_queue
+                .expect("No graphics queue");
+            let (image, image_memory) = create_image(
+                logical_device,
+                instance,
+                physical_device,
+                height as u32,
+                width as u32,
+                vk::Format::R8G8B8A8_SRGB,
+                vk::ImageTiling::OPTIMAL,
+                vk::ImageUsageFlags::TRANSFER_DST | vk::ImageUsageFlags::SAMPLED,
+                device_memory_properties,
+                &self.vulkan_context.texture_image_memory,
+                command_pool,
+                graphics_queue,
+            );
+            //Copy buffer to image
+            transition_image_layout(
+                logical_device,
+                command_pool,
+                image,
+                graphics_queue,
+                vk::Format::R8G8B8A8_SRGB,
+                vk::ImageLayout::UNDEFINED,
+                vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+            );
+            copy_buffer_to_image(
+                logical_device,
+                instance,
+                staging_buffer,
+                image,
+                width as u32,
+                height as u32,
+                command_pool,
+                graphics_queue,
+            );
+            transition_image_layout(
+                logical_device,
+                command_pool,
+                image,
+                graphics_queue,
+                vk::Format::R8G8B8A8_SRGB,
+                vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+                vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+            );
+            self.vulkan_context.texture_image = image;
+            self.vulkan_context.texture_image_memory = image_memory;
+
+            logical_device.destroy_buffer(staging_buffer, None);
+            logical_device.free_memory(staging_buffer_memory, None);
+        }
+    }
+
+    fn create_texture_image_view(&mut self) {
+        let Some(logical_device) = &self.vulkan_context.logical_device else {
+            panic!("No logical_device when calling create_texture_image");
+        };
+        self.vulkan_context.texture_image_view = create_image_view(
+            self.vulkan_context.texture_image,
+            vk::Format::R8G8B8A8_SRGB,
+            logical_device,
+        );
+    }
+
+    fn create_texture_sampler(&mut self) {
+        let Some(instance) = &self.vulkan_context.instance else {
+            panic!("No instance when calling create_texture_sampler");
+        };
+        let Some(logical_device) = &self.vulkan_context.logical_device else {
+            panic!("No logical_device when calling create_texture_sampler");
+        };
+        let Some(physical_device) = self.vulkan_context.physical_device else {
+            panic!("No physical_device when calling create_texture_sampler");
+        };
+
+        unsafe {
+            let properties = instance.get_physical_device_properties(physical_device);
+
+            let sampler_info = vk::SamplerCreateInfo {
+                mag_filter: vk::Filter::LINEAR,
+                min_filter: vk::Filter::LINEAR,
+                address_mode_u: vk::SamplerAddressMode::REPEAT,
+                address_mode_v: vk::SamplerAddressMode::REPEAT,
+                address_mode_w: vk::SamplerAddressMode::REPEAT,
+                anisotropy_enable: vk::TRUE,
+                max_anisotropy: properties.limits.max_sampler_anisotropy,
+                border_color: vk::BorderColor::INT_OPAQUE_BLACK,
+                unnormalized_coordinates: vk::FALSE, //False means [0, 1) True means [0, tex_width)
+                compare_enable: vk::FALSE,
+                compare_op: vk::CompareOp::ALWAYS,
+                mipmap_mode: vk::SamplerMipmapMode::LINEAR,
+                mip_lod_bias: 0.0,
+                min_lod: 0.0,
+                max_lod: 0.0,
+                ..Default::default()
+            };
+
+            match logical_device.create_sampler(&sampler_info, None) {
+                Ok(sampler) => {
+                    println!("CREATED SAMPLER");
+                    self.vulkan_context.texture_sampler = sampler;
+                }
+                Err(e) => panic!("{}", e),
+            }
         }
     }
 
@@ -1921,14 +2262,30 @@ impl HelloTriangleApp {
         let Some(logical_device) = &self.vulkan_context.logical_device else {
             panic!("No logical_device when calling create_descriptor_pool");
         };
-        let pool_size = vk::DescriptorPoolSize {
-            descriptor_count: MAX_FRAMES_IN_FLIGHT,
-            ty: vk::DescriptorType::UNIFORM_BUFFER,
-        };
+        /*
+                let pool_size = vk::DescriptorPoolSize {
+                    descriptor_count: MAX_FRAMES_IN_FLIGHT,
+                    ty: vk::DescriptorType::UNIFORM_BUFFER,
+                };
+        */
+
+        let mut pool_sizes = [
+            //[0]
+            vk::DescriptorPoolSize {
+                ty: vk::DescriptorType::UNIFORM_BUFFER,
+                descriptor_count: MAX_FRAMES_IN_FLIGHT,
+            },
+            //[1]
+            vk::DescriptorPoolSize {
+                ty: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
+                descriptor_count: MAX_FRAMES_IN_FLIGHT,
+            },
+        ];
+
         let pool_info = vk::DescriptorPoolCreateInfo {
             s_type: vk::StructureType::DESCRIPTOR_POOL_CREATE_INFO,
-            pool_size_count: 1,
-            p_pool_sizes: &pool_size,
+            pool_size_count: pool_sizes.len() as u32,
+            p_pool_sizes: pool_sizes.as_ptr(),
             max_sets: MAX_FRAMES_IN_FLIGHT,
             ..Default::default()
         };
@@ -1977,18 +2334,52 @@ impl HelloTriangleApp {
                 range: size_of::<UniformBufferObject>() as u64,
                 ..Default::default()
             };
-            let descriptor_write = vk::WriteDescriptorSet {
-                s_type: vk::StructureType::WRITE_DESCRIPTOR_SET,
-                dst_set: self.vulkan_context.descriptor_sets[i as usize],
-                dst_binding: 0,
-                dst_array_element: 0,
-                descriptor_type: vk::DescriptorType::UNIFORM_BUFFER,
-                descriptor_count: 1,
-                p_buffer_info: &buffer_info,
+
+            //FIXME (if something goes wrong)
+            let image_info = vk::DescriptorImageInfo {
+                image_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+                image_view: self.vulkan_context.texture_image_view,
+                sampler: self.vulkan_context.texture_sampler,
                 ..Default::default()
             };
+
+            /*
+                        let descriptor_write = vk::WriteDescriptorSet {
+                            s_type: vk::StructureType::WRITE_DESCRIPTOR_SET,
+                            dst_set: self.vulkan_context.descriptor_sets[i as usize],
+                            dst_binding: 0,
+                            dst_array_element: 0,
+                            descriptor_type: vk::DescriptorType::UNIFORM_BUFFER,
+                            descriptor_count: 1,
+                            p_buffer_info: &buffer_info,
+                            ..Default::default()
+                        };
+            */
+
+            let descriptor_writes = [
+                vk::WriteDescriptorSet {
+                    s_type: vk::StructureType::WRITE_DESCRIPTOR_SET,
+                    dst_set: self.vulkan_context.descriptor_sets[i as usize],
+                    dst_binding: 0,
+                    dst_array_element: 0,
+                    descriptor_type: vk::DescriptorType::UNIFORM_BUFFER,
+                    descriptor_count: 1,
+                    p_buffer_info: &buffer_info,
+                    ..Default::default()
+                },
+                vk::WriteDescriptorSet {
+                    s_type: vk::StructureType::WRITE_DESCRIPTOR_SET,
+                    dst_set: self.vulkan_context.descriptor_sets[i as usize],
+                    dst_binding: 1,
+                    dst_array_element: 0,
+                    descriptor_type: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
+                    descriptor_count: 1,
+                    p_image_info: &image_info,
+                    ..Default::default()
+                },
+            ];
             unsafe {
-                logical_device.update_descriptor_sets(&[descriptor_write], &[]);
+                logical_device.update_descriptor_sets(&descriptor_writes, &[]);
             }
         }
     }
@@ -2307,17 +2698,9 @@ impl HelloTriangleApp {
 struct Vertex {
     pos: glm::Vec2,
     colour: glm::Vec3,
+    _pad: f32,
+    tex_coord: glm::Vec2,
 }
-
-#[repr(C)]
-#[repr(align(16))]
-#[derive(Default)]
-struct UniformBufferObject {
-    model: glm::Mat4,
-    view: glm::Mat4,
-    proj: glm::Mat4,
-}
-
 impl Vertex {
     fn get_binding_descs() -> Vec<vk::VertexInputBindingDescription> {
         let vertex_size: u32 = std::mem::size_of::<Vertex>() as u32;
@@ -2345,9 +2728,29 @@ impl Vertex {
             offset: offset_of!(Vertex, colour) as u32,
             ..Default::default()
         };
-        let attributes = vec![position_attribute_desc, colour_attribute_desc];
+        let tex_attribute_desc = vk::VertexInputAttributeDescription {
+            binding: 0,
+            location: 2,
+            format: vk::Format::R32G32_SFLOAT,
+            offset: offset_of!(Vertex, tex_coord) as u32,
+            ..Default::default()
+        };
+        let attributes = vec![
+            position_attribute_desc,
+            colour_attribute_desc,
+            tex_attribute_desc,
+        ];
         attributes
     }
+}
+
+#[repr(C)]
+#[repr(align(16))]
+#[derive(Default)]
+struct UniformBufferObject {
+    model: glm::Mat4,
+    view: glm::Mat4,
+    proj: glm::Mat4,
 }
 
 fn main() {
@@ -2356,18 +2759,26 @@ fn main() {
         Vertex {
             pos: glm::vec2(-0.5, -0.5),
             colour: glm::vec3(1.0, 0.0, 0.0),
+            tex_coord: glm::vec2(1.0, 0.0),
+            _pad: 0.0,
         },
         Vertex {
             pos: glm::vec2(0.5, -0.5),
             colour: glm::vec3(0.0, 1.0, 0.0),
+            tex_coord: glm::vec2(0.0, 0.0),
+            _pad: 0.0,
         },
         Vertex {
             pos: glm::vec2(0.5, 0.5),
             colour: glm::vec3(1.0, 1.0, 1.0),
+            tex_coord: glm::vec2(0.0, 1.0),
+            _pad: 0.0,
         },
         Vertex {
             pos: glm::vec2(-0.5, 0.5),
             colour: glm::vec3(0.0, 0.0, 1.0),
+            tex_coord: glm::vec2(1.0, 1.0),
+            _pad: 0.0,
         },
     ];
 
