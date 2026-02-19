@@ -124,6 +124,52 @@ impl ApplicationHandler for HelloTriangleApp {
 
 //----------------Helper functions-----------------
 
+fn find_supported_format(
+    instance: &Instance,
+    physical_device: &vk::PhysicalDevice,
+    candidates: Vec<vk::Format>,
+    tiling: vk::ImageTiling,
+    features: vk::FormatFeatureFlags,
+) -> vk::Format {
+    for format in candidates.iter() {
+        unsafe {
+            let properties =
+                instance.get_physical_device_format_properties(*physical_device, *format);
+            if (tiling == vk::ImageTiling::LINEAR
+                && (properties.linear_tiling_features & features) == features)
+            {
+                return *format;
+            } else if (tiling == vk::ImageTiling::OPTIMAL
+                && (properties.optimal_tiling_features & features) == features)
+            {
+                return *format;
+            }
+        }
+    }
+    //If all else fails
+    panic!("No supported format found");
+}
+
+fn find_depth_format(instance: &Instance, physical_device: &vk::PhysicalDevice) -> vk::Format {
+    let format = find_supported_format(
+        instance,
+        physical_device,
+        vec![
+            vk::Format::D32_SFLOAT,
+            vk::Format::D32_SFLOAT_S8_UINT,
+            vk::Format::D24_UNORM_S8_UINT,
+        ],
+        vk::ImageTiling::OPTIMAL,
+        vk::FormatFeatureFlags::DEPTH_STENCIL_ATTACHMENT,
+    );
+    println!("using: {:?} for depth buffering", format);
+    return format;
+}
+
+fn has_stencil_component(format: vk::Format) -> bool {
+    return format == vk::Format::D32_SFLOAT_S8_UINT || format == vk::Format::D24_UNORM_S8_UINT;
+}
+
 fn copy_buffer_to_image(
     logical_device: &ash::Device,
     instance: &Instance,
@@ -177,7 +223,7 @@ fn create_image(
     format: vk::Format,
     tiling: vk::ImageTiling,
     usage: vk::ImageUsageFlags,
-    properties: vk::PhysicalDeviceMemoryProperties,
+    properties: vk::MemoryPropertyFlags,
     image_memory: &vk::DeviceMemory,
     command_pool: vk::CommandPool,
     graphics_queue: vk::Queue,
@@ -253,6 +299,7 @@ fn create_image(
 fn create_image_view(
     image: vk::Image,
     format: vk::Format,
+    aspect_flags: vk::ImageAspectFlags,
     logical_device: &ash::Device,
 ) -> vk::ImageView {
     let view_info = vk::ImageViewCreateInfo {
@@ -260,7 +307,7 @@ fn create_image_view(
         view_type: vk::ImageViewType::TYPE_2D,
         format: format,
         subresource_range: vk::ImageSubresourceRange {
-            aspect_mask: vk::ImageAspectFlags::COLOR,
+            aspect_mask: aspect_flags,
             base_mip_level: 0,
             base_array_layer: 0,
             level_count: 1,
@@ -346,7 +393,7 @@ fn update_uniform_buffer(
     let time = current_time.duration_since(start_time).as_secs_f32();
 
     let mut transform = glm::Mat4::identity();
-    transform[(0, 3)] = 1.0;
+    transform[(0, 3)] = 0.0;
 
     let model = transform
         * glm::rotate(
@@ -359,7 +406,7 @@ fn update_uniform_buffer(
         &glm::vec3(0.0, 0.0, 0.0),
         &glm::vec3(0.0, 0.0, 1.0),
     );
-    let mut proj = glm::perspective(
+    let mut proj = glm::perspective_rh_zo(
         std::f32::consts::PI / 4.0,
         extent.width as f32 / extent.height as f32,
         0.1,
@@ -544,8 +591,24 @@ fn transition_image_layout(
 
         source_stage = vk::PipelineStageFlags::TRANSFER;
         destination_stage = vk::PipelineStageFlags::FRAGMENT_SHADER;
+    } else if (old_layout == vk::ImageLayout::UNDEFINED
+        && new_layout == vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
+    {
+        barrier.src_access_mask = vk::AccessFlags::empty();
+        barrier.dst_access_mask = vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_READ
+            | vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_WRITE;
+
+        source_stage = vk::PipelineStageFlags::TOP_OF_PIPE;
+        destination_stage = vk::PipelineStageFlags::EARLY_FRAGMENT_TESTS;
     } else {
         panic!("Unsupported Image type when transitioning");
+    }
+    if (new_layout == vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL) {
+        if (has_stencil_component(format)) {
+            barrier.subresource_range.aspect_mask |= vk::ImageAspectFlags::STENCIL;
+        }
+    } else {
+        barrier.subresource_range.aspect_mask = vk::ImageAspectFlags::COLOR;
     }
     unsafe {
         logical_device.cmd_pipeline_barrier(
@@ -880,6 +943,11 @@ struct VulkanContext {
     texture_image_memory: vk::DeviceMemory,
     texture_sampler: vk::Sampler,
 
+    //Depth Buffering
+    depth_image: vk::Image,
+    depth_image_memory: vk::DeviceMemory,
+    depth_image_view: vk::ImageView,
+
     //Shader Info
     shader_list: Vec<vk::ShaderModule>,
 
@@ -891,6 +959,7 @@ struct VulkanContext {
     pipeline_layout: Option<vk::PipelineLayout>,
     render_pass: Option<vk::RenderPass>,
     graphics_pipelines: Vec<vk::Pipeline>,
+
     //Buffers
     frame_buffers: Vec<vk::Framebuffer>,
     vertex_buffer: vk::Buffer,
@@ -976,8 +1045,9 @@ impl HelloTriangleApp {
         self.create_render_pass();
         self.create_descriptor_set_layout();
         self.create_graphics_pipeline();
-        self.create_frame_buffers();
         self.create_command_pool();
+        self.create_depth_resources();
+        self.create_frame_buffers();
         self.create_texture_image();
         self.create_texture_image_view();
         self.create_texture_sampler();
@@ -1518,7 +1588,12 @@ impl HelloTriangleApp {
         };
         let mut swap_chain_image_views: Vec<vk::ImageView> = Vec::new();
         for image in swap_chain_images.iter() {
-            let image = create_image_view(*image, surface_format.format, logical_device);
+            let image = create_image_view(
+                *image,
+                surface_format.format,
+                vk::ImageAspectFlags::COLOR,
+                logical_device,
+            );
             swap_chain_image_views.push(image);
         }
         self.vulkan_context.swap_chain_image_views = swap_chain_image_views;
@@ -1697,6 +1772,17 @@ impl HelloTriangleApp {
             ..Default::default()
         };
 
+        //Depth Info
+        let depth_stencil_info = vk::PipelineDepthStencilStateCreateInfo {
+            depth_test_enable: vk::TRUE,
+            depth_write_enable: vk::TRUE,
+            depth_compare_op: vk::CompareOp::LESS,
+            min_depth_bounds: 0.0,
+            max_depth_bounds: 1.0,
+            stencil_test_enable: vk::FALSE,
+            ..Default::default()
+        };
+
         //Multisampling
         //(Anti-aliasing)
         let sample_mask_list: Vec<vk::SampleMask> = Vec::new();
@@ -1775,6 +1861,7 @@ impl HelloTriangleApp {
             p_rasterization_state: &rasterizer_info,
             p_multisample_state: &multisampling_info,
             p_color_blend_state: &colour_blend_info,
+            p_depth_stencil_state: &depth_stencil_info,
             p_dynamic_state: &dynamic_state,
             layout: pipeline_layout,
             render_pass: render_pass,
@@ -1807,6 +1894,12 @@ impl HelloTriangleApp {
         let Some(swapchain_format) = self.vulkan_context.swap_chain_format else {
             panic!("No swapchain_format when calling create_render_pass");
         };
+        let Some(instance) = &self.vulkan_context.instance else {
+            panic!("");
+        };
+        let Some(physical_device) = &self.vulkan_context.physical_device else {
+            panic!("");
+        };
         let color_attatchment = vk::AttachmentDescription {
             format: swapchain_format.format,
             samples: vk::SampleCountFlags::TYPE_1,
@@ -1824,15 +1917,36 @@ impl HelloTriangleApp {
             attachment: 0,
             layout: vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
         };
+
         let colour_attatchment_ref_list: Vec<vk::AttachmentReference> =
             vec![colour_attatchment_ref];
 
+        let depth_format = find_depth_format(instance, physical_device);
+        let depth_attachment = vk::AttachmentDescription {
+            format: depth_format,
+            samples: vk::SampleCountFlags::TYPE_1,
+            load_op: vk::AttachmentLoadOp::CLEAR,
+            store_op: vk::AttachmentStoreOp::DONT_CARE,
+            stencil_store_op: vk::AttachmentStoreOp::DONT_CARE,
+            initial_layout: vk::ImageLayout::UNDEFINED,
+            final_layout: vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+            ..Default::default()
+        };
+        let depth_attachment_ref = vk::AttachmentReference {
+            attachment: 1,
+            layout: vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+        };
+        let depth_attachment_ref_list = vec![depth_attachment_ref];
+
         let subpass_dependancy = vk::SubpassDependency {
             dst_subpass: 0,
-            src_stage_mask: vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
-            src_access_mask: vk::AccessFlags::empty(),
-            dst_stage_mask: vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
-            dst_access_mask: vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
+            src_stage_mask: vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT
+                | vk::PipelineStageFlags::LATE_FRAGMENT_TESTS,
+            src_access_mask: vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_WRITE,
+            dst_stage_mask: vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT
+                | vk::PipelineStageFlags::EARLY_FRAGMENT_TESTS,
+            dst_access_mask: vk::AccessFlags::COLOR_ATTACHMENT_WRITE
+                | vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_WRITE,
             dependency_flags: vk::DependencyFlags::BY_REGION,
             ..Default::default()
         };
@@ -1840,13 +1954,16 @@ impl HelloTriangleApp {
             pipeline_bind_point: vk::PipelineBindPoint::GRAPHICS,
             color_attachment_count: 1,
             p_color_attachments: colour_attatchment_ref_list.as_ptr(),
+            p_depth_stencil_attachment: depth_attachment_ref_list.as_ptr(),
             ..Default::default()
         };
         let subpass_list: Vec<vk::SubpassDescription> = vec![subpass];
 
+        let attachments = [color_attatchment, depth_attachment];
+
         let render_pass_info = vk::RenderPassCreateInfo {
-            attachment_count: 1,
-            p_attachments: &color_attatchment,
+            attachment_count: attachments.len() as u32,
+            p_attachments: attachments.as_ptr(),
             subpass_count: 1,
             p_subpasses: &subpass,
             dependency_count: 1,
@@ -1876,13 +1993,15 @@ impl HelloTriangleApp {
             panic!("No logical_device when calling create_frame_buffers");
         };
         let image_views = &self.vulkan_context.swap_chain_image_views;
+
         let swapchain_frame_frame_buffers: Vec<vk::Framebuffer> = Vec::new();
         let frame_buffer_count = image_views.len();
         for i in 0..frame_buffer_count {
-            let attatchments: [vk::ImageView; 1] = [image_views[i]];
+            let attatchments: [vk::ImageView; 2] =
+                [image_views[i], self.vulkan_context.depth_image_view];
             let frame_buffer_info = vk::FramebufferCreateInfo {
                 render_pass: render_pass,
-                attachment_count: 1,
+                attachment_count: attatchments.len() as u32,
                 p_attachments: attatchments.as_ptr(),
                 width: swapchain_extent.width,
                 height: swapchain_extent.height,
@@ -1916,6 +2035,61 @@ impl HelloTriangleApp {
                 Err(e) => panic!("{}", e),
             };
         }
+    }
+
+    fn create_depth_resources(&mut self) {
+        let Some(instance) = &self.vulkan_context.instance else {
+            panic!("No instance when calling create_depth_resources");
+        };
+        let Some(logical_device) = &self.vulkan_context.logical_device else {
+            panic!("No logical_device when calling create_depth_resources");
+        };
+        let Some(physical_device) = &self.vulkan_context.physical_device else {
+            panic!("No physical_device when calling create_depth_resources");
+        };
+        let Some(swapchain_extent) = self.vulkan_context.swap_chain_extent_used else {
+            panic!("No swap_chain_extent_used when calling create_depth_resources");
+        };
+        let Some(command_pool) = self.vulkan_context.command_pool else {
+            panic!("");
+        };
+        let Some(graphics_queue) = self.vulkan_context.graphics_queue else {
+            panic!("");
+        };
+        let depth_format: vk::Format = find_depth_format(instance, physical_device);
+
+        let (depth_image, depth_image_memory) = create_image(
+            logical_device,
+            instance,
+            physical_device,
+            swapchain_extent.height,
+            swapchain_extent.width,
+            depth_format,
+            vk::ImageTiling::OPTIMAL,
+            vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT,
+            vk::MemoryPropertyFlags::DEVICE_LOCAL,
+            &self.vulkan_context.depth_image_memory,
+            command_pool,
+            graphics_queue,
+        );
+        let depth_image_view = create_image_view(
+            depth_image,
+            depth_format,
+            vk::ImageAspectFlags::DEPTH,
+            logical_device,
+        );
+        transition_image_layout(
+            logical_device,
+            command_pool,
+            depth_image,
+            graphics_queue,
+            depth_format,
+            vk::ImageLayout::UNDEFINED,
+            vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+        );
+        self.vulkan_context.depth_image = depth_image;
+        self.vulkan_context.depth_image_memory = depth_image_memory;
+        self.vulkan_context.depth_image_view = depth_image_view;
     }
 
     fn create_texture_image(&mut self) {
@@ -1986,7 +2160,7 @@ impl HelloTriangleApp {
                 vk::Format::R8G8B8A8_SRGB,
                 vk::ImageTiling::OPTIMAL,
                 vk::ImageUsageFlags::TRANSFER_DST | vk::ImageUsageFlags::SAMPLED,
-                device_memory_properties,
+                vk::MemoryPropertyFlags::DEVICE_LOCAL,
                 &self.vulkan_context.texture_image_memory,
                 command_pool,
                 graphics_queue,
@@ -2035,6 +2209,7 @@ impl HelloTriangleApp {
         self.vulkan_context.texture_image_view = create_image_view(
             self.vulkan_context.texture_image,
             vk::Format::R8G8B8A8_SRGB,
+            vk::ImageAspectFlags::COLOR,
             logical_device,
         );
     }
@@ -2410,11 +2585,26 @@ impl HelloTriangleApp {
                 Err(e) => panic!("{:?}", e),
             }
         };
-        let clear_color = vk::ClearValue {
-            color: vk::ClearColorValue {
-                float32: [0.0, 0.0, 0.0, 1.0],
+        /*
+                let clear_color = vk::ClearValue {
+                    color: vk::ClearColorValue {
+                        float32: [0.0, 0.0, 0.0, 1.0],
+                    },
+                };
+        */
+        let clear_values = [
+            vk::ClearValue {
+                color: vk::ClearColorValue {
+                    float32: [0.0, 0.0, 0.0, 1.0],
+                },
             },
-        };
+            vk::ClearValue {
+                depth_stencil: vk::ClearDepthStencilValue {
+                    depth: 1.0,
+                    stencil: 0,
+                },
+            },
+        ];
         let render_pass_info = vk::RenderPassBeginInfo {
             render_pass: render_pass,
             render_area: vk::Rect2D {
@@ -2422,8 +2612,8 @@ impl HelloTriangleApp {
                 extent: swapchain_extent,
             },
             framebuffer: frame_buffers[image_index],
-            clear_value_count: 1,
-            p_clear_values: &clear_color,
+            clear_value_count: clear_values.len() as u32,
+            p_clear_values: clear_values.as_ptr(),
             ..Default::default()
         };
         unsafe {
@@ -2695,10 +2885,12 @@ impl HelloTriangleApp {
 
 #[derive(Default)]
 #[repr(C)]
+//All pads will be 0.0 by using ..Default::default()
 struct Vertex {
-    pos: glm::Vec2,
+    pos: glm::Vec3,
+    _pad1: f32,
     colour: glm::Vec3,
-    _pad: f32,
+    _pad2: f32,
     tex_coord: glm::Vec2,
 }
 impl Vertex {
@@ -2717,7 +2909,7 @@ impl Vertex {
         let position_attribute_desc = vk::VertexInputAttributeDescription {
             binding: 0,
             location: 0,
-            format: vk::Format::R32G32_SFLOAT,
+            format: vk::Format::R32G32B32_SFLOAT,
             offset: offset_of!(Vertex, pos) as u32,
             ..Default::default()
         };
@@ -2757,33 +2949,58 @@ fn main() {
     let start_time = std::time::Instant::now();
     let vertecies: Vec<Vertex> = vec![
         Vertex {
-            pos: glm::vec2(-0.5, -0.5),
+            pos: glm::vec3(-0.5, -0.5, 0.0),
             colour: glm::vec3(1.0, 0.0, 0.0),
             tex_coord: glm::vec2(1.0, 0.0),
-            _pad: 0.0,
+            ..Default::default()
         },
         Vertex {
-            pos: glm::vec2(0.5, -0.5),
+            pos: glm::vec3(0.5, -0.5, 0.0),
             colour: glm::vec3(0.0, 1.0, 0.0),
             tex_coord: glm::vec2(0.0, 0.0),
-            _pad: 0.0,
+            ..Default::default()
         },
         Vertex {
-            pos: glm::vec2(0.5, 0.5),
+            pos: glm::vec3(0.5, 0.5, 0.0),
             colour: glm::vec3(1.0, 1.0, 1.0),
             tex_coord: glm::vec2(0.0, 1.0),
-            _pad: 0.0,
+            ..Default::default()
         },
         Vertex {
-            pos: glm::vec2(-0.5, 0.5),
+            pos: glm::vec3(-0.5, 0.5, 0.0),
             colour: glm::vec3(0.0, 0.0, 1.0),
             tex_coord: glm::vec2(1.0, 1.0),
-            _pad: 0.0,
+            ..Default::default()
+        },
+        //Second square
+        Vertex {
+            pos: glm::vec3(-0.5, -0.5, -0.5),
+            colour: glm::vec3(1.0, 0.0, 0.0),
+            tex_coord: glm::vec2(1.0, 0.0),
+            ..Default::default()
+        },
+        Vertex {
+            pos: glm::vec3(0.5, -0.5, -0.5),
+            colour: glm::vec3(0.0, 1.0, 0.0),
+            tex_coord: glm::vec2(0.0, 0.0),
+            ..Default::default()
+        },
+        Vertex {
+            pos: glm::vec3(0.5, 0.5, -0.5),
+            colour: glm::vec3(1.0, 1.0, 1.0),
+            tex_coord: glm::vec2(0.0, 1.0),
+            ..Default::default()
+        },
+        Vertex {
+            pos: glm::vec3(-0.5, 0.5, -0.5),
+            colour: glm::vec3(0.0, 0.0, 1.0),
+            tex_coord: glm::vec2(1.0, 1.0),
+            ..Default::default()
         },
     ];
 
     //May need to make u32 to hold more vertices
-    let indices: Vec<u32> = vec![0, 1, 2, 2, 3, 0];
+    let indices: Vec<u32> = vec![0, 1, 2, 2, 3, 0, 4, 5, 6, 6, 7, 4];
 
     //Vulkan Setup
     let mut app: HelloTriangleApp = HelloTriangleApp {
