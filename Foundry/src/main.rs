@@ -604,6 +604,7 @@ fn transition_image_layout(
         panic!("Unsupported Image type when transitioning");
     }
     if (new_layout == vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL) {
+        barrier.subresource_range.aspect_mask = vk::ImageAspectFlags::DEPTH;
         if (has_stencil_component(format)) {
             barrier.subresource_range.aspect_mask |= vk::ImageAspectFlags::STENCIL;
         }
@@ -1076,6 +1077,10 @@ impl HelloTriangleApp {
         let surface_instance = ash::khr::surface::Instance::new(entry, instance);
 
         unsafe {
+            logical_device.destroy_image_view(self.vulkan_context.depth_image_view, None);
+            logical_device.destroy_image(self.vulkan_context.depth_image, None);
+            logical_device.free_memory(self.vulkan_context.depth_image_memory, None);
+
             logical_device.destroy_sampler(self.vulkan_context.texture_sampler, None);
             logical_device.destroy_image_view(self.vulkan_context.texture_image_view, None);
             logical_device.destroy_image(self.vulkan_context.texture_image, None);
@@ -1560,6 +1565,10 @@ impl HelloTriangleApp {
             self.vulkan_context.swap_chain_image_views.clear();
 
             swapchain_device.destroy_swapchain(swapchain, None);
+
+            logical_device.destroy_image_view(self.vulkan_context.depth_image_view, None);
+            logical_device.destroy_image(self.vulkan_context.depth_image, None);
+            logical_device.free_memory(self.vulkan_context.depth_image_memory, None);
         }
     }
 
@@ -1574,6 +1583,7 @@ impl HelloTriangleApp {
 
             self.create_swapchain();
             self.create_image_views();
+            self.create_depth_resources();
             self.create_frame_buffers();
         }
     }
@@ -2078,6 +2088,7 @@ impl HelloTriangleApp {
             vk::ImageAspectFlags::DEPTH,
             logical_device,
         );
+        println!("Transiton depth");
         transition_image_layout(
             logical_device,
             command_pool,
@@ -2087,6 +2098,7 @@ impl HelloTriangleApp {
             vk::ImageLayout::UNDEFINED,
             vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
         );
+        println!("Not a problem?");
         self.vulkan_context.depth_image = depth_image;
         self.vulkan_context.depth_image_memory = depth_image_memory;
         self.vulkan_context.depth_image_view = depth_image_view;
