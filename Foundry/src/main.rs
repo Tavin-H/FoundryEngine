@@ -51,8 +51,7 @@ use nalgebra_glm::{self as glm, any, log, pi};
 use bytemuck::{cast, offset_of};
 use num::clamp;
 use std::ffi::{CStr, CString};
-use std::fs;
-use std::hash::Hash;
+use std::fs::{self, File};
 use std::mem::swap;
 use std::panic;
 use std::path::{Path, PathBuf};
@@ -64,6 +63,11 @@ use std::thread::current;
 use stb_image;
 use stb_image::image::LoadResult;
 use std::path;
+
+//Model
+use std::collections::HashMap;
+use std::hash::{Hash, Hasher};
+use std::io::BufReader;
 
 //Setup winit boilerplate
 #[derive(Default)]
@@ -906,8 +910,11 @@ struct HelloTriangleApp {
     event_loop: Option<EventLoop<()>>,
     vulkan_context: VulkanContext,
     closing: bool,
+
+    //Model info
     vertices: Vec<Vertex>,
     indices: Vec<u32>,
+
     minimized: bool,
     window_resized: bool,
     start_time: Option<std::time::Instant>,
@@ -1052,6 +1059,7 @@ impl HelloTriangleApp {
         self.create_texture_image();
         self.create_texture_image_view();
         self.create_texture_sampler();
+        self.load_model();
         self.create_vertex_buffer();
         self.create_index_buffer();
         self.create_uniform_buffer();
@@ -2114,7 +2122,7 @@ impl HelloTriangleApp {
         let Some(instance) = &self.vulkan_context.instance else {
             panic!("No instance when calling create_texture_image");
         };
-        let path_name = "textures/sunset.jpg";
+        let path_name = "textures/viking_room.png";
         let path = Path::new(path_name);
         let (mut height, mut width) = (0, 0);
         let mut image_size: vk::DeviceSize = 0;
@@ -2266,6 +2274,38 @@ impl HelloTriangleApp {
                 }
                 Err(e) => panic!("{}", e),
             }
+        }
+    }
+
+    fn load_model(&mut self) {
+        //Maybe write this from scratch one day?
+        let mut load_options = tobj::LoadOptions {
+            ..Default::default()
+        };
+        match tobj::load_obj("models/viking_room.obj", &load_options) {
+            Ok((models, _materials)) => {
+                println!("Loaded viking room --------------------------------");
+                for shape in models {
+                    for index in shape.mesh.indices {
+                        let x = shape.mesh.positions[3 * index as usize + 0];
+                        let y = shape.mesh.positions[3 * index as usize + 1];
+                        let z = shape.mesh.positions[3 * index as usize + 2];
+
+                        let u = shape.mesh.texcoords[2 * index as usize + 0];
+                        let v = 1.0 - shape.mesh.texcoords[2 * index as usize + 1];
+
+                        let vertex = Vertex {
+                            pos: glm::vec3(x, y, z),
+                            tex_coord: glm::vec2(u, v),
+                            colour: glm::vec3(1.0, 1.0, 1.0),
+                            ..Default::default()
+                        };
+                        self.vertices.push(vertex);
+                        self.indices.push(self.indices.len() as u32);
+                    }
+                }
+            }
+            Err(e) => panic!("{}", e),
         }
     }
 
@@ -3012,16 +3052,16 @@ fn main() {
     ];
 
     //May need to make u32 to hold more vertices
-    let indices: Vec<u32> = vec![0, 1, 2, 2, 3, 0, 4, 5, 6, 6, 7, 4];
+    //let indices: Vec<u32> = vec![0, 1, 2, 2, 3, 0, 4, 5, 6, 6, 7, 4];
 
     //Vulkan Setup
     let mut app: HelloTriangleApp = HelloTriangleApp {
         start_time: Some(start_time),
-        indices: indices,
-        vertices: vertecies,
+        //indices: indices,
+        //vertices: vertecies,
         ..Default::default()
     };
-    app.run(800.0, 600.0);
+    app.run(800.0, 800.0);
 }
 
 //TODO to expand
