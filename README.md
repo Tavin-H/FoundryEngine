@@ -15,7 +15,10 @@ Current supported OS:
 - MacOS (only intel tested)
 - Linux support coming soon
 
-Recent Mileston: Added a texture image to the rotating plane (Feb 17)
+Recent Milestone: Loaded a 3D objec from a .obj file (Feb 21)
+<img width="747" height="1028" alt="Object Example" src="https://github.com/user-attachments/assets/e00c756a-17e6-420e-9180-1c8acbac72e2" />
+
+Past Milestone: Added a texture image to the rotating plane (Feb 17)
 <img width="1003" height="784" alt="Texture Image Example" src="https://github.com/user-attachments/assets/84a99227-8666-4e55-b28d-171da7501a54" />
 
 Past Milestone: Made a rotating 3d square thats off-center of the origin with a transformation matrix (Feb 4, 2025)
