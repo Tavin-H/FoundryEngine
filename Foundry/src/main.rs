@@ -9,17 +9,22 @@
 //                                            |___/                 |___/
 //==========================================================================================
 
-//Basic config
+//Basic IDE config
 #![allow(unused)]
+
+//-----------Foundry Engine Modules------------
+//Game Data
+mod game_data;
+use crate::game_data::GameObject;
+use crate::game_data::MeshAllocation;
+
+//------------------Vulkan----------------------
+//Constants
 const VALIDATION_LAYERS: &[&str] = &["VK_LAYER_KHRONOS_validation"];
 const WANTED_EXTENSION_NAMES: &[&CStr] = &[vk::KHR_SWAPCHAIN_NAME];
 const FIRST_PRIORITY: f32 = 1.0;
 const MAX_FRAMES_IN_FLIGHT: u32 = 2;
-//static vertices: [Vertex 3];
-//
 
-//const main_name: CString = CString::new("main").expect("failed to load c string");
-//const MAIN_NAME: &[i8] = &[109, 97, 105, 110, 0];
 const MAIN_NAME: *const i8 = [109 as i8, 97 as i8, 105 as i8, 110 as i8, 0 as i8].as_ptr();
 use ash::amd::texture_gather_bias_lod;
 //Window
@@ -914,6 +919,8 @@ struct HelloTriangleApp {
     //Model info
     vertices: Vec<Vertex>,
     indices: Vec<u32>,
+
+    gameobjects: Vec<GameObject>,
 
     minimized: bool,
     window_resized: bool,
@@ -2625,6 +2632,7 @@ impl HelloTriangleApp {
         pipeline_layout: vk::PipelineLayout,
         descriptor_sets: &Vec<vk::DescriptorSet>,
         current_frame: usize,
+        gameobjects: &Vec<GameObject>,
     ) {
         let begin_info = vk::CommandBufferBeginInfo {
             ..Default::default()
@@ -2733,7 +2741,17 @@ impl HelloTriangleApp {
             );
 
             //logical_device.cmd_draw(command_buffer, 3, 1, 0, 0);
-            logical_device.cmd_draw_indexed(command_buffer, indices_count, 1, 0, 0, 0);
+            for gameobject in gameobjects {
+                logical_device.cmd_draw_indexed(
+                    command_buffer,
+                    indices_count,
+                    1,
+                    gameobject._mesh.first_index,
+                    gameobject._mesh.first_vertex,
+                    0,
+                );
+            }
+            //logical_device.cmd_draw_indexed(command_buffer, indices_count, 1, 0, 0, 0);
             match logical_device.end_command_buffer(command_buffer) {
                 Ok(something) => (),
                 Err(e) => panic!("{}", e),
@@ -2872,6 +2890,7 @@ impl HelloTriangleApp {
                 pipeline_layout,
                 &self.vulkan_context.descriptor_sets,
                 current_frame,
+                &self.gameobjects,
             );
             let wait_semaphores = [current_image_available_semaphore];
             let wait_stages = [vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];
@@ -2999,64 +3018,78 @@ struct UniformBufferObject {
 
 fn main() {
     let start_time = std::time::Instant::now();
-    let vertecies: Vec<Vertex> = vec![
-        Vertex {
-            pos: glm::vec3(-0.5, -0.5, 0.0),
-            colour: glm::vec3(1.0, 0.0, 0.0),
-            tex_coord: glm::vec2(1.0, 0.0),
-            ..Default::default()
-        },
-        Vertex {
-            pos: glm::vec3(0.5, -0.5, 0.0),
-            colour: glm::vec3(0.0, 1.0, 0.0),
-            tex_coord: glm::vec2(0.0, 0.0),
-            ..Default::default()
-        },
-        Vertex {
-            pos: glm::vec3(0.5, 0.5, 0.0),
-            colour: glm::vec3(1.0, 1.0, 1.0),
-            tex_coord: glm::vec2(0.0, 1.0),
-            ..Default::default()
-        },
-        Vertex {
-            pos: glm::vec3(-0.5, 0.5, 0.0),
-            colour: glm::vec3(0.0, 0.0, 1.0),
-            tex_coord: glm::vec2(1.0, 1.0),
-            ..Default::default()
-        },
-        //Second square
-        Vertex {
-            pos: glm::vec3(-0.5, -0.5, -0.5),
-            colour: glm::vec3(1.0, 0.0, 0.0),
-            tex_coord: glm::vec2(1.0, 0.0),
-            ..Default::default()
-        },
-        Vertex {
-            pos: glm::vec3(0.5, -0.5, -0.5),
-            colour: glm::vec3(0.0, 1.0, 0.0),
-            tex_coord: glm::vec2(0.0, 0.0),
-            ..Default::default()
-        },
-        Vertex {
-            pos: glm::vec3(0.5, 0.5, -0.5),
-            colour: glm::vec3(1.0, 1.0, 1.0),
-            tex_coord: glm::vec2(0.0, 1.0),
-            ..Default::default()
-        },
-        Vertex {
-            pos: glm::vec3(-0.5, 0.5, -0.5),
-            colour: glm::vec3(0.0, 0.0, 1.0),
-            tex_coord: glm::vec2(1.0, 1.0),
-            ..Default::default()
-        },
-    ];
+    /*
+        let vertecies: Vec<Vertex> = vec![
+            Vertex {
+                pos: glm::vec3(-0.5, -0.5, 0.0),
+                colour: glm::vec3(1.0, 0.0, 0.0),
+                tex_coord: glm::vec2(1.0, 0.0),
+                ..Default::default()
+            },
+            Vertex {
+                pos: glm::vec3(0.5, -0.5, 0.0),
+                colour: glm::vec3(0.0, 1.0, 0.0),
+                tex_coord: glm::vec2(0.0, 0.0),
+                ..Default::default()
+            },
+            Vertex {
+                pos: glm::vec3(0.5, 0.5, 0.0),
+                colour: glm::vec3(1.0, 1.0, 1.0),
+                tex_coord: glm::vec2(0.0, 1.0),
+                ..Default::default()
+            },
+            Vertex {
+                pos: glm::vec3(-0.5, 0.5, 0.0),
+                colour: glm::vec3(0.0, 0.0, 1.0),
+                tex_coord: glm::vec2(1.0, 1.0),
+                ..Default::default()
+            },
+            //Second square
+            Vertex {
+                pos: glm::vec3(-0.5, -0.5, -0.5),
+                colour: glm::vec3(1.0, 0.0, 0.0),
+                tex_coord: glm::vec2(1.0, 0.0),
+                ..Default::default()
+            },
+            Vertex {
+                pos: glm::vec3(0.5, -0.5, -0.5),
+                colour: glm::vec3(0.0, 1.0, 0.0),
+                tex_coord: glm::vec2(0.0, 0.0),
+                ..Default::default()
+            },
+            Vertex {
+                pos: glm::vec3(0.5, 0.5, -0.5),
+                colour: glm::vec3(1.0, 1.0, 1.0),
+                tex_coord: glm::vec2(0.0, 1.0),
+                ..Default::default()
+            },
+            Vertex {
+                pos: glm::vec3(-0.5, 0.5, -0.5),
+                colour: glm::vec3(0.0, 0.0, 1.0),
+                tex_coord: glm::vec2(1.0, 1.0),
+                ..Default::default()
+            },
+        ];
+    */
 
     //May need to make u32 to hold more vertices
     //let indices: Vec<u32> = vec![0, 1, 2, 2, 3, 0, 4, 5, 6, 6, 7, 4];
 
     //Vulkan Setup
+    let gameobject_example = GameObject {
+        name: String::from("Example"),
+        id: 0,
+        _mesh: MeshAllocation {
+            index_count: 11484, //Hardcoded - change when loading the object
+            first_index: 0,
+            first_vertex: 0,
+        },
+        ..Default::default()
+    };
     let mut app: HelloTriangleApp = HelloTriangleApp {
         start_time: Some(start_time),
+
+        gameobjects: vec![gameobject_example],
         //indices: indices,
         //vertices: vertecies,
         ..Default::default()
