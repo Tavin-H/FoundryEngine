@@ -20,6 +20,7 @@ use crate::game_data::MeshAllocation;
 
 //------------------Vulkan----------------------
 //Constants
+const MAX_GAME_OBJECTS_IN_SCENE: u64 = 1000;
 const VALIDATION_LAYERS: &[&str] = &["VK_LAYER_KHRONOS_validation"];
 const WANTED_EXTENSION_NAMES: &[&CStr] = &[vk::KHR_SWAPCHAIN_NAME];
 const FIRST_PRIORITY: f32 = 1.0;
@@ -438,6 +439,7 @@ fn update_uniform_buffer(
         );
     }
 }
+fn update_transform_buffer(current_image: u32) {}
 //Takes creation info and returns a buffer as well as the device memory where the buffer is
 //located
 fn create_buffer(
@@ -985,6 +987,10 @@ struct VulkanContext {
     uniform_buffers_memory: Vec<vk::DeviceMemory>,
     uniform_buffers_mapped: Vec<*mut UniformBufferObject>,
 
+    transform_buffers: Vec<vk::Buffer>,
+    transform_buffers_memory: Vec<vk::DeviceMemory>,
+    transform_buffers_mapped: Vec<vk::Buffer>,
+
     //Command stuff
     command_pool: Option<vk::CommandPool>,
     command_buffers: Vec<vk::CommandBuffer>,
@@ -1069,6 +1075,7 @@ impl HelloTriangleApp {
         self.load_model();
         self.create_vertex_buffer();
         self.create_index_buffer();
+        self.create_transform_storage_buffers();
         self.create_uniform_buffer();
         self.create_descriptor_pool();
         self.create_descriptor_sets();
@@ -1146,6 +1153,13 @@ impl HelloTriangleApp {
                     .destroy_buffer(self.vulkan_context.uniform_buffers[i as usize], None);
                 logical_device
                     .free_memory(self.vulkan_context.uniform_buffers_memory[i as usize], None);
+
+                logical_device
+                    .destroy_buffer(self.vulkan_context.transform_buffers[i as usize], None);
+                logical_device.free_memory(
+                    self.vulkan_context.transform_buffers_memory[i as usize],
+                    None,
+                );
             }
             logical_device.destroy_buffer(self.vulkan_context.vertex_buffer, None);
             logical_device.free_memory(self.vulkan_context.vertex_buffer_memory, None);
@@ -2456,6 +2470,42 @@ impl HelloTriangleApp {
         }
     }
 
+    fn create_transform_storage_buffers(&mut self) {
+        let Some(logical_device) = &self.vulkan_context.logical_device else {
+            panic!("");
+        };
+        let storage_buffer_size = size_of::<GameObject>() as u64 * MAX_GAME_OBJECTS_IN_SCENE;
+
+        for i in 0..MAX_FRAMES_IN_FLIGHT {
+            let (buffer, buffer_memory) = create_buffer(
+                storage_buffer_size,
+                vk::BufferUsageFlags::STORAGE_BUFFER | vk::BufferUsageFlags::TRANSFER_DST,
+                vk::MemoryPropertyFlags::HOST_VISIBLE,
+                &self.vulkan_context,
+            );
+
+            //Map memory
+            unsafe {
+                match logical_device.map_memory(
+                    buffer_memory,
+                    0,
+                    storage_buffer_size,
+                    vk::MemoryMapFlags::empty(),
+                ) {
+                    Ok(buffer_memory_mapped) => {
+                        println!("Mapped memory for storage buffer");
+                    }
+                    Err(e) => panic!("{}", e),
+                }
+            }
+
+            self.vulkan_context.transform_buffers.push(buffer);
+            self.vulkan_context
+                .transform_buffers_memory
+                .push(buffer_memory);
+        }
+    }
+
     fn create_uniform_buffer(&mut self) {
         let Some(logical_device) = &self.vulkan_context.logical_device else {
             panic!("No logical_device when calling create_uniform_buffer");
@@ -2956,12 +3006,13 @@ impl HelloTriangleApp {
 
 #[derive(Default)]
 #[repr(C)]
+#[repr(align(16))]
 //All pads will be 0.0 by using ..Default::default()
 struct Vertex {
     pos: glm::Vec3,
-    _pad1: f32,
+    //_pad1: f32,
     colour: glm::Vec3,
-    _pad2: f32,
+    //_pad2: f32,
     tex_coord: glm::Vec2,
 }
 impl Vertex {
