@@ -14,6 +14,7 @@ bytemuck = "1.24.0"
 image = "0.25.9"
 glam = "0.31.0"
 stb_image = "0.3.0"
+tobj = "4.0.3"
 
 [dependencies.vulkan-headers]
 version = "0.1.1+1.4.336"
