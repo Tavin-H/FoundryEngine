@@ -9,7 +9,7 @@ pub struct MeshAllocation {
 
 #[derive(Default, Clone, Copy)]
 pub struct Transform {
-    pub position: glm::Mat4,
+    pub position: [f32; 3],
 }
 
 #[derive(Default)]

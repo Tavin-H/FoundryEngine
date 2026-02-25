@@ -32,6 +32,7 @@ use ash::amd::texture_gather_bias_lod;
 //Window
 use ash_window;
 use image;
+use nalgebra_glm::Mat4x4;
 #[allow(deprecated)]
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 use vulkan_headers::vulkan::vulkan::VkExternalMemoryTensorCreateInfoARM;
@@ -102,6 +103,7 @@ impl ApplicationHandler for HelloTriangleApp {
                 }
             }
             WindowEvent::RedrawRequested => {
+                self.gameobjects[0].transform.position[2] -= 0.01;
                 self.window.as_ref().unwrap();
             }
             WindowEvent::Resized(size) => {
@@ -116,7 +118,13 @@ impl ApplicationHandler for HelloTriangleApp {
                 event,
                 is_synthetic,
             } => {
-                println!("{:?} {:?}", event.physical_key, event.state);
+                //println!("{:?} {:?}", event.physical_key, event.state);
+                match event.state {
+                    winit::event::ElementState::Pressed => {
+                        self.gameobjects[0].transform.position[2] += 0.5;
+                    }
+                    _ => {}
+                }
             }
             _ => (),
         }
@@ -134,6 +142,19 @@ impl ApplicationHandler for HelloTriangleApp {
 }
 
 //----------------Helper functions-----------------
+
+fn convert_vec_to_mat(position: [f32; 3]) -> Mat4x4 {
+    if (position.len() != 3) {
+        panic!("Position does not have 3 elements");
+    }
+
+    let mut transform = glm::Mat4::identity();
+    transform[(0, 3)] = position[0];
+    transform[(1, 3)] = position[1];
+    transform[(2, 3)] = position[2];
+
+    transform
+}
 
 fn find_supported_format(
     instance: &Instance,
@@ -442,14 +463,14 @@ fn update_uniform_buffer(
 }
 fn update_transform_buffer(
     current_image: u32,
-    transform_buffers_mapped: &Vec<*mut Transform>,
+    transform_buffers_mapped: &Vec<*mut glm::Mat4>,
     gameobjects: &Vec<GameObject>,
 ) {
-    let mut transforms: Vec<Transform> = Vec::new();
+    let mut transforms: Vec<glm::Mat4> = Vec::new();
 
     for gameobject in gameobjects {
-        transforms.push(gameobject.transform);
-        println!("{:?}", gameobject.transform.position);
+        let converted_transform: Mat4x4 = convert_vec_to_mat(gameobject.transform.position);
+        transforms.push(converted_transform);
     }
     unsafe {
         ptr::copy_nonoverlapping(
@@ -1008,7 +1029,7 @@ struct VulkanContext {
 
     transform_buffers: Vec<vk::Buffer>,
     transform_buffers_memory: Vec<vk::DeviceMemory>,
-    transform_buffers_mapped: Vec<*mut Transform>,
+    transform_buffers_mapped: Vec<*mut Mat4x4>,
 
     //Command stuff
     command_pool: Option<vk::CommandPool>,
@@ -2527,7 +2548,7 @@ impl HelloTriangleApp {
                         println!("Mapped memory for storage buffer");
                         self.vulkan_context
                             .transform_buffers_mapped
-                            .push(memory_pointer as *mut Transform);
+                            .push(memory_pointer as *mut Mat4x4);
                     }
                     Err(e) => panic!("{}", e),
                 }
@@ -3191,6 +3212,7 @@ fn main() {
     //
     let mut test_position = glm::Mat4::identity();
     test_position[(0, 3)] = 1.0;
+    //test_position[(2, 3)] = 1.0;
 
     let gameobject_example = GameObject {
         name: String::from("Example"),
@@ -3201,7 +3223,7 @@ fn main() {
             first_vertex: 0,
         },
         transform: Transform {
-            position: test_position,
+            position: [0.0, 0.0, -2.0],
         },
         ..Default::default()
     };
