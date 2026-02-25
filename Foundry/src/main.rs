@@ -17,6 +17,7 @@
 mod game_data;
 use crate::game_data::GameObject;
 use crate::game_data::MeshAllocation;
+use crate::game_data::Transform;
 
 //------------------Vulkan----------------------
 //Constants
@@ -403,7 +404,7 @@ fn update_uniform_buffer(
     let time = current_time.duration_since(start_time).as_secs_f32();
 
     let mut transform = glm::Mat4::identity();
-    transform[(0, 3)] = 0.0;
+    transform[(0, 3)] = 1.0;
 
     let model = transform
         * glm::rotate(
@@ -439,7 +440,25 @@ fn update_uniform_buffer(
         );
     }
 }
-fn update_transform_buffer(current_image: u32) {}
+fn update_transform_buffer(
+    current_image: u32,
+    transform_buffers_mapped: &Vec<*mut Transform>,
+    gameobjects: &Vec<GameObject>,
+) {
+    let mut transforms: Vec<Transform> = Vec::new();
+
+    for gameobject in gameobjects {
+        transforms.push(gameobject.transform);
+        println!("{:?}", gameobject.transform.position);
+    }
+    unsafe {
+        ptr::copy_nonoverlapping(
+            transforms.as_ptr(),
+            transform_buffers_mapped[current_image as usize],
+            1,
+        );
+    }
+}
 //Takes creation info and returns a buffer as well as the device memory where the buffer is
 //located
 fn create_buffer(
@@ -989,7 +1008,7 @@ struct VulkanContext {
 
     transform_buffers: Vec<vk::Buffer>,
     transform_buffers_memory: Vec<vk::DeviceMemory>,
-    transform_buffers_mapped: Vec<vk::Buffer>,
+    transform_buffers_mapped: Vec<*mut Transform>,
 
     //Command stuff
     command_pool: Option<vk::CommandPool>,
@@ -1676,7 +1695,19 @@ impl HelloTriangleApp {
             ..Default::default()
         };
 
-        let bindings = [sampler_layout_binding, ubo_layout_binding];
+        let transform_layout_binding = vk::DescriptorSetLayoutBinding {
+            binding: 2,
+            descriptor_count: 1,
+            descriptor_type: vk::DescriptorType::STORAGE_BUFFER,
+            stage_flags: vk::ShaderStageFlags::VERTEX,
+            ..Default::default()
+        };
+
+        let bindings = [
+            sampler_layout_binding,
+            ubo_layout_binding,
+            transform_layout_binding,
+        ];
 
         let layout_info = vk::DescriptorSetLayoutCreateInfo {
             binding_count: bindings.len() as u32,
@@ -2492,8 +2523,11 @@ impl HelloTriangleApp {
                     storage_buffer_size,
                     vk::MemoryMapFlags::empty(),
                 ) {
-                    Ok(buffer_memory_mapped) => {
+                    Ok(memory_pointer) => {
                         println!("Mapped memory for storage buffer");
+                        self.vulkan_context
+                            .transform_buffers_mapped
+                            .push(memory_pointer as *mut Transform);
                     }
                     Err(e) => panic!("{}", e),
                 }
@@ -2564,6 +2598,10 @@ impl HelloTriangleApp {
                 ty: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
                 descriptor_count: MAX_FRAMES_IN_FLIGHT,
             },
+            vk::DescriptorPoolSize {
+                ty: vk::DescriptorType::STORAGE_BUFFER,
+                descriptor_count: MAX_FRAMES_IN_FLIGHT,
+            },
         ];
 
         let pool_info = vk::DescriptorPoolCreateInfo {
@@ -2627,6 +2665,13 @@ impl HelloTriangleApp {
                 ..Default::default()
             };
 
+            let transform_buffer_info = vk::DescriptorBufferInfo {
+                buffer: self.vulkan_context.transform_buffers[i as usize],
+                offset: 0,
+                range: size_of::<Transform>() as u64,
+                ..Default::default()
+            };
+
             /*
                         let descriptor_write = vk::WriteDescriptorSet {
                             s_type: vk::StructureType::WRITE_DESCRIPTOR_SET,
@@ -2659,6 +2704,16 @@ impl HelloTriangleApp {
                     descriptor_type: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
                     descriptor_count: 1,
                     p_image_info: &image_info,
+                    ..Default::default()
+                },
+                vk::WriteDescriptorSet {
+                    s_type: vk::StructureType::WRITE_DESCRIPTOR_SET,
+                    dst_set: self.vulkan_context.descriptor_sets[i as usize],
+                    dst_binding: 2,
+                    dst_array_element: 0,
+                    descriptor_type: vk::DescriptorType::STORAGE_BUFFER,
+                    descriptor_count: 1,
+                    p_buffer_info: &transform_buffer_info,
                     ..Default::default()
                 },
             ];
@@ -2957,6 +3012,12 @@ impl HelloTriangleApp {
                 self.start_time.expect("Nope"),
             );
 
+            update_transform_buffer(
+                current_frame as u32,
+                &self.vulkan_context.transform_buffers_mapped,
+                &self.gameobjects,
+            );
+
             let submit_info = vk::SubmitInfo {
                 wait_semaphore_count: 1,
                 s_type: vk::StructureType::SUBMIT_INFO,
@@ -3127,6 +3188,10 @@ fn main() {
     //let indices: Vec<u32> = vec![0, 1, 2, 2, 3, 0, 4, 5, 6, 6, 7, 4];
 
     //Vulkan Setup
+    //
+    let mut test_position = glm::Mat4::identity();
+    test_position[(0, 3)] = 1.0;
+
     let gameobject_example = GameObject {
         name: String::from("Example"),
         id: 0,
@@ -3134,6 +3199,9 @@ fn main() {
             index_count: 11484, //Hardcoded - change when loading the object
             first_index: 0,
             first_vertex: 0,
+        },
+        transform: Transform {
+            position: test_position,
         },
         ..Default::default()
     };
