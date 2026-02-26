@@ -144,6 +144,16 @@ impl ApplicationHandler for HelloTriangleApp {
             if (!self.running) {
                 delta_time = 0.0;
             }
+            let mut avg_delta_time: f32 = 0.0;
+            for i in 0..6 {
+                match self.game_context.previous_delta_times.get(i) {
+                    Some(past_delta_time) => {
+                        avg_delta_time += past_delta_time;
+                    }
+                    None => (),
+                }
+            }
+            avg_delta_time /= 5.0;
 
             if (self.gameobjects[0].transform.position[2] > 1.0) {
                 self.rising = false;
@@ -152,9 +162,9 @@ impl ApplicationHandler for HelloTriangleApp {
                 self.rising = true;
             }
             if (!self.rising) {
-                self.gameobjects[0].transform.position[2] -= 3.0 * delta_time
+                self.gameobjects[0].transform.position[2] -= 3.0 * avg_delta_time;
             } else {
-                self.gameobjects[0].transform.position[2] += 3.0 * delta_time
+                self.gameobjects[0].transform.position[2] += 3.0 * avg_delta_time;
             }
             //////
             if (self.gameobjects[1].transform.position[2] > 1.0) {
@@ -164,9 +174,9 @@ impl ApplicationHandler for HelloTriangleApp {
                 self.rising2 = true;
             }
             if (!self.rising2) {
-                self.gameobjects[1].transform.position[2] -= 8.0 * delta_time
+                self.gameobjects[1].transform.position[2] -= 8.0 * avg_delta_time;
             } else {
-                self.gameobjects[1].transform.position[2] += 8.0 * delta_time
+                self.gameobjects[1].transform.position[2] += 8.0 * avg_delta_time;
             }
 
             //println!("{} {}", delta_time, self.running);
@@ -176,6 +186,9 @@ impl ApplicationHandler for HelloTriangleApp {
             //LAST THINGS
             self.draw_frame();
             self.game_context.delta_time_previous_frame = time::Instant::now();
+            self.game_context.previous_delta_times.push_back(delta_time);
+            self.game_context.previous_delta_times.pop_front();
+
             if let Some(window) = &self.window {
                 window.request_redraw();
             }
