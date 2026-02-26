@@ -29,6 +29,7 @@ const MAX_FRAMES_IN_FLIGHT: u32 = 2;
 
 const MAIN_NAME: *const i8 = [109 as i8, 97 as i8, 105 as i8, 110 as i8, 0 as i8].as_ptr();
 use ash::amd::texture_gather_bias_lod;
+use ash::vk::native::StdVideoAV1Level_STD_VIDEO_AV1_LEVEL_2_2;
 //Window
 use ash_window;
 use image;
@@ -103,7 +104,7 @@ impl ApplicationHandler for HelloTriangleApp {
                 }
             }
             WindowEvent::RedrawRequested => {
-                self.gameobjects[0].transform.position[2] -= 0.01;
+                //self.gameobjects[0].transform.position[2] -= 0.01;
                 self.window.as_ref().unwrap();
             }
             WindowEvent::Resized(size) => {
@@ -134,6 +135,31 @@ impl ApplicationHandler for HelloTriangleApp {
         // update logic here
         if (!self.closing) {
             self.draw_frame();
+
+            if (self.gameobjects[0].transform.position[2] > 1.0) {
+                self.rising = false;
+            }
+            if (self.gameobjects[0].transform.position[2] < -1.0) {
+                self.rising = true;
+            }
+            if (!self.rising) {
+                self.gameobjects[0].transform.position[2] -= 0.0001
+            } else {
+                self.gameobjects[0].transform.position[2] += 0.0001
+            }
+            //////
+            if (self.gameobjects[1].transform.position[2] > 1.0) {
+                self.rising2 = false;
+            }
+            if (self.gameobjects[1].transform.position[2] < -1.0) {
+                self.rising2 = true;
+            }
+            if (!self.rising2) {
+                self.gameobjects[1].transform.position[2] -= 0.0002
+            } else {
+                self.gameobjects[1].transform.position[2] += 0.0002
+            }
+
             if let Some(window) = &self.window {
                 window.request_redraw();
             }
@@ -476,7 +502,7 @@ fn update_transform_buffer(
         ptr::copy_nonoverlapping(
             transforms.as_ptr(),
             transform_buffers_mapped[current_image as usize],
-            1,
+            transforms.len(),
         );
     }
 }
@@ -958,6 +984,9 @@ struct HelloTriangleApp {
     vulkan_context: VulkanContext,
     closing: bool,
 
+    rising: bool,
+    rising2: bool,
+
     //Model info
     vertices: Vec<Vertex>,
     indices: Vec<u32>,
@@ -1112,7 +1141,7 @@ impl HelloTriangleApp {
         self.create_texture_image();
         self.create_texture_image_view();
         self.create_texture_sampler();
-        self.load_model();
+        //self.load_model();
         self.create_vertex_buffer();
         self.create_index_buffer();
         self.create_transform_storage_buffers();
@@ -2350,6 +2379,18 @@ impl HelloTriangleApp {
         }
     }
 
+    fn instantiate(&mut self, mut gameobject: GameObject) {
+        let before_indices = self.indices.len();
+        gameobject._mesh.first_vertex = self.vertices.len() as i32;
+        //println!("RAHHHHHHHHHHHHHH {:?}", gameobject._mesh.first_index);
+        self.load_model();
+        let after_indices = self.indices.len();
+
+        gameobject._mesh.first_index = before_indices as u32;
+        gameobject._mesh.index_count = (after_indices - before_indices) as u32;
+        self.gameobjects.push(gameobject);
+    }
+
     fn load_model(&mut self) {
         //Maybe write this from scratch one day?
         let mut load_options = tobj::LoadOptions {
@@ -2689,7 +2730,7 @@ impl HelloTriangleApp {
             let transform_buffer_info = vk::DescriptorBufferInfo {
                 buffer: self.vulkan_context.transform_buffers[i as usize],
                 offset: 0,
-                range: size_of::<Transform>() as u64,
+                range: size_of::<glm::Mat4>() as u64 * MAX_GAME_OBJECTS_IN_SCENE,
                 ..Default::default()
             };
 
@@ -2867,14 +2908,16 @@ impl HelloTriangleApp {
             );
 
             //logical_device.cmd_draw(command_buffer, 3, 1, 0, 0);
-            for gameobject in gameobjects {
+            for i in 0..gameobjects.len() {
+                let gameobject = &gameobjects[i];
                 logical_device.cmd_draw_indexed(
                     command_buffer,
-                    indices_count,
+                    gameobject._mesh.index_count,
                     1,
                     gameobject._mesh.first_index,
-                    gameobject._mesh.first_vertex,
+                    //gameobject._mesh.first_vertex,
                     0,
+                    i as u32,
                 );
             }
             //logical_device.cmd_draw_indexed(command_buffer, indices_count, 1, 0, 0, 0);
@@ -3214,7 +3257,7 @@ fn main() {
     test_position[(0, 3)] = 1.0;
     //test_position[(2, 3)] = 1.0;
 
-    let gameobject_example = GameObject {
+    let mut gameobject_example = GameObject {
         name: String::from("Example"),
         id: 0,
         _mesh: MeshAllocation {
@@ -3227,14 +3270,26 @@ fn main() {
         },
         ..Default::default()
     };
+
+    let mut gameobject_example_2 = GameObject {
+        name: String::from("Example"),
+        id: 1,
+        transform: Transform {
+            position: [1.0, 0.0, 0.0],
+        },
+        ..Default::default()
+    };
+
     let mut app: HelloTriangleApp = HelloTriangleApp {
         start_time: Some(start_time),
 
-        gameobjects: vec![gameobject_example],
+        //gameobjects: vec![gameobject_example],
         //indices: indices,
         //vertices: vertecies,
         ..Default::default()
     };
+    app.instantiate(gameobject_example_2);
+    app.instantiate(gameobject_example);
     app.run(800.0, 800.0);
 }
 

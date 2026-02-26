@@ -26,7 +26,7 @@ layout(location = 1) out vec2 frag_tex_coord;
 void main() {
 	//gl_Position = vec4(in_position, 1.0, 0.0);
 	//0 should change to gameObject ID
-gl_Position = ubo.proj * ubo.view * tra.transforms[0] * vec4(in_position, 1.0);
+gl_Position = ubo.proj * ubo.view * tra.transforms[gl_InstanceIndex] * vec4(in_position, 1.0);
 //gl_Position = ubo.proj * ubo.view * ubo.model * vec4(in_position, 1.0);
 	frag_color = in_colour;
 	frag_tex_coord = in_tex_coord;
