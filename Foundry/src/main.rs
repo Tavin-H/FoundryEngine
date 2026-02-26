@@ -136,25 +136,10 @@ impl ApplicationHandler for HelloTriangleApp {
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
         // update logic here
         if (!self.closing) {
-            let mut delta_time = (time::Instant::now()
-                - self.game_context.delta_time_previous_frame)
-                .as_nanos() as f32
-                / 1000000000 as f32;
-            //self.game_context.delta_time
+            let mut avg_delta_time = self.game_context.calculate_delta_time();
             if (!self.running) {
-                delta_time = 0.0;
+                avg_delta_time = 0.0;
             }
-            let mut avg_delta_time: f32 = 0.0;
-            for i in 0..6 {
-                match self.game_context.previous_delta_times.get(i) {
-                    Some(past_delta_time) => {
-                        avg_delta_time += past_delta_time;
-                    }
-                    None => (),
-                }
-            }
-            avg_delta_time /= 5.0;
-
             if (self.gameobjects[0].transform.position[2] > 1.0) {
                 self.rising = false;
             }
@@ -185,9 +170,6 @@ impl ApplicationHandler for HelloTriangleApp {
 
             //LAST THINGS
             self.draw_frame();
-            self.game_context.delta_time_previous_frame = time::Instant::now();
-            self.game_context.previous_delta_times.push_back(delta_time);
-            self.game_context.previous_delta_times.pop_front();
 
             if let Some(window) = &self.window {
                 window.request_redraw();

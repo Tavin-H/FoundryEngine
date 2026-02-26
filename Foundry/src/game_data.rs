@@ -37,3 +37,26 @@ impl Default for GameContext {
         }
     }
 }
+
+impl GameContext {
+    pub fn calculate_delta_time(&mut self) -> f32 {
+        let mut delta_time = (time::Instant::now() - self.delta_time_previous_frame).as_nanos()
+            as f32
+            / 1000000000 as f32;
+        //self.game_context.delta_time
+        let mut avg_delta_time: f32 = 0.0;
+        for i in 0..5 {
+            match self.previous_delta_times.get(i) {
+                Some(past_delta_time) => {
+                    avg_delta_time += past_delta_time;
+                }
+                None => (),
+            }
+        }
+        avg_delta_time /= 5.0;
+        self.delta_time_previous_frame = time::Instant::now();
+        self.previous_delta_times.push_back(delta_time);
+        self.previous_delta_times.pop_front();
+        avg_delta_time
+    }
+}
