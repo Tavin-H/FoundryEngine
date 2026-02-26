@@ -15,6 +15,7 @@
 //-----------Foundry Engine Modules------------
 //Game Data
 mod game_data;
+use crate::game_data::GameContext;
 use crate::game_data::GameObject;
 use crate::game_data::MeshAllocation;
 use crate::game_data::Transform;
@@ -67,6 +68,7 @@ use std::path::{Path, PathBuf};
 use std::ptr;
 use std::sync::Arc;
 use std::thread::current;
+use std::time;
 
 //Image
 use stb_image;
@@ -134,7 +136,14 @@ impl ApplicationHandler for HelloTriangleApp {
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
         // update logic here
         if (!self.closing) {
-            self.draw_frame();
+            let mut delta_time = (time::Instant::now()
+                - self.game_context.delta_time_previous_frame)
+                .as_nanos() as f32
+                / 1000000000 as f32;
+            //self.game_context.delta_time
+            if (!self.running) {
+                delta_time = 0.0;
+            }
 
             if (self.gameobjects[0].transform.position[2] > 1.0) {
                 self.rising = false;
@@ -143,9 +152,9 @@ impl ApplicationHandler for HelloTriangleApp {
                 self.rising = true;
             }
             if (!self.rising) {
-                self.gameobjects[0].transform.position[2] -= 0.0001
+                self.gameobjects[0].transform.position[2] -= 3.0 * delta_time
             } else {
-                self.gameobjects[0].transform.position[2] += 0.0001
+                self.gameobjects[0].transform.position[2] += 3.0 * delta_time
             }
             //////
             if (self.gameobjects[1].transform.position[2] > 1.0) {
@@ -155,11 +164,18 @@ impl ApplicationHandler for HelloTriangleApp {
                 self.rising2 = true;
             }
             if (!self.rising2) {
-                self.gameobjects[1].transform.position[2] -= 0.0002
+                self.gameobjects[1].transform.position[2] -= 8.0 * delta_time
             } else {
-                self.gameobjects[1].transform.position[2] += 0.0002
+                self.gameobjects[1].transform.position[2] += 8.0 * delta_time
             }
 
+            //println!("{} {}", delta_time, self.running);
+
+            //println!("{}", self.gameobjects[1].transform.position[2]);
+
+            //LAST THINGS
+            self.draw_frame();
+            self.game_context.delta_time_previous_frame = time::Instant::now();
             if let Some(window) = &self.window {
                 window.request_redraw();
             }
@@ -982,7 +998,9 @@ struct HelloTriangleApp {
     size: winit::dpi::LogicalSize<f64>,
     event_loop: Option<EventLoop<()>>,
     vulkan_context: VulkanContext,
+    game_context: GameContext,
     closing: bool,
+    running: bool,
 
     rising: bool,
     rising2: bool,
@@ -1150,6 +1168,8 @@ impl HelloTriangleApp {
         self.create_descriptor_sets();
         self.create_command_buffers();
         self.create_sync_object();
+
+        //self.running = true;
     }
     fn main_loop(&self) {}
     fn cleanup(&mut self) {
@@ -3013,6 +3033,9 @@ impl HelloTriangleApp {
             if (self.window_resized) {
                 self.recreate_swapchain();
                 self.window_resized = false;
+                if (!self.running) {
+                    self.running = true;
+                }
                 return;
             }
 
@@ -3286,6 +3309,9 @@ fn main() {
         //gameobjects: vec![gameobject_example],
         //indices: indices,
         //vertices: vertecies,
+        rising: false,
+        rising2: true,
+        running: false,
         ..Default::default()
     };
     app.instantiate(gameobject_example_2);
