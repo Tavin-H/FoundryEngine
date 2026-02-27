@@ -20,6 +20,10 @@ use crate::game_data::GameObject;
 use crate::game_data::MeshAllocation;
 use crate::game_data::Transform;
 
+//Vulkan Data
+mod vulkan_data;
+use crate::vulkan_data::VulkanContext;
+
 //------------------Vulkan----------------------
 //Constants
 const MAX_GAME_OBJECTS_IN_SCENE: u64 = 1000;
