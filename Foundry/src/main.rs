@@ -22,7 +22,7 @@ use crate::game_data::Transform;
 
 //Vulkan Data
 mod vulkan_data;
-use crate::vulkan_data::VulkanContextNew;
+use crate::vulkan_data::{Vertex, VulkanContextNew};
 
 //------------------Vulkan----------------------
 //Constants
@@ -94,7 +94,11 @@ struct WinitApp {
 
 impl ApplicationHandler for HelloTriangleApp {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        self.init_vulkan();
+        let Some(window) = &self.window else {
+            panic!("No window when calling init");
+        };
+        self.vulkan_context_new.init_vulkan(window);
+        //self.init_vulkan();
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, id: WindowId, event: WindowEvent) {
@@ -102,12 +106,15 @@ impl ApplicationHandler for HelloTriangleApp {
             WindowEvent::CloseRequested => {
                 self.closing = true;
                 event_loop.exit();
-                let Some(logical_device) = &self.vulkan_context.logical_device else {
-                    panic!("AAA");
-                };
-                unsafe {
-                    logical_device.device_wait_idle();
-                }
+                /*
+                                let Some(logical_device) = &self.vulkan_context.logical_device else {
+                                    panic!("AAA");
+                                };
+                                unsafe {
+                                    logical_device.device_wait_idle();
+                                }
+                */
+                self.vulkan_context_new.wait_idle();
             }
             WindowEvent::RedrawRequested => {
                 //self.gameobjects[0].transform.position[2] -= 0.01;
@@ -141,39 +148,45 @@ impl ApplicationHandler for HelloTriangleApp {
         // update logic here
         if (!self.closing) {
             let mut avg_delta_time = self.game_context.calculate_delta_time();
-            if (!self.running) {
-                avg_delta_time = 0.0;
-            }
-            if (self.gameobjects[0].transform.position[2] > 1.0) {
-                self.rising = false;
-            }
-            if (self.gameobjects[0].transform.position[2] < -1.0) {
-                self.rising = true;
-            }
-            if (!self.rising) {
-                self.gameobjects[0].transform.position[2] -= 3.0 * avg_delta_time;
-            } else {
-                self.gameobjects[0].transform.position[2] += 3.0 * avg_delta_time;
-            }
-            //////
-            if (self.gameobjects[1].transform.position[2] > 1.0) {
-                self.rising2 = false;
-            }
-            if (self.gameobjects[1].transform.position[2] < -1.0) {
-                self.rising2 = true;
-            }
-            if (!self.rising2) {
-                self.gameobjects[1].transform.position[2] -= 8.0 * avg_delta_time;
-            } else {
-                self.gameobjects[1].transform.position[2] += 8.0 * avg_delta_time;
-            }
+            /*
+                        if (!self.running) {
+                            avg_delta_time = 0.0;
+                        }
+                        if (self.game_context.gameobjects[0].transform.position[2] > 1.0) {
+                            self.rising = false;
+                        }
+                        if (self.game_context.gameobjects[0].transform.position[2] < -1.0) {
+                            self.rising = true;
+                        }
+                        if (!self.rising) {
+                            self.gameobjects[0].transform.position[2] -= 3.0 * avg_delta_time;
+                        } else {
+                            self.gameobjects[0].transform.position[2] += 3.0 * avg_delta_time;
+                        }
+
+                        if (self.gameobjects[1].transform.position[2] > 1.0) {
+                            self.rising2 = false;
+                        }
+                        if (self.gameobjects[1].transform.position[2] < -1.0) {
+                            self.rising2 = true;
+                        }
+                        if (!self.rising2) {
+                            self.gameobjects[1].transform.position[2] -= 8.0 * avg_delta_time;
+                        } else {
+                            self.gameobjects[1].transform.position[2] += 8.0 * avg_delta_time;
+                        }
+            */
 
             //println!("{} {}", delta_time, self.running);
 
             //println!("{}", self.gameobjects[1].transform.position[2]);
 
             //LAST THINGS
-            self.draw_frame();
+            let Some(window) = &self.window else {
+                panic!("");
+            };
+            self.vulkan_context_new
+                .draw_frame(window, &mut self.game_context);
 
             if let Some(window) = &self.window {
                 window.request_redraw();
@@ -1105,8 +1118,7 @@ impl HelloTriangleApp {
         self.size = winit::dpi::LogicalSize::new(window_width, window_height);
         let event_loop = self.load_window_early();
         self.init_window(event_loop, window_width, window_height);
-        self.main_loop();
-        self.cleanup();
+        self.vulkan_context_new.cleanup();
         println!("Shutdown complete");
     }
 
@@ -2408,7 +2420,7 @@ impl HelloTriangleApp {
 
         gameobject._mesh.first_index = before_indices as u32;
         gameobject._mesh.index_count = (after_indices - before_indices) as u32;
-        self.gameobjects.push(gameobject);
+        self.game_context.game_objects.push(gameobject);
     }
 
     fn load_model(&mut self) {
@@ -2434,8 +2446,10 @@ impl HelloTriangleApp {
                             colour: glm::vec3(1.0, 1.0, 1.0),
                             ..Default::default()
                         };
-                        self.vertices.push(vertex);
-                        self.indices.push(self.indices.len() as u32);
+                        self.vulkan_context_new.vertices.push(vertex);
+                        self.vulkan_context_new
+                            .indices
+                            .push(self.indices.len() as u32);
                     }
                 }
             }
@@ -3152,6 +3166,7 @@ impl HelloTriangleApp {
     }
 }
 
+/*
 #[derive(Default)]
 #[repr(C)]
 #[repr(align(16))]
@@ -3205,7 +3220,7 @@ impl Vertex {
         attributes
     }
 }
-
+*/
 #[repr(C)]
 #[repr(align(16))]
 #[derive(Default)]

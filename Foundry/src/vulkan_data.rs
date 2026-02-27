@@ -88,8 +88,8 @@ pub struct VulkanContextNew {
     texture_sampler: vk::Sampler,
 
     //Model info
-    vertices: Vec<VertexNew>,
-    indices: Vec<u32>,
+    pub vertices: Vec<Vertex>,
+    pub indices: Vec<u32>,
 
     //Depth Buffering
     depth_image: vk::Image,
@@ -134,7 +134,6 @@ pub struct VulkanContextNew {
 
     //Random info
     window_resized: bool,
-    window: Option<Window>,
 }
 struct SwapChainSupportDetails {
     capabilities: vk::SurfaceCapabilitiesKHR,
@@ -161,16 +160,16 @@ struct UniformBufferObject {
 #[repr(C)]
 #[repr(align(16))]
 //All pads will be 0.0 by using ..Default::default()
-struct VertexNew {
-    pos: glm::Vec3,
+pub struct Vertex {
+    pub pos: glm::Vec3,
     //_pad1: f32,
-    colour: glm::Vec3,
+    pub colour: glm::Vec3,
     //_pad2: f32,
-    tex_coord: glm::Vec2,
+    pub tex_coord: glm::Vec2,
 }
-impl VertexNew {
-    fn get_binding_descs() -> Vec<vk::VertexInputBindingDescription> {
-        let vertex_size: u32 = std::mem::size_of::<VertexNew>() as u32;
+impl Vertex {
+    pub fn get_binding_descs() -> Vec<vk::VertexInputBindingDescription> {
+        let vertex_size: u32 = std::mem::size_of::<Vertex>() as u32;
         let binding_desc = vk::VertexInputBindingDescription {
             binding: 0,
             stride: vertex_size,
@@ -180,26 +179,26 @@ impl VertexNew {
         vec![binding_desc]
     }
 
-    fn get_attribute_descs() -> Vec<vk::VertexInputAttributeDescription> {
+    pub fn get_attribute_descs() -> Vec<vk::VertexInputAttributeDescription> {
         let position_attribute_desc = vk::VertexInputAttributeDescription {
             binding: 0,
             location: 0,
             format: vk::Format::R32G32B32_SFLOAT,
-            offset: offset_of!(VertexNew, pos) as u32,
+            offset: offset_of!(Vertex, pos) as u32,
             ..Default::default()
         };
         let colour_attribute_desc = vk::VertexInputAttributeDescription {
             binding: 0,
             location: 1,
             format: vk::Format::R32G32B32_SFLOAT,
-            offset: offset_of!(VertexNew, colour) as u32,
+            offset: offset_of!(Vertex, colour) as u32,
             ..Default::default()
         };
         let tex_attribute_desc = vk::VertexInputAttributeDescription {
             binding: 0,
             location: 2,
             format: vk::Format::R32G32_SFLOAT,
-            offset: offset_of!(VertexNew, tex_coord) as u32,
+            offset: offset_of!(Vertex, tex_coord) as u32,
             ..Default::default()
         };
         let attributes = vec![
@@ -1152,7 +1151,7 @@ fn record_command_buffer(
 
 //--------------------VulkanContextNew Methods----------------
 impl VulkanContextNew {
-    fn wait_idle(&mut self) {
+    pub fn wait_idle(&mut self) {
         let Some(logical_device) = &self.logical_device else {
             panic!("AAA");
         };
@@ -1160,7 +1159,7 @@ impl VulkanContextNew {
             logical_device.device_wait_idle();
         }
     }
-    pub fn init_vulkan(&mut self) {
+    pub fn init_vulkan(&mut self, window: &Window) {
         unsafe {
             match Entry::load() {
                 Err(result) => {
@@ -1175,13 +1174,14 @@ impl VulkanContextNew {
             panic!("uh oh");
         }
 
+        //self.create_entry();
         self.create_instance();
-        self.create_surface();
+        self.create_surface(window);
         self.pick_physical_device();
         self.find_queue_families();
         self.create_logical_device();
         self.retrieve_queue_handles();
-        self.create_swapchain();
+        self.create_swapchain(window);
         self.create_image_views();
         self.create_render_pass();
         self.create_descriptor_set_layout();
@@ -1202,6 +1202,21 @@ impl VulkanContextNew {
         self.create_command_buffers();
         self.create_sync_object();
     }
+
+    /*
+    fn create_entry(&mut self) {
+        unsafe {
+            match Entry::load() {
+                Err(result) => {
+                    panic!("Failed to load an entry");
+                }
+                Ok(entry) => {
+                    self.entry = Some(entry);
+                }
+            }
+        }
+    }
+    */
 
     fn create_instance(&mut self) {
         let Some(entry) = &self.entry else {
@@ -1293,10 +1308,10 @@ impl VulkanContextNew {
                 }
             }
         }
-        panic!("Failure: No vk instance created");
+        //panic!("Failure: No vk instance created");
     }
 
-    fn cleanup(&mut self) {
+    pub fn cleanup(&mut self) {
         let Some(instance) = &self.instance else {
             println!("Instance does not exist");
             return;
@@ -1606,15 +1621,12 @@ impl VulkanContextNew {
     }
 
     #[allow(deprecated)]
-    fn create_surface(&mut self) {
+    fn create_surface(&mut self, window: &Window) {
         let Some(instance) = &self.instance else {
             panic!("No instance when calling create_surface");
         };
         let Some(entry) = &self.entry else {
             panic!("No entry when calling create_surface");
-        };
-        let Some(window) = &self.window else {
-            panic!("No window when calling create_surface");
         };
         let display_handle = window
             .raw_display_handle()
@@ -1660,7 +1672,7 @@ impl VulkanContextNew {
             self.surface = Some(surface);
         }
     }
-    fn create_swapchain(&mut self) {
+    fn create_swapchain(&mut self, window: &Window) {
         let Some(instance) = &self.instance else {
             panic!("No instance when calling create_swapchain");
         };
@@ -1672,9 +1684,6 @@ impl VulkanContextNew {
         };
         let Some(device) = &self.physical_device else {
             panic!("No physical_device when calling create_swapchain");
-        };
-        let Some(window) = &self.window else {
-            panic!("No window when calling create_swapchain");
         };
 
         let swapchain_support: SwapChainSupportDetails =
@@ -1778,7 +1787,7 @@ impl VulkanContextNew {
         }
     }
 
-    fn recreate_swapchain(&mut self) {
+    fn recreate_swapchain(&mut self, window: &Window) {
         let Some(logical_device) = &self.logical_device else {
             panic!("Cannot fetch logical_device durring recreate_swapchain");
         };
@@ -1787,7 +1796,7 @@ impl VulkanContextNew {
 
             self.cleanup_swapchain();
 
-            self.create_swapchain();
+            self.create_swapchain(window);
             self.create_image_views();
             self.create_depth_resources();
             self.create_frame_buffers();
@@ -1928,8 +1937,8 @@ impl VulkanContextNew {
             ..Default::default()
         };
 
-        let binding_descriptions_list = VertexNew::get_binding_descs();
-        let attributes_list = VertexNew::get_attribute_descs();
+        let binding_descriptions_list = Vertex::get_binding_descs();
+        let attributes_list = Vertex::get_attribute_descs();
         //let binding_descriptions_list: Vec<vk::VertexInputBindingDescription> = Vec::new();
         //let attributes_list: Vec<vk::VertexInputAttributeDescription> = Vec::new();
         let vertex_input_info = vk::PipelineVertexInputStateCreateInfo {
@@ -2483,6 +2492,7 @@ impl VulkanContextNew {
         }
     }
 
+    /*
     fn instantiate(&mut self, mut gameobject: GameObject) {
         let before_indices = self.indices.len();
         gameobject._mesh.first_vertex = self.vertices.len() as i32;
@@ -2494,6 +2504,7 @@ impl VulkanContextNew {
         gameobject._mesh.index_count = (after_indices - before_indices) as u32;
         self.game_context_reference.game_objects.push(gameobject);
     }
+    */
 
     fn load_model(&mut self) {
         //Maybe write this from scratch one day?
@@ -2512,7 +2523,7 @@ impl VulkanContextNew {
                         let u = shape.mesh.texcoords[2 * index as usize + 0];
                         let v = 1.0 - shape.mesh.texcoords[2 * index as usize + 1];
 
-                        let vertex = VertexNew {
+                        let vertex = Vertex {
                             pos: glm::vec3(x, y, z),
                             tex_coord: glm::vec2(u, v),
                             colour: glm::vec3(1.0, 1.0, 1.0),
@@ -2528,11 +2539,12 @@ impl VulkanContextNew {
     }
 
     fn create_vertex_buffer(&mut self) {
+        println!("vertices length = {}", self.vertices.len());
         let Some(logical_device) = &self.logical_device else {
             panic!("No logical device when calling create_vertex_buffer");
         };
         let vertices = &self.vertices;
-        let vertex_buffer_size = size_of::<VertexNew>() * vertices.len();
+        let vertex_buffer_size = size_of::<Vertex>() * vertices.len();
 
         //Create Staging buffer
         let (staging_buffer, staging_buffer_memory) = create_buffer(
@@ -2557,7 +2569,7 @@ impl VulkanContextNew {
 
             ptr::copy_nonoverlapping(
                 self.vertices.as_ptr(),
-                staging_memory_pointer as *mut VertexNew, //Cast void to Vertex Data Type
+                staging_memory_pointer as *mut Vertex, //Cast void to Vertex Data Type
                 self.vertices.len(),
             );
             logical_device.unmap_memory(staging_buffer_memory);
@@ -2642,6 +2654,7 @@ impl VulkanContextNew {
             logical_device.destroy_buffer(staging_buffer, None);
             logical_device.free_memory(staging_buffer_memory, None);
         }
+        println!("WORKING????");
     }
 
     fn create_command_buffers(&mut self) {
@@ -2920,7 +2933,11 @@ impl VulkanContextNew {
         }
     }
 
-    fn draw_frame(&mut self) {
+    pub fn draw_frame(&mut self, window: &Window, game_context: &mut GameContext) {
+        println!(
+            "{} {}",
+            game_context.game_objects[0].name, game_context.game_objects[0].transform.position[2]
+        );
         if (self.frame_buffers.is_empty()) {
             return;
         }
@@ -2959,10 +2976,10 @@ impl VulkanContextNew {
 
             //In case device driver doesn't handle ERROR_OUT_OF_DATE_KHR
             if (self.window_resized) {
-                self.recreate_swapchain();
+                self.recreate_swapchain(window);
                 self.window_resized = false;
-                if (!self.game_context_reference.game_active) {
-                    self.game_context_reference.game_active = true;
+                if (!game_context.game_active) {
+                    game_context.game_active = true;
                 }
                 return;
             }
@@ -2981,7 +2998,7 @@ impl VulkanContextNew {
 
                     println!("\n\n\n recreating \n\n\n");
                     //panic!("LKSJD");
-                    self.recreate_swapchain();
+                    self.recreate_swapchain(window);
                     return;
                 }
                 Err(e) => {
@@ -3010,7 +3027,7 @@ impl VulkanContextNew {
                 pipeline_layout,
                 &self.descriptor_sets,
                 current_frame,
-                &self.game_context_reference.game_objects,
+                &game_context.game_objects,
             );
             let wait_semaphores = [current_image_available_semaphore];
             let wait_stages = [vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];
@@ -3025,7 +3042,7 @@ impl VulkanContextNew {
             update_transform_buffer(
                 current_frame as u32,
                 &self.transform_buffers_mapped,
-                &self.game_context_reference.game_objects,
+                &game_context.game_objects,
             );
 
             let submit_info = vk::SubmitInfo {
@@ -3057,12 +3074,12 @@ impl VulkanContextNew {
             match swapchain_device.queue_present(graphics_queue, &present_info) {
                 Ok(is_suboptimal) => {
                     if (is_suboptimal) {
-                        self.recreate_swapchain();
+                        self.recreate_swapchain(window);
                         return;
                     }
                 }
                 Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => {
-                    self.recreate_swapchain();
+                    self.recreate_swapchain(window);
                     return;
                 }
                 Err(e) => {
