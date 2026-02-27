@@ -26,6 +26,8 @@ pub struct GameContext {
     pub delta_time_previous_frame: std::time::Instant,
     pub previous_delta_times: VecDeque<f32>,
     pub delta_time: f32,
+    pub game_active: bool,
+    pub game_objects: Vec<GameObject>,
 }
 
 impl Default for GameContext {
@@ -34,6 +36,8 @@ impl Default for GameContext {
             delta_time_previous_frame: time::Instant::now(),
             previous_delta_times: VecDeque::from([0.0, 0.0, 0.0]),
             delta_time: 0.0,
+            game_active: false,
+            game_objects: Vec::new(),
         }
     }
 }

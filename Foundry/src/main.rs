@@ -22,7 +22,7 @@ use crate::game_data::Transform;
 
 //Vulkan Data
 mod vulkan_data;
-use crate::vulkan_data::VulkanContext;
+use crate::vulkan_data::VulkanContextNew;
 
 //------------------Vulkan----------------------
 //Constants
@@ -997,6 +997,7 @@ struct HelloTriangleApp {
     size: winit::dpi::LogicalSize<f64>,
     event_loop: Option<EventLoop<()>>,
     vulkan_context: VulkanContext,
+    vulkan_context_new: VulkanContextNew,
     game_context: GameContext,
     closing: bool,
     running: bool,
