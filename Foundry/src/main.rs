@@ -22,7 +22,7 @@ use crate::game_data::Transform;
 
 //Vulkan Data
 mod vulkan_data;
-use crate::vulkan_data::{Vertex, VulkanContextNew};
+//use crate::vulkan_data::VulkanContext;
 
 //------------------Vulkan----------------------
 //Constants
@@ -95,10 +95,9 @@ struct WinitApp {
 impl ApplicationHandler for HelloTriangleApp {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         let Some(window) = &self.window else {
-            panic!("No window when calling init");
+            panic!("");
         };
-        self.vulkan_context_new.init_vulkan(window);
-        //self.init_vulkan();
+        self.vulkan_context.init_vulkan(window);
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, id: WindowId, event: WindowEvent) {
@@ -106,15 +105,7 @@ impl ApplicationHandler for HelloTriangleApp {
             WindowEvent::CloseRequested => {
                 self.closing = true;
                 event_loop.exit();
-                /*
-                                let Some(logical_device) = &self.vulkan_context.logical_device else {
-                                    panic!("AAA");
-                                };
-                                unsafe {
-                                    logical_device.device_wait_idle();
-                                }
-                */
-                self.vulkan_context_new.wait_idle();
+                self.vulkan_context.wait_idle();
             }
             WindowEvent::RedrawRequested => {
                 //self.gameobjects[0].transform.position[2] -= 0.01;
@@ -125,7 +116,8 @@ impl ApplicationHandler for HelloTriangleApp {
                     self.minimized = true;
                     return;
                 }
-                self.window_resized = true;
+                //self.window_resized = true;
+                self.vulkan_context.window_resized = true;
             }
             WindowEvent::KeyboardInput {
                 device_id,
@@ -148,34 +140,32 @@ impl ApplicationHandler for HelloTriangleApp {
         // update logic here
         if (!self.closing) {
             let mut avg_delta_time = self.game_context.calculate_delta_time();
-            /*
-                        if (!self.running) {
-                            avg_delta_time = 0.0;
-                        }
-                        if (self.game_context.gameobjects[0].transform.position[2] > 1.0) {
-                            self.rising = false;
-                        }
-                        if (self.game_context.gameobjects[0].transform.position[2] < -1.0) {
-                            self.rising = true;
-                        }
-                        if (!self.rising) {
-                            self.gameobjects[0].transform.position[2] -= 3.0 * avg_delta_time;
-                        } else {
-                            self.gameobjects[0].transform.position[2] += 3.0 * avg_delta_time;
-                        }
-
-                        if (self.gameobjects[1].transform.position[2] > 1.0) {
-                            self.rising2 = false;
-                        }
-                        if (self.gameobjects[1].transform.position[2] < -1.0) {
-                            self.rising2 = true;
-                        }
-                        if (!self.rising2) {
-                            self.gameobjects[1].transform.position[2] -= 8.0 * avg_delta_time;
-                        } else {
-                            self.gameobjects[1].transform.position[2] += 8.0 * avg_delta_time;
-                        }
-            */
+            if (!self.vulkan_context.running) {
+                avg_delta_time = 0.0;
+            }
+            if (self.gameobjects[0].transform.position[2] > 1.0) {
+                self.rising = false;
+            }
+            if (self.gameobjects[0].transform.position[2] < -1.0) {
+                self.rising = true;
+            }
+            if (!self.rising) {
+                self.gameobjects[0].transform.position[2] -= 3.0 * avg_delta_time;
+            } else {
+                self.gameobjects[0].transform.position[2] += 3.0 * avg_delta_time;
+            }
+            //////
+            if (self.gameobjects[1].transform.position[2] > 1.0) {
+                self.rising2 = false;
+            }
+            if (self.gameobjects[1].transform.position[2] < -1.0) {
+                self.rising2 = true;
+            }
+            if (!self.rising2) {
+                self.gameobjects[1].transform.position[2] -= 8.0 * avg_delta_time;
+            } else {
+                self.gameobjects[1].transform.position[2] += 8.0 * avg_delta_time;
+            }
 
             //println!("{} {}", delta_time, self.running);
 
@@ -185,8 +175,7 @@ impl ApplicationHandler for HelloTriangleApp {
             let Some(window) = &self.window else {
                 panic!("");
             };
-            self.vulkan_context_new
-                .draw_frame(window, &mut self.game_context);
+            self.vulkan_context.draw_frame(&self.gameobjects, window);
 
             if let Some(window) = &self.window {
                 window.request_redraw();
@@ -473,10 +462,8 @@ fn update_uniform_buffer(
     current_image: u32,
     extent: vk::Extent2D,
     uniform_buffers_mapped: &Vec<*mut UniformBufferObject>,
-    start_time: std::time::Instant,
 ) {
     let current_time = std::time::Instant::now();
-    let time = current_time.duration_since(start_time).as_secs_f32();
 
     let mut transform = glm::Mat4::identity();
     transform[(0, 3)] = 1.0;
@@ -484,7 +471,7 @@ fn update_uniform_buffer(
     let model = transform
         * glm::rotate(
             &glm::Mat4::identity(),
-            time * 0.3 * std::f32::consts::PI / 2.0,
+            90.0 * 0.3 * std::f32::consts::PI / 2.0,
             &glm::vec3(0.0, 0.0, 1.0),
         );
     let view = glm::look_at(
@@ -589,7 +576,7 @@ fn create_buffer(
 
         match logical_device.allocate_memory(&alloc_info, None) {
             Ok(buffer_memory) => {
-                //self.vulkan_context.vertex_buffer_memory = buffer_memory;
+                //self.vertex_buffer_memory = buffer_memory;
                 logical_device.bind_buffer_memory(buffer, buffer_memory, 0);
 
                 println!("Allocated Vertex Buffer Memory");
@@ -753,99 +740,6 @@ fn load_icon(file_path: &String) -> winit::window::Icon {
 }
 
 //Change to entry::linked() if having problems
-fn create_instance(context: &mut VulkanContext) -> Option<ash::Instance> {
-    let Some(entry) = &context.entry else {
-        panic!("Sent invalid entry to create_instance");
-    };
-
-    let engine_name: CString = CString::new("No Engine").unwrap();
-    let app_info = vk::ApplicationInfo {
-        api_version: vk::make_api_version(0, 1, 0, 0),
-        p_engine_name: engine_name.as_ptr(),
-        ..Default::default()
-    };
-    let mut layer_count: u32 = 0;
-    let mut enabled_layer_names: Vec<*const i8> = Vec::new();
-
-    let validation = vec![
-        CString::new("VK_LAYER_KHRONOS_validation")
-            .unwrap()
-            .as_ptr(),
-    ];
-
-    if cfg!(debug_assertions) {
-        //Save Cstrings in vulkan_context and make a list of pointers to those
-        layer_count = VALIDATION_LAYERS.len() as u32;
-        for item in VALIDATION_LAYERS.iter() {
-            context
-                .validation_layer_names
-                .push(CString::new(*item).expect("ih on"));
-        }
-        for item in context.validation_layer_names.iter() {
-            enabled_layer_names.push(item.as_ptr());
-        }
-    }
-    let mut extension_names: Vec<*const i8> = Vec::new();
-    extension_names.push(ash::khr::surface::NAME.as_ptr());
-    if (std::env::consts::OS == "windows") {
-        extension_names.push(ash::vk::KHR_WIN32_SURFACE_NAME.as_ptr());
-    }
-    let mut create_info = vk::InstanceCreateInfo {
-        p_application_info: &app_info,
-        enabled_layer_count: layer_count,
-        pp_enabled_layer_names: enabled_layer_names.as_ptr(),
-        pp_enabled_extension_names: extension_names.as_ptr(),
-        enabled_extension_count: extension_names.len() as u32,
-
-        ..Default::default()
-    };
-
-    unsafe {
-        match entry.create_instance(&create_info, None) {
-            Ok(instance) => {
-                println!("Created Vulkan Instance");
-                return Some(instance);
-            }
-            Err(result) => {
-                //Check if there is a driver issue on mac (likely need to port MoltenVK)
-                if (std::env::consts::OS == "macos"
-                    && result == vk::Result::ERROR_INCOMPATIBLE_DRIVER)
-                {
-                    println!("Error: Incompatible driver, making a port");
-                    //Make a MoltenVK port for mac
-                    let instance_flags: vk::InstanceCreateFlags =
-                        vk::InstanceCreateFlags::ENUMERATE_PORTABILITY_KHR;
-                    let mut mac_extension_names = Vec::new();
-                    mac_extension_names.push(vk::KHR_PORTABILITY_ENUMERATION_NAME.as_ptr());
-                    mac_extension_names.push(vk::KHR_GET_PHYSICAL_DEVICE_PROPERTIES2_NAME.as_ptr());
-                    mac_extension_names.push(ash::khr::surface::NAME.as_ptr());
-                    mac_extension_names.push(ash::ext::metal_surface::NAME.as_ptr());
-                    //MAKE SURE TO INCREASE COUNT
-                    create_info.pp_enabled_layer_names = enabled_layer_names.as_ptr();
-                    create_info.pp_enabled_extension_names = mac_extension_names.as_ptr();
-                    create_info.enabled_extension_count = 4;
-                    create_info.flags = instance_flags;
-
-                    match entry.create_instance(&create_info, None) {
-                        Ok(instance) => {
-                            println!("Successfully created mac port");
-                            return Some(instance);
-                        }
-                        Err(result) => {
-                            panic!("{:?}", result);
-                        }
-                    }
-                }
-                if (std::env::consts::OS == "windows") {
-                    println!("Windows problem");
-                    panic!("{}", result);
-                }
-            }
-        }
-    }
-    panic!("Failure: No vk instance created");
-    return None;
-}
 
 fn is_device_stable(
     entry: &ash::Entry,
@@ -1010,7 +904,6 @@ struct HelloTriangleApp {
     size: winit::dpi::LogicalSize<f64>,
     event_loop: Option<EventLoop<()>>,
     vulkan_context: VulkanContext,
-    vulkan_context_new: VulkanContextNew,
     game_context: GameContext,
     closing: bool,
     running: bool,
@@ -1032,6 +925,11 @@ struct HelloTriangleApp {
 //Holds all vulkan objects in a single struct to controll lifetimes more precisely
 #[derive(Default)]
 struct VulkanContext {
+    vertices: Vec<Vertex>,
+    indices: Vec<u32>,
+    window_resized: bool,
+    running: bool,
+
     //Basics
     instance: Option<ash::Instance>,
     entry: Option<ash::Entry>,
@@ -1118,7 +1016,7 @@ impl HelloTriangleApp {
         self.size = winit::dpi::LogicalSize::new(window_width, window_height);
         let event_loop = self.load_window_early();
         self.init_window(event_loop, window_width, window_height);
-        self.vulkan_context_new.cleanup();
+        self.vulkan_context.cleanup();
         println!("Shutdown complete");
     }
 
@@ -1135,15 +1033,33 @@ impl HelloTriangleApp {
         self.window = Some(event_loop.create_window(window_attributes).unwrap());
         event_loop
     }
+    fn init_window(&mut self, event_loop: EventLoop<()>, window_width: f64, window_height: f64) {
+        event_loop.set_control_flow(ControlFlow::Poll);
+        self.size = winit::dpi::LogicalSize::new(window_width, window_height);
+        event_loop.run_app(self);
+    }
 
-    fn init_vulkan(&mut self) {
+    fn instantiate(&mut self, mut gameobject: GameObject) {
+        let before_indices = self.vulkan_context.indices.len();
+        gameobject._mesh.first_vertex = self.vulkan_context.vertices.len() as i32;
+        //println!("RAHHHHHHHHHHHHHH {:?}", gameobject._mesh.first_index);
+        self.vulkan_context.load_model();
+        let after_indices = self.vulkan_context.indices.len();
+
+        gameobject._mesh.first_index = before_indices as u32;
+        gameobject._mesh.index_count = (after_indices - before_indices) as u32;
+        self.gameobjects.push(gameobject);
+    }
+}
+impl VulkanContext {
+    fn init_vulkan(&mut self, window: &Window) {
         unsafe {
             match Entry::load() {
                 Err(result) => {
                     panic!("Failed to load an entry");
                 }
                 Ok(entry) => {
-                    self.vulkan_context.entry = Some(entry);
+                    self.entry = Some(entry);
                 }
             }
         }
@@ -1151,16 +1067,13 @@ impl HelloTriangleApp {
             panic!("uh oh");
         }
 
-        let instance_result: Option<Instance> = create_instance(&mut self.vulkan_context);
-        unsafe {
-            self.vulkan_context.instance = instance_result;
-        }
-        self.create_surface();
+        self.create_instance();
+        self.create_surface(window);
         self.pick_physical_device();
         self.find_queue_families();
         self.create_logical_device();
         self.retrieve_queue_handles();
-        self.create_swapchain();
+        self.create_swapchain(window);
         self.create_image_views();
         self.create_render_pass();
         self.create_descriptor_set_layout();
@@ -1184,15 +1097,114 @@ impl HelloTriangleApp {
         //self.running = true;
     }
     fn main_loop(&self) {}
+    fn wait_idle(&mut self) {
+        let Some(logical_device) = &self.logical_device else {
+            panic!("AAA");
+        };
+        unsafe {
+            logical_device.device_wait_idle();
+        }
+    }
+    fn create_instance(&mut self) {
+        let Some(entry) = &self.entry else {
+            panic!("Sent invalid entry to create_instance");
+        };
+
+        let engine_name: CString = CString::new("No Engine").unwrap();
+        let app_info = vk::ApplicationInfo {
+            api_version: vk::make_api_version(0, 1, 0, 0),
+            p_engine_name: engine_name.as_ptr(),
+            ..Default::default()
+        };
+        let mut layer_count: u32 = 0;
+        let mut enabled_layer_names: Vec<*const i8> = Vec::new();
+
+        let validation = vec![
+            CString::new("VK_LAYER_KHRONOS_validation")
+                .unwrap()
+                .as_ptr(),
+        ];
+
+        if cfg!(debug_assertions) {
+            //Save Cstrings in vulkan_context and make a list of pointers to those
+            layer_count = VALIDATION_LAYERS.len() as u32;
+            for item in VALIDATION_LAYERS.iter() {
+                self.validation_layer_names
+                    .push(CString::new(*item).expect("ih on"));
+            }
+            for item in self.validation_layer_names.iter() {
+                enabled_layer_names.push(item.as_ptr());
+            }
+        }
+        let mut extension_names: Vec<*const i8> = Vec::new();
+        extension_names.push(ash::khr::surface::NAME.as_ptr());
+        if (std::env::consts::OS == "windows") {
+            extension_names.push(ash::vk::KHR_WIN32_SURFACE_NAME.as_ptr());
+        }
+        let mut create_info = vk::InstanceCreateInfo {
+            p_application_info: &app_info,
+            enabled_layer_count: layer_count,
+            pp_enabled_layer_names: enabled_layer_names.as_ptr(),
+            pp_enabled_extension_names: extension_names.as_ptr(),
+            enabled_extension_count: extension_names.len() as u32,
+
+            ..Default::default()
+        };
+
+        unsafe {
+            match entry.create_instance(&create_info, None) {
+                Ok(instance) => {
+                    println!("Created Vulkan Instance");
+                    self.instance = Some(instance);
+                }
+                Err(result) => {
+                    //Check if there is a driver issue on mac (likely need to port MoltenVK)
+                    if (std::env::consts::OS == "macos"
+                        && result == vk::Result::ERROR_INCOMPATIBLE_DRIVER)
+                    {
+                        println!("Error: Incompatible driver, making a port");
+                        //Make a MoltenVK port for mac
+                        let instance_flags: vk::InstanceCreateFlags =
+                            vk::InstanceCreateFlags::ENUMERATE_PORTABILITY_KHR;
+                        let mut mac_extension_names = Vec::new();
+                        mac_extension_names.push(vk::KHR_PORTABILITY_ENUMERATION_NAME.as_ptr());
+                        mac_extension_names
+                            .push(vk::KHR_GET_PHYSICAL_DEVICE_PROPERTIES2_NAME.as_ptr());
+                        mac_extension_names.push(ash::khr::surface::NAME.as_ptr());
+                        mac_extension_names.push(ash::ext::metal_surface::NAME.as_ptr());
+                        //MAKE SURE TO INCREASE COUNT
+                        create_info.pp_enabled_layer_names = enabled_layer_names.as_ptr();
+                        create_info.pp_enabled_extension_names = mac_extension_names.as_ptr();
+                        create_info.enabled_extension_count = 4;
+                        create_info.flags = instance_flags;
+
+                        match entry.create_instance(&create_info, None) {
+                            Ok(instance) => {
+                                println!("Successfully created mac port");
+                                self.instance = Some(instance);
+                            }
+                            Err(result) => {
+                                panic!("{:?}", result);
+                            }
+                        }
+                    }
+                    if (std::env::consts::OS == "windows") {
+                        println!("Windows problem");
+                        panic!("{}", result);
+                    }
+                }
+            }
+        }
+    }
     fn cleanup(&mut self) {
-        let Some(instance) = &self.vulkan_context.instance else {
+        let Some(instance) = &self.instance else {
             println!("Instance does not exist");
             return;
         };
-        let Some(logical_device) = &self.vulkan_context.logical_device else {
+        let Some(logical_device) = &self.logical_device else {
             panic!("No logical device when cleaning up");
         };
-        let Some(entry) = &self.vulkan_context.entry else {
+        let Some(entry) = &self.entry else {
             panic!("No entry when cleaning up");
         };
 
@@ -1200,108 +1212,94 @@ impl HelloTriangleApp {
         let surface_instance = ash::khr::surface::Instance::new(entry, instance);
 
         unsafe {
-            logical_device.destroy_image_view(self.vulkan_context.depth_image_view, None);
-            logical_device.destroy_image(self.vulkan_context.depth_image, None);
-            logical_device.free_memory(self.vulkan_context.depth_image_memory, None);
+            logical_device.destroy_image_view(self.depth_image_view, None);
+            logical_device.destroy_image(self.depth_image, None);
+            logical_device.free_memory(self.depth_image_memory, None);
 
-            logical_device.destroy_sampler(self.vulkan_context.texture_sampler, None);
-            logical_device.destroy_image_view(self.vulkan_context.texture_image_view, None);
-            logical_device.destroy_image(self.vulkan_context.texture_image, None);
-            logical_device.free_memory(self.vulkan_context.texture_image_memory, None);
+            logical_device.destroy_sampler(self.texture_sampler, None);
+            logical_device.destroy_image_view(self.texture_image_view, None);
+            logical_device.destroy_image(self.texture_image, None);
+            logical_device.free_memory(self.texture_image_memory, None);
             //Syncronization
             /*
-                        let Some(fence) = self.vulkan_context.in_flight_fence else {
+                        let Some(fence) = self.in_flight_fence else {
                             panic!("No fence when cleaning up");
                         };
                         logical_device.destroy_fence(fence, None);
-                        let Some(image_semaphore) = self.vulkan_context.image_available_semaphore else {
+                        let Some(image_semaphore) = self.image_available_semaphore else {
                             panic!("No sephamore when cleaning up");
                         };
                         logical_device.destroy_semaphore(image_semaphore, None);
 
-                        let Some(render_semaphore) = self.vulkan_context.render_finished_semaphore else {
+                        let Some(render_semaphore) = self.render_finished_semaphore else {
                             panic!("No sephamore when cleaning up");
                         };
                         logical_device.destroy_semaphore(render_semaphore, None);
             */
 
             for i in 0..MAX_FRAMES_IN_FLIGHT {
-                logical_device.destroy_semaphore(
-                    self.vulkan_context.render_finished_semaphores[i as usize],
-                    None,
-                );
-                logical_device.destroy_semaphore(
-                    self.vulkan_context.image_available_semaphores[i as usize],
-                    None,
-                );
-                logical_device
-                    .destroy_fence(self.vulkan_context.in_flight_fences[i as usize], None);
+                logical_device.destroy_semaphore(self.render_finished_semaphores[i as usize], None);
+                logical_device.destroy_semaphore(self.image_available_semaphores[i as usize], None);
+                logical_device.destroy_fence(self.in_flight_fences[i as usize], None);
             }
 
             //Command stuff
-            let Some(command_pool) = self.vulkan_context.command_pool else {
+            let Some(command_pool) = self.command_pool else {
                 panic!("No command_pool when cleaning up");
             };
             logical_device.destroy_command_pool(command_pool, None);
             //Graphics pipleline
-            for frame_buffer in self.vulkan_context.frame_buffers.iter() {
+            for frame_buffer in self.frame_buffers.iter() {
                 logical_device.destroy_framebuffer(*frame_buffer, None);
             }
 
             //Buffers
             for i in 0..MAX_FRAMES_IN_FLIGHT {
-                logical_device
-                    .destroy_buffer(self.vulkan_context.uniform_buffers[i as usize], None);
-                logical_device
-                    .free_memory(self.vulkan_context.uniform_buffers_memory[i as usize], None);
+                logical_device.destroy_buffer(self.uniform_buffers[i as usize], None);
+                logical_device.free_memory(self.uniform_buffers_memory[i as usize], None);
 
-                logical_device
-                    .destroy_buffer(self.vulkan_context.transform_buffers[i as usize], None);
-                logical_device.free_memory(
-                    self.vulkan_context.transform_buffers_memory[i as usize],
-                    None,
-                );
+                logical_device.destroy_buffer(self.transform_buffers[i as usize], None);
+                logical_device.free_memory(self.transform_buffers_memory[i as usize], None);
             }
-            logical_device.destroy_buffer(self.vulkan_context.vertex_buffer, None);
-            logical_device.free_memory(self.vulkan_context.vertex_buffer_memory, None);
+            logical_device.destroy_buffer(self.vertex_buffer, None);
+            logical_device.free_memory(self.vertex_buffer_memory, None);
 
-            logical_device.destroy_buffer(self.vulkan_context.index_buffer, None);
-            logical_device.free_memory(self.vulkan_context.index_buffer_memory, None);
+            logical_device.destroy_buffer(self.index_buffer, None);
+            logical_device.free_memory(self.index_buffer_memory, None);
 
-            for graphics_pipeline in self.vulkan_context.graphics_pipelines.iter() {
+            for graphics_pipeline in self.graphics_pipelines.iter() {
                 logical_device.destroy_pipeline(*graphics_pipeline, None);
             }
-            let Some(render_pass) = self.vulkan_context.render_pass else {
+            let Some(render_pass) = self.render_pass else {
                 panic!("No render_pass when cleaning up");
             };
             logical_device.destroy_render_pass(render_pass, None);
 
             //Pipeline Layout
-            let Some(pipeline_layout) = self.vulkan_context.pipeline_layout else {
+            let Some(pipeline_layout) = self.pipeline_layout else {
                 panic!("No pipeline_layout when cleaning up");
             };
             logical_device.destroy_pipeline_layout(pipeline_layout, None);
 
-            logical_device
-                .destroy_descriptor_set_layout(self.vulkan_context.descriptor_set_layout, None);
-            logical_device.destroy_descriptor_pool(self.vulkan_context.descriptor_pool, None);
+            logical_device.destroy_descriptor_set_layout(self.descriptor_set_layout, None);
+            logical_device.destroy_descriptor_pool(self.descriptor_pool, None);
 
             //Graphics pipleline handles
-            for image_view in self.vulkan_context.swap_chain_image_views.iter() {
+            for image_view in self.swap_chain_image_views.iter() {
                 logical_device.destroy_image_view(*image_view, None);
             }
-            for shader_module in self.vulkan_context.shader_list.iter() {
+            for shader_module in self.shader_list.iter() {
                 logical_device.destroy_shader_module(*shader_module, None);
             }
 
             //Swapchain
-            let Some(swapchain) = self.vulkan_context.swap_chain else {
+            let Some(swapchain) = self.swap_chain else {
                 panic!("No swapchain when cleaning up");
             };
             swapchain_device.destroy_swapchain(swapchain, None);
 
             //Surface
-            let Some(surface) = self.vulkan_context.surface else {
+            let Some(surface) = self.surface else {
                 panic!("No surface when cleaning up");
             };
             surface_instance.destroy_surface(surface, None);
@@ -1310,7 +1308,7 @@ impl HelloTriangleApp {
             logical_device.destroy_device(None);
 
             //Instance
-            let Some(instance) = &self.vulkan_context.instance else {
+            let Some(instance) = &self.instance else {
                 panic!("No instance when cleaning up");
             };
             instance.destroy_instance(None);
@@ -1318,17 +1316,12 @@ impl HelloTriangleApp {
             println!("Everything cleaned up");
         }
     }
-    fn init_window(&mut self, event_loop: EventLoop<()>, window_width: f64, window_height: f64) {
-        event_loop.set_control_flow(ControlFlow::Poll);
-        self.size = winit::dpi::LogicalSize::new(window_width, window_height);
-        event_loop.run_app(self);
-    }
 
     fn check_validation_layers(&mut self) -> bool {
         if !cfg!(debug_assertions) {
             return true;
         }
-        let Some(entry) = &self.vulkan_context.entry else {
+        let Some(entry) = &self.entry else {
             panic!("Entry is invalid when seting in setup_validation_layers");
         };
         match unsafe { entry.enumerate_instance_layer_properties() } {
@@ -1364,13 +1357,13 @@ impl HelloTriangleApp {
 
     fn pick_physical_device(&mut self) {
         //physical_device: vk::PhysicalDevice;
-        let Some(instance) = &self.vulkan_context.instance else {
+        let Some(instance) = &self.instance else {
             panic!("invalid instance when getting physical devices");
         };
-        let Some(entry) = &self.vulkan_context.entry else {
+        let Some(entry) = &self.entry else {
             panic!("No entry in pick_physical_device");
         };
-        let Some(surface) = &self.vulkan_context.surface else {
+        let Some(surface) = &self.surface else {
             panic!("No surface in pick_physical_device");
         };
         unsafe {
@@ -1379,7 +1372,7 @@ impl HelloTriangleApp {
                     if (physical_device_list.len() == 0) {
                         panic!("found no physical devices");
                     }
-                    let Some(instance) = &self.vulkan_context.instance else {
+                    let Some(instance) = &self.instance else {
                         panic!("No instance in pick_physical_device()");
                     };
                     let mut physical_device: vk::PhysicalDevice = vk::PhysicalDevice::null();
@@ -1393,7 +1386,7 @@ impl HelloTriangleApp {
                         panic!("No stable devices found");
                     }
 
-                    self.vulkan_context.physical_device = Some(physical_device);
+                    self.physical_device = Some(physical_device);
                 }
                 Err(e) => {
                     panic!("{:?}", e);
@@ -1403,16 +1396,16 @@ impl HelloTriangleApp {
     }
 
     fn find_queue_families(&mut self) {
-        let Some(device) = self.vulkan_context.physical_device else {
+        let Some(device) = self.physical_device else {
             panic!("No physical_device when finding families");
         };
-        let Some(instance) = &self.vulkan_context.instance else {
+        let Some(instance) = &self.instance else {
             panic!("No instance when finding families");
         };
-        let Some(entry) = &self.vulkan_context.entry else {
+        let Some(entry) = &self.entry else {
             panic!("No entry when calling find_queue_families");
         };
-        let Some(surface) = self.vulkan_context.surface else {
+        let Some(surface) = self.surface else {
             panic!("No surface when calling find_queue_families");
         };
         let mut indices = QueueFamilyIndices {
@@ -1444,12 +1437,12 @@ impl HelloTriangleApp {
                 panic!("Did not find all needed indices");
             }
         }
-        self.vulkan_context.family_indicies = indices;
+        self.family_indicies = indices;
     }
 
     #[allow(deprecated)]
     fn create_logical_device(&mut self) {
-        let indices = &self.vulkan_context.family_indicies;
+        let indices = &self.family_indicies;
         //Remember to add indices to this list
         //BUG
         let indices_vec = vec![indices.graphics_family, indices.present_family];
@@ -1488,26 +1481,25 @@ impl HelloTriangleApp {
             ..Default::default()
         };
         let mut enabled_layer_names: Vec<*const i8> = Vec::new();
-        for item in self.vulkan_context.validation_layer_names.iter() {
+        for item in self.validation_layer_names.iter() {
             enabled_layer_names.push(item.as_ptr());
         }
-        if self.vulkan_context.validation_layers_enabaled {
-            create_info.enabled_layer_count =
-                self.vulkan_context.validation_layer_names.len() as u32;
+        if self.validation_layers_enabaled {
+            create_info.enabled_layer_count = self.validation_layer_names.len() as u32;
             create_info.pp_enabled_layer_names = enabled_layer_names.as_ptr();
         } else {
             create_info.enabled_layer_count = 0;
         }
-        let Some(instance) = &self.vulkan_context.instance else {
+        let Some(instance) = &self.instance else {
             panic!("No instance when creating logical device");
         };
-        let Some(physical_device) = self.vulkan_context.physical_device else {
+        let Some(physical_device) = self.physical_device else {
             panic!("No physical_device when creating logical device");
         };
         unsafe {
             match instance.create_device(physical_device, &create_info, None) {
                 Ok(logical_device) => {
-                    self.vulkan_context.logical_device = Some(logical_device);
+                    self.logical_device = Some(logical_device);
                 }
                 Err(e) => {
                     panic!("{:?}", e);
@@ -1516,29 +1508,26 @@ impl HelloTriangleApp {
         }
     }
     fn retrieve_queue_handles(&mut self) {
-        let Some(device) = &self.vulkan_context.logical_device else {
+        let Some(device) = &self.logical_device else {
             panic!("No physical_device when calling retrieve_queue_handles");
         };
-        let indices = &self.vulkan_context.family_indicies;
+        let indices = &self.family_indicies;
         unsafe {
             let device_queue: vk::Queue = device.get_device_queue(indices.graphics_family, 0);
-            self.vulkan_context.graphics_queue = Some(device_queue);
+            self.graphics_queue = Some(device_queue);
 
             let present_queue: vk::Queue = device.get_device_queue(indices.present_family, 0);
-            self.vulkan_context.present_queue = Some(present_queue);
+            self.present_queue = Some(present_queue);
         };
     }
 
     #[allow(deprecated)]
-    fn create_surface(&mut self) {
-        let Some(instance) = &self.vulkan_context.instance else {
+    fn create_surface(&mut self, window: &Window) {
+        let Some(instance) = &self.instance else {
             panic!("No instance when calling create_surface");
         };
-        let Some(entry) = &self.vulkan_context.entry else {
+        let Some(entry) = &self.entry else {
             panic!("No entry when calling create_surface");
-        };
-        let Some(window) = &self.window else {
-            panic!("No window when calling create_surface");
         };
         let display_handle = window
             .raw_display_handle()
@@ -1564,14 +1553,14 @@ impl HelloTriangleApp {
                             let Ok(surface) = metal_surface else {
                                 panic!("metal surface creation failed");
                             };
-                            self.vulkan_context.surface = Some(surface);
+                            self.surface = Some(surface);
                         }
             */
             let Ok(surface) = surface else {
                 panic!("metal surface creation failed");
             };
 
-            self.vulkan_context.surface = Some(surface);
+            self.surface = Some(surface);
 
             println!("Created SurfaceKHR Successfully");
         } else {
@@ -1581,24 +1570,21 @@ impl HelloTriangleApp {
             let Ok(surface) = surface else {
                 panic!("metal surface creation failed");
             };
-            self.vulkan_context.surface = Some(surface);
+            self.surface = Some(surface);
         }
     }
-    fn create_swapchain(&mut self) {
-        let Some(instance) = &self.vulkan_context.instance else {
+    fn create_swapchain(&mut self, window: &Window) {
+        let Some(instance) = &self.instance else {
             panic!("No instance when calling create_swapchain");
         };
-        let Some(entry) = &self.vulkan_context.entry else {
+        let Some(entry) = &self.entry else {
             panic!("No entry when calling create_swapchain");
         };
-        let Some(surface) = &self.vulkan_context.surface else {
+        let Some(surface) = &self.surface else {
             panic!("No surface when calling create_swapchain");
         };
-        let Some(device) = &self.vulkan_context.physical_device else {
+        let Some(device) = &self.physical_device else {
             panic!("No physical_device when calling create_swapchain");
-        };
-        let Some(window) = &self.window else {
-            panic!("No window when calling create_swapchain");
         };
 
         let swapchain_support: SwapChainSupportDetails =
@@ -1614,7 +1600,7 @@ impl HelloTriangleApp {
         {
             image_count = swapchain_support.capabilities.max_image_count;
         }
-        let indices = &self.vulkan_context.family_indicies;
+        let indices = &self.family_indicies;
 
         //Assume values are same
         //TUTORAL MENTIONS HOW TO USE POST PROCESSING KINDA
@@ -1645,7 +1631,7 @@ impl HelloTriangleApp {
             create_info.queue_family_index_count = 2;
             create_info.queue_family_indices(&indices);
         }
-        let Some(logical_device) = &self.vulkan_context.logical_device else {
+        let Some(logical_device) = &self.logical_device else {
             panic!("No logical device in create_swapchain");
         };
         let swapchain_device = ash::khr::swapchain::Device::new(instance, logical_device);
@@ -1658,11 +1644,11 @@ impl HelloTriangleApp {
                         .expect("Failed to get swap_chain images");
 
                     //Store variables
-                    self.vulkan_context.swap_chain_details = Some(swapchain_support);
-                    self.vulkan_context.swap_chain = Some(swapchain);
-                    self.vulkan_context.swap_chain_images = swap_chain_images;
-                    self.vulkan_context.swap_chain_format = Some(surface_format);
-                    self.vulkan_context.swap_chain_extent_used = Some(extent);
+                    self.swap_chain_details = Some(swapchain_support);
+                    self.swap_chain = Some(swapchain);
+                    self.swap_chain_images = swap_chain_images;
+                    self.swap_chain_format = Some(surface_format);
+                    self.swap_chain_extent_used = Some(extent);
                 }
                 Err(e) => {
                     panic!("{:?}", e);
@@ -1672,38 +1658,38 @@ impl HelloTriangleApp {
     }
 
     fn cleanup_swapchain(&mut self) {
-        let Some(logical_device) = &self.vulkan_context.logical_device else {
+        let Some(logical_device) = &self.logical_device else {
             panic!("Cannot fetch logical_device during recreate_swapchain");
         };
-        let Some(instance) = &self.vulkan_context.instance else {
+        let Some(instance) = &self.instance else {
             panic!("Cannot fetch instance during cleanup_swapchain");
         };
         let swapchain_device = ash::khr::swapchain::Device::new(instance, logical_device);
         unsafe {
-            for image_view in self.vulkan_context.swap_chain_image_views.iter() {
+            for image_view in self.swap_chain_image_views.iter() {
                 logical_device.destroy_image_view(*image_view, None);
             }
-            for frame_buffer in self.vulkan_context.frame_buffers.iter() {
+            for frame_buffer in self.frame_buffers.iter() {
                 logical_device.destroy_framebuffer(*frame_buffer, None);
             }
-            let Some(swapchain) = self.vulkan_context.swap_chain else {
+            let Some(swapchain) = self.swap_chain else {
                 panic!("No swapchain when cleaning up");
             };
 
             //Clear old lists to avoid dangling pointers
-            self.vulkan_context.frame_buffers.clear();
-            self.vulkan_context.swap_chain_image_views.clear();
+            self.frame_buffers.clear();
+            self.swap_chain_image_views.clear();
 
             swapchain_device.destroy_swapchain(swapchain, None);
 
-            logical_device.destroy_image_view(self.vulkan_context.depth_image_view, None);
-            logical_device.destroy_image(self.vulkan_context.depth_image, None);
-            logical_device.free_memory(self.vulkan_context.depth_image_memory, None);
+            logical_device.destroy_image_view(self.depth_image_view, None);
+            logical_device.destroy_image(self.depth_image, None);
+            logical_device.free_memory(self.depth_image_memory, None);
         }
     }
 
-    fn recreate_swapchain(&mut self) {
-        let Some(logical_device) = &self.vulkan_context.logical_device else {
+    fn recreate_swapchain(&mut self, window: &Window) {
+        let Some(logical_device) = &self.logical_device else {
             panic!("Cannot fetch logical_device durring recreate_swapchain");
         };
         unsafe {
@@ -1711,7 +1697,7 @@ impl HelloTriangleApp {
 
             self.cleanup_swapchain();
 
-            self.create_swapchain();
+            self.create_swapchain(window);
             self.create_image_views();
             self.create_depth_resources();
             self.create_frame_buffers();
@@ -1719,11 +1705,11 @@ impl HelloTriangleApp {
     }
 
     fn create_image_views(&mut self) {
-        let swap_chain_images = &self.vulkan_context.swap_chain_images;
-        let Some(surface_format) = self.vulkan_context.swap_chain_format else {
+        let swap_chain_images = &self.swap_chain_images;
+        let Some(surface_format) = self.swap_chain_format else {
             panic!("No format when calling create_image_views");
         };
-        let Some(logical_device) = &self.vulkan_context.logical_device else {
+        let Some(logical_device) = &self.logical_device else {
             panic!("No logical_device when calling create_image_views");
         };
         let mut swap_chain_image_views: Vec<vk::ImageView> = Vec::new();
@@ -1736,7 +1722,7 @@ impl HelloTriangleApp {
             );
             swap_chain_image_views.push(image);
         }
-        self.vulkan_context.swap_chain_image_views = swap_chain_image_views;
+        self.swap_chain_image_views = swap_chain_image_views;
     }
 
     fn create_shader_module(&mut self, bytes: Vec<u8>) -> vk::ShaderModule {
@@ -1746,7 +1732,7 @@ impl HelloTriangleApp {
             p_code: bytes_as_u32.as_ptr(),
             ..Default::default()
         };
-        let Some(logical_device) = &self.vulkan_context.logical_device else {
+        let Some(logical_device) = &self.logical_device else {
             panic!("No logical_device when calling create_shader_module");
         };
         unsafe {
@@ -1758,7 +1744,7 @@ impl HelloTriangleApp {
     }
 
     fn create_descriptor_set_layout(&mut self) {
-        let Some(logical_device) = &self.vulkan_context.logical_device else {
+        let Some(logical_device) = &self.logical_device else {
             panic!("No logical_device when calling create_descriptor_set_layout");
         };
         let ubo_layout_binding = vk::DescriptorSetLayoutBinding {
@@ -1801,7 +1787,7 @@ impl HelloTriangleApp {
             match logical_device.create_descriptor_set_layout(&layout_info, None) {
                 Ok(descriptor_set_layout) => {
                     println!("Created descriptor set layout");
-                    self.vulkan_context.descriptor_set_layout = descriptor_set_layout;
+                    self.descriptor_set_layout = descriptor_set_layout;
                 }
                 Err(e) => panic!("{:?}", e),
             }
@@ -1818,8 +1804,8 @@ impl HelloTriangleApp {
         let vert_shader_module: vk::ShaderModule = self.create_shader_module(vert_shader_code);
         let frag_shader_module: vk::ShaderModule = self.create_shader_module(frag_shader_code);
 
-        self.vulkan_context.shader_list.push(vert_shader_module);
-        self.vulkan_context.shader_list.push(frag_shader_module);
+        self.shader_list.push(vert_shader_module);
+        self.shader_list.push(frag_shader_module);
 
         //Make main as a string to avoid a danging pointer
         let main_name: CString = CString::new("main").expect("failed to load c string");
@@ -1873,7 +1859,7 @@ impl HelloTriangleApp {
         };
 
         //Viewport
-        let Some(swapchain_extent) = self.vulkan_context.swap_chain_extent_used else {
+        let Some(swapchain_extent) = self.swap_chain_extent_used else {
             panic!("No swapchain_extent when calling create_graphics_pipeline");
         };
         let viewport = vk::Viewport {
@@ -1976,7 +1962,7 @@ impl HelloTriangleApp {
 
         //Pipeline Layout
         //let set_layouts: Vec<vk::DescriptorSetLayout> = Vec::new();
-        let set_layouts: [vk::DescriptorSetLayout; 1] = [self.vulkan_context.descriptor_set_layout];
+        let set_layouts: [vk::DescriptorSetLayout; 1] = [self.descriptor_set_layout];
 
         let push_constants: Vec<vk::PushConstantRange> = Vec::new();
         let pipeline_layout_create_info = vk::PipelineLayoutCreateInfo {
@@ -1987,21 +1973,21 @@ impl HelloTriangleApp {
             ..Default::default()
         };
 
-        let Some(logical_device) = &self.vulkan_context.logical_device else {
+        let Some(logical_device) = &self.logical_device else {
             panic!("No logical_device when calling create_graphics_pipeline");
         };
         unsafe {
             match logical_device.create_pipeline_layout(&pipeline_layout_create_info, None) {
-                Ok(pipeline_layout) => self.vulkan_context.pipeline_layout = Some(pipeline_layout),
+                Ok(pipeline_layout) => self.pipeline_layout = Some(pipeline_layout),
                 Err(e) => panic!("Failed to create pipeline_layout"),
             }
         }
 
         //Render pass
-        let Some(pipeline_layout) = self.vulkan_context.pipeline_layout else {
+        let Some(pipeline_layout) = self.pipeline_layout else {
             panic!("No pipeline_layout when calling create_graphics_pipeline");
         };
-        let Some(render_pass) = self.vulkan_context.render_pass else {
+        let Some(render_pass) = self.render_pass else {
             panic!("No render_pass when calling create_graphics_pipeline");
         };
         let pipeline_create_info = vk::GraphicsPipelineCreateInfo {
@@ -2035,7 +2021,7 @@ impl HelloTriangleApp {
             )) {
                 Ok(pipeline) => {
                     println!("Created graphics pipeline");
-                    self.vulkan_context.graphics_pipelines = pipeline;
+                    self.graphics_pipelines = pipeline;
                 }
                 Err(e) => panic!("{:?}", e),
             }
@@ -2043,13 +2029,13 @@ impl HelloTriangleApp {
     }
 
     fn create_render_pass(&mut self) {
-        let Some(swapchain_format) = self.vulkan_context.swap_chain_format else {
+        let Some(swapchain_format) = self.swap_chain_format else {
             panic!("No swapchain_format when calling create_render_pass");
         };
-        let Some(instance) = &self.vulkan_context.instance else {
+        let Some(instance) = &self.instance else {
             panic!("");
         };
-        let Some(physical_device) = &self.vulkan_context.physical_device else {
+        let Some(physical_device) = &self.physical_device else {
             panic!("");
         };
         let color_attatchment = vk::AttachmentDescription {
@@ -2123,34 +2109,33 @@ impl HelloTriangleApp {
             ..Default::default()
         };
 
-        let Some(logical_device) = &self.vulkan_context.logical_device else {
+        let Some(logical_device) = &self.logical_device else {
             panic!("No logical when calling create_render_pass");
         };
         unsafe {
             match logical_device.create_render_pass(&render_pass_info, None) {
-                Ok(render_pass) => self.vulkan_context.render_pass = Some(render_pass),
+                Ok(render_pass) => self.render_pass = Some(render_pass),
                 Err(e) => panic!("NOOO"),
             }
         }
     }
 
     fn create_frame_buffers(&mut self) {
-        let Some(render_pass) = self.vulkan_context.render_pass else {
+        let Some(render_pass) = self.render_pass else {
             panic!("No render_pass when calling create_frame_buffers");
         };
-        let Some(swapchain_extent) = self.vulkan_context.swap_chain_extent_used else {
+        let Some(swapchain_extent) = self.swap_chain_extent_used else {
             panic!("No swap_chain_extent_used when calling create_frame_buffers");
         };
-        let Some(logical_device) = &self.vulkan_context.logical_device else {
+        let Some(logical_device) = &self.logical_device else {
             panic!("No logical_device when calling create_frame_buffers");
         };
-        let image_views = &self.vulkan_context.swap_chain_image_views;
+        let image_views = &self.swap_chain_image_views;
 
         let swapchain_frame_frame_buffers: Vec<vk::Framebuffer> = Vec::new();
         let frame_buffer_count = image_views.len();
         for i in 0..frame_buffer_count {
-            let attatchments: [vk::ImageView; 2] =
-                [image_views[i], self.vulkan_context.depth_image_view];
+            let attatchments: [vk::ImageView; 2] = [image_views[i], self.depth_image_view];
             let frame_buffer_info = vk::FramebufferCreateInfo {
                 render_pass: render_pass,
                 attachment_count: attatchments.len() as u32,
@@ -2162,7 +2147,7 @@ impl HelloTriangleApp {
             };
             unsafe {
                 match logical_device.create_framebuffer(&frame_buffer_info, None) {
-                    Ok(frame_buffer) => self.vulkan_context.frame_buffers.push(frame_buffer),
+                    Ok(frame_buffer) => self.frame_buffers.push(frame_buffer),
                     Err(e) => panic!("{}", e),
                 };
             }
@@ -2170,10 +2155,10 @@ impl HelloTriangleApp {
     }
 
     fn create_command_pool(&mut self) {
-        let Some(logical_device) = &self.vulkan_context.logical_device else {
+        let Some(logical_device) = &self.logical_device else {
             panic!("No logical_device when calling create_command_buffers");
         };
-        let queue_families = &self.vulkan_context.family_indicies;
+        let queue_families = &self.family_indicies;
         let pool_info = vk::CommandPoolCreateInfo {
             flags: vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER,
             queue_family_index: queue_families.graphics_family,
@@ -2182,7 +2167,7 @@ impl HelloTriangleApp {
         unsafe {
             match logical_device.create_command_pool(&pool_info, None) {
                 Ok(command_pool) => {
-                    self.vulkan_context.command_pool = Some(command_pool);
+                    self.command_pool = Some(command_pool);
                 }
                 Err(e) => panic!("{}", e),
             };
@@ -2190,22 +2175,22 @@ impl HelloTriangleApp {
     }
 
     fn create_depth_resources(&mut self) {
-        let Some(instance) = &self.vulkan_context.instance else {
+        let Some(instance) = &self.instance else {
             panic!("No instance when calling create_depth_resources");
         };
-        let Some(logical_device) = &self.vulkan_context.logical_device else {
+        let Some(logical_device) = &self.logical_device else {
             panic!("No logical_device when calling create_depth_resources");
         };
-        let Some(physical_device) = &self.vulkan_context.physical_device else {
+        let Some(physical_device) = &self.physical_device else {
             panic!("No physical_device when calling create_depth_resources");
         };
-        let Some(swapchain_extent) = self.vulkan_context.swap_chain_extent_used else {
+        let Some(swapchain_extent) = self.swap_chain_extent_used else {
             panic!("No swap_chain_extent_used when calling create_depth_resources");
         };
-        let Some(command_pool) = self.vulkan_context.command_pool else {
+        let Some(command_pool) = self.command_pool else {
             panic!("");
         };
-        let Some(graphics_queue) = self.vulkan_context.graphics_queue else {
+        let Some(graphics_queue) = self.graphics_queue else {
             panic!("");
         };
         let depth_format: vk::Format = find_depth_format(instance, physical_device);
@@ -2220,7 +2205,7 @@ impl HelloTriangleApp {
             vk::ImageTiling::OPTIMAL,
             vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT,
             vk::MemoryPropertyFlags::DEVICE_LOCAL,
-            &self.vulkan_context.depth_image_memory,
+            &self.depth_image_memory,
             command_pool,
             graphics_queue,
         );
@@ -2241,19 +2226,19 @@ impl HelloTriangleApp {
             vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
         );
         println!("Not a problem?");
-        self.vulkan_context.depth_image = depth_image;
-        self.vulkan_context.depth_image_memory = depth_image_memory;
-        self.vulkan_context.depth_image_view = depth_image_view;
+        self.depth_image = depth_image;
+        self.depth_image_memory = depth_image_memory;
+        self.depth_image_view = depth_image_view;
     }
 
     fn create_texture_image(&mut self) {
-        let Some(logical_device) = &self.vulkan_context.logical_device else {
+        let Some(logical_device) = &self.logical_device else {
             panic!("No logical_device when calling create_texture_image");
         };
-        let Some(physical_device) = &self.vulkan_context.physical_device else {
+        let Some(physical_device) = &self.physical_device else {
             panic!("No physical_device when calling create_texture_image");
         };
-        let Some(instance) = &self.vulkan_context.instance else {
+        let Some(instance) = &self.instance else {
             panic!("No instance when calling create_texture_image");
         };
         let path_name = "textures/viking_room.png";
@@ -2279,7 +2264,7 @@ impl HelloTriangleApp {
             image_size,
             vk::BufferUsageFlags::TRANSFER_SRC,
             vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
-            &self.vulkan_context,
+            &self,
         );
         unsafe {
             let staging_map_memory_result = logical_device.map_memory(
@@ -2300,11 +2285,8 @@ impl HelloTriangleApp {
             let device_memory_properties =
                 instance.get_physical_device_memory_properties(*physical_device);
 
-            let command_pool = self.vulkan_context.command_pool.expect("No command pool");
-            let graphics_queue = self
-                .vulkan_context
-                .graphics_queue
-                .expect("No graphics queue");
+            let command_pool = self.command_pool.expect("No command pool");
+            let graphics_queue = self.graphics_queue.expect("No graphics queue");
             let (image, image_memory) = create_image(
                 logical_device,
                 instance,
@@ -2315,7 +2297,7 @@ impl HelloTriangleApp {
                 vk::ImageTiling::OPTIMAL,
                 vk::ImageUsageFlags::TRANSFER_DST | vk::ImageUsageFlags::SAMPLED,
                 vk::MemoryPropertyFlags::DEVICE_LOCAL,
-                &self.vulkan_context.texture_image_memory,
+                &self.texture_image_memory,
                 command_pool,
                 graphics_queue,
             );
@@ -2348,8 +2330,8 @@ impl HelloTriangleApp {
                 vk::ImageLayout::TRANSFER_DST_OPTIMAL,
                 vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
             );
-            self.vulkan_context.texture_image = image;
-            self.vulkan_context.texture_image_memory = image_memory;
+            self.texture_image = image;
+            self.texture_image_memory = image_memory;
 
             logical_device.destroy_buffer(staging_buffer, None);
             logical_device.free_memory(staging_buffer_memory, None);
@@ -2357,11 +2339,11 @@ impl HelloTriangleApp {
     }
 
     fn create_texture_image_view(&mut self) {
-        let Some(logical_device) = &self.vulkan_context.logical_device else {
+        let Some(logical_device) = &self.logical_device else {
             panic!("No logical_device when calling create_texture_image");
         };
-        self.vulkan_context.texture_image_view = create_image_view(
-            self.vulkan_context.texture_image,
+        self.texture_image_view = create_image_view(
+            self.texture_image,
             vk::Format::R8G8B8A8_SRGB,
             vk::ImageAspectFlags::COLOR,
             logical_device,
@@ -2369,13 +2351,13 @@ impl HelloTriangleApp {
     }
 
     fn create_texture_sampler(&mut self) {
-        let Some(instance) = &self.vulkan_context.instance else {
+        let Some(instance) = &self.instance else {
             panic!("No instance when calling create_texture_sampler");
         };
-        let Some(logical_device) = &self.vulkan_context.logical_device else {
+        let Some(logical_device) = &self.logical_device else {
             panic!("No logical_device when calling create_texture_sampler");
         };
-        let Some(physical_device) = self.vulkan_context.physical_device else {
+        let Some(physical_device) = self.physical_device else {
             panic!("No physical_device when calling create_texture_sampler");
         };
 
@@ -2404,25 +2386,12 @@ impl HelloTriangleApp {
             match logical_device.create_sampler(&sampler_info, None) {
                 Ok(sampler) => {
                     println!("CREATED SAMPLER");
-                    self.vulkan_context.texture_sampler = sampler;
+                    self.texture_sampler = sampler;
                 }
                 Err(e) => panic!("{}", e),
             }
         }
     }
-
-    fn instantiate(&mut self, mut gameobject: GameObject) {
-        let before_indices = self.indices.len();
-        gameobject._mesh.first_vertex = self.vertices.len() as i32;
-        //println!("RAHHHHHHHHHHHHHH {:?}", gameobject._mesh.first_index);
-        self.load_model();
-        let after_indices = self.indices.len();
-
-        gameobject._mesh.first_index = before_indices as u32;
-        gameobject._mesh.index_count = (after_indices - before_indices) as u32;
-        self.game_context.game_objects.push(gameobject);
-    }
-
     fn load_model(&mut self) {
         //Maybe write this from scratch one day?
         let mut load_options = tobj::LoadOptions {
@@ -2446,10 +2415,8 @@ impl HelloTriangleApp {
                             colour: glm::vec3(1.0, 1.0, 1.0),
                             ..Default::default()
                         };
-                        self.vulkan_context_new.vertices.push(vertex);
-                        self.vulkan_context_new
-                            .indices
-                            .push(self.indices.len() as u32);
+                        self.vertices.push(vertex);
+                        self.indices.push(self.indices.len() as u32);
                     }
                 }
             }
@@ -2458,7 +2425,7 @@ impl HelloTriangleApp {
     }
 
     fn create_vertex_buffer(&mut self) {
-        let Some(logical_device) = &self.vulkan_context.logical_device else {
+        let Some(logical_device) = &self.logical_device else {
             panic!("No logical device when calling create_vertex_buffer");
         };
         let vertices = &self.vertices;
@@ -2469,7 +2436,7 @@ impl HelloTriangleApp {
             vertex_buffer_size as u64,
             vk::BufferUsageFlags::TRANSFER_SRC,
             vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
-            &self.vulkan_context,
+            &self,
         );
 
         //MAP MEMORY
@@ -2498,16 +2465,16 @@ impl HelloTriangleApp {
             vertex_buffer_size as u64,
             vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::VERTEX_BUFFER,
             vk::MemoryPropertyFlags::DEVICE_LOCAL,
-            &self.vulkan_context,
+            &self,
         );
-        self.vulkan_context.vertex_buffer_memory = vertex_buffer_memory;
-        self.vulkan_context.vertex_buffer = vertex_buffer;
+        self.vertex_buffer_memory = vertex_buffer_memory;
+        self.vertex_buffer = vertex_buffer;
 
         copy_buffer(
             staging_buffer,
             vertex_buffer,
             vertex_buffer_size as u64,
-            &self.vulkan_context,
+            &self,
         );
         unsafe {
             logical_device.destroy_buffer(staging_buffer, None);
@@ -2517,7 +2484,7 @@ impl HelloTriangleApp {
 
     //Almost the same as create_vertex_buffer
     fn create_index_buffer(&mut self) {
-        let Some(logical_device) = &self.vulkan_context.logical_device else {
+        let Some(logical_device) = &self.logical_device else {
             panic!("No logical device when calling create_vertex_buffer");
         };
         let indices = &self.indices;
@@ -2528,7 +2495,7 @@ impl HelloTriangleApp {
             indices_buffer_size as u64,
             vk::BufferUsageFlags::TRANSFER_SRC,
             vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
-            &self.vulkan_context,
+            &self,
         );
 
         //MAP MEMORY
@@ -2557,16 +2524,16 @@ impl HelloTriangleApp {
             indices_buffer_size as u64,
             vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::INDEX_BUFFER,
             vk::MemoryPropertyFlags::DEVICE_LOCAL,
-            &self.vulkan_context,
+            &self,
         );
-        self.vulkan_context.index_buffer = indices_buffer;
-        self.vulkan_context.index_buffer_memory = indices_buffer_memory;
+        self.index_buffer = indices_buffer;
+        self.index_buffer_memory = indices_buffer_memory;
 
         copy_buffer(
             staging_buffer,
             indices_buffer,
             indices_buffer_size as u64,
-            &self.vulkan_context,
+            &self,
         );
         unsafe {
             logical_device.destroy_buffer(staging_buffer, None);
@@ -2575,10 +2542,10 @@ impl HelloTriangleApp {
     }
 
     fn create_command_buffers(&mut self) {
-        let Some(pool) = self.vulkan_context.command_pool else {
+        let Some(pool) = self.command_pool else {
             panic!("No command_pool when calling create_command_buffer");
         };
-        let Some(logical_device) = &self.vulkan_context.logical_device else {
+        let Some(logical_device) = &self.logical_device else {
             panic!("No logical_device when calling create_command_buffer");
         };
         let alloc_info = vk::CommandBufferAllocateInfo {
@@ -2590,7 +2557,7 @@ impl HelloTriangleApp {
         unsafe {
             match logical_device.allocate_command_buffers(&alloc_info) {
                 Ok(command_buffer_vec) => {
-                    self.vulkan_context.command_buffers = command_buffer_vec;
+                    self.command_buffers = command_buffer_vec;
                 }
                 Err(e) => panic!("{:?}", e),
             }
@@ -2598,7 +2565,7 @@ impl HelloTriangleApp {
     }
 
     fn create_transform_storage_buffers(&mut self) {
-        let Some(logical_device) = &self.vulkan_context.logical_device else {
+        let Some(logical_device) = &self.logical_device else {
             panic!("");
         };
         let storage_buffer_size = size_of::<GameObject>() as u64 * MAX_GAME_OBJECTS_IN_SCENE;
@@ -2608,7 +2575,7 @@ impl HelloTriangleApp {
                 storage_buffer_size,
                 vk::BufferUsageFlags::STORAGE_BUFFER | vk::BufferUsageFlags::TRANSFER_DST,
                 vk::MemoryPropertyFlags::HOST_VISIBLE,
-                &self.vulkan_context,
+                &self,
             );
 
             //Map memory
@@ -2621,23 +2588,20 @@ impl HelloTriangleApp {
                 ) {
                     Ok(memory_pointer) => {
                         println!("Mapped memory for storage buffer");
-                        self.vulkan_context
-                            .transform_buffers_mapped
+                        self.transform_buffers_mapped
                             .push(memory_pointer as *mut Mat4x4);
                     }
                     Err(e) => panic!("{}", e),
                 }
             }
 
-            self.vulkan_context.transform_buffers.push(buffer);
-            self.vulkan_context
-                .transform_buffers_memory
-                .push(buffer_memory);
+            self.transform_buffers.push(buffer);
+            self.transform_buffers_memory.push(buffer_memory);
         }
     }
 
     fn create_uniform_buffer(&mut self) {
-        let Some(logical_device) = &self.vulkan_context.logical_device else {
+        let Some(logical_device) = &self.logical_device else {
             panic!("No logical_device when calling create_uniform_buffer");
         };
         let buffer_size: vk::DeviceSize = size_of::<UniformBufferObject>() as u64;
@@ -2647,7 +2611,7 @@ impl HelloTriangleApp {
                 buffer_size,
                 vk::BufferUsageFlags::UNIFORM_BUFFER,
                 vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
-                &self.vulkan_context,
+                &self,
             );
 
             unsafe {
@@ -2658,22 +2622,19 @@ impl HelloTriangleApp {
                     vk::MemoryMapFlags::empty(),
                 ) {
                     Ok(memory_pointer) => {
-                        self.vulkan_context
-                            .uniform_buffers_mapped
+                        self.uniform_buffers_mapped
                             .push(memory_pointer as *mut UniformBufferObject);
                     }
                     Err(e) => panic!("{:?}", e),
                 }
             }
-            self.vulkan_context.uniform_buffers.push(uniform_buffer);
-            self.vulkan_context
-                .uniform_buffers_memory
-                .push(uniform_buffer_memory);
+            self.uniform_buffers.push(uniform_buffer);
+            self.uniform_buffers_memory.push(uniform_buffer_memory);
         }
     }
 
     fn create_descriptor_pool(&mut self) {
-        let Some(logical_device) = &self.vulkan_context.logical_device else {
+        let Some(logical_device) = &self.logical_device else {
             panic!("No logical_device when calling create_descriptor_pool");
         };
         /*
@@ -2710,7 +2671,7 @@ impl HelloTriangleApp {
         unsafe {
             match logical_device.create_descriptor_pool(&pool_info, None) {
                 Ok(descriptor_pool) => {
-                    self.vulkan_context.descriptor_pool = descriptor_pool;
+                    self.descriptor_pool = descriptor_pool;
                     println!("Created descriptor pool");
                 }
                 Err(e) => panic!("{:?}", e),
@@ -2719,26 +2680,24 @@ impl HelloTriangleApp {
     }
 
     fn create_descriptor_sets(&mut self) {
-        let Some(logical_device) = &self.vulkan_context.logical_device else {
+        let Some(logical_device) = &self.logical_device else {
             panic!("No logical_device when calling create_descriptor_pool");
         };
-        self.vulkan_context.descriptor_set_layouts.clear();
+        self.descriptor_set_layouts.clear();
         for i in 0..MAX_FRAMES_IN_FLIGHT {
-            self.vulkan_context
-                .descriptor_set_layouts
-                .push(self.vulkan_context.descriptor_set_layout);
+            self.descriptor_set_layouts.push(self.descriptor_set_layout);
         }
         let alloc_info = vk::DescriptorSetAllocateInfo {
-            descriptor_pool: self.vulkan_context.descriptor_pool,
+            descriptor_pool: self.descriptor_pool,
             descriptor_set_count: MAX_FRAMES_IN_FLIGHT,
-            p_set_layouts: self.vulkan_context.descriptor_set_layouts.as_ptr(),
+            p_set_layouts: self.descriptor_set_layouts.as_ptr(),
             ..Default::default()
         };
 
         unsafe {
             match logical_device.allocate_descriptor_sets(&alloc_info) {
                 Ok(descriptor_sets) => {
-                    self.vulkan_context.descriptor_sets = descriptor_sets;
+                    self.descriptor_sets = descriptor_sets;
                     println!("Created descriptor sets");
                 }
                 Err(e) => panic!("{:?}", e),
@@ -2747,7 +2706,7 @@ impl HelloTriangleApp {
 
         for i in 0..MAX_FRAMES_IN_FLIGHT {
             let buffer_info = vk::DescriptorBufferInfo {
-                buffer: self.vulkan_context.uniform_buffers[i as usize],
+                buffer: self.uniform_buffers[i as usize],
                 offset: 0,
                 range: size_of::<UniformBufferObject>() as u64,
                 ..Default::default()
@@ -2756,13 +2715,13 @@ impl HelloTriangleApp {
             //FIXME (if something goes wrong)
             let image_info = vk::DescriptorImageInfo {
                 image_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-                image_view: self.vulkan_context.texture_image_view,
-                sampler: self.vulkan_context.texture_sampler,
+                image_view: self.texture_image_view,
+                sampler: self.texture_sampler,
                 ..Default::default()
             };
 
             let transform_buffer_info = vk::DescriptorBufferInfo {
-                buffer: self.vulkan_context.transform_buffers[i as usize],
+                buffer: self.transform_buffers[i as usize],
                 offset: 0,
                 range: size_of::<glm::Mat4>() as u64 * MAX_GAME_OBJECTS_IN_SCENE,
                 ..Default::default()
@@ -2771,7 +2730,7 @@ impl HelloTriangleApp {
             /*
                         let descriptor_write = vk::WriteDescriptorSet {
                             s_type: vk::StructureType::WRITE_DESCRIPTOR_SET,
-                            dst_set: self.vulkan_context.descriptor_sets[i as usize],
+                            dst_set: self.descriptor_sets[i as usize],
                             dst_binding: 0,
                             dst_array_element: 0,
                             descriptor_type: vk::DescriptorType::UNIFORM_BUFFER,
@@ -2784,7 +2743,7 @@ impl HelloTriangleApp {
             let descriptor_writes = [
                 vk::WriteDescriptorSet {
                     s_type: vk::StructureType::WRITE_DESCRIPTOR_SET,
-                    dst_set: self.vulkan_context.descriptor_sets[i as usize],
+                    dst_set: self.descriptor_sets[i as usize],
                     dst_binding: 0,
                     dst_array_element: 0,
                     descriptor_type: vk::DescriptorType::UNIFORM_BUFFER,
@@ -2794,7 +2753,7 @@ impl HelloTriangleApp {
                 },
                 vk::WriteDescriptorSet {
                     s_type: vk::StructureType::WRITE_DESCRIPTOR_SET,
-                    dst_set: self.vulkan_context.descriptor_sets[i as usize],
+                    dst_set: self.descriptor_sets[i as usize],
                     dst_binding: 1,
                     dst_array_element: 0,
                     descriptor_type: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
@@ -2804,7 +2763,7 @@ impl HelloTriangleApp {
                 },
                 vk::WriteDescriptorSet {
                     s_type: vk::StructureType::WRITE_DESCRIPTOR_SET,
-                    dst_set: self.vulkan_context.descriptor_sets[i as usize],
+                    dst_set: self.descriptor_sets[i as usize],
                     dst_binding: 2,
                     dst_array_element: 0,
                     descriptor_type: vk::DescriptorType::STORAGE_BUFFER,
@@ -2962,7 +2921,7 @@ impl HelloTriangleApp {
         }
     }
     fn create_sync_object(&mut self) {
-        let Some(logical_device) = &self.vulkan_context.logical_device else {
+        let Some(logical_device) = &self.logical_device else {
             panic!("No logical_device when calling create_sync_object");
         };
         let semaphore_info = vk::SemaphoreCreateInfo {
@@ -2976,26 +2935,22 @@ impl HelloTriangleApp {
             for i in 0..MAX_FRAMES_IN_FLIGHT {
                 match logical_device.create_semaphore(&semaphore_info, None) {
                     Ok(semaphore) => {
-                        //self.vulkan_context.image_available_semaphores[i as usize] = semaphore
-                        self.vulkan_context
-                            .image_available_semaphores
-                            .push(semaphore);
+                        //self.image_available_semaphores[i as usize] = semaphore
+                        self.image_available_semaphores.push(semaphore);
                     }
                     Err(e) => panic!("{}", e),
                 }
                 match logical_device.create_semaphore(&semaphore_info, None) {
                     Ok(semaphore) => {
-                        //self.vulkan_context.render_finished_semaphores[i] = Some(semaphore)
-                        self.vulkan_context
-                            .render_finished_semaphores
-                            .push(semaphore);
+                        //self.render_finished_semaphores[i] = Some(semaphore)
+                        self.render_finished_semaphores.push(semaphore);
                     }
                     Err(e) => panic!("{}", e),
                 }
                 match logical_device.create_fence(&fence_info, None) {
                     Ok(fence) => {
-                        //self.vulkan_context.in_flight_fences[i] = Some(fence)
-                        self.vulkan_context.in_flight_fences.push(fence);
+                        //self.in_flight_fences[i] = Some(fence)
+                        self.in_flight_fences.push(fence);
                     }
 
                     Err(e) => panic!("{}", e),
@@ -3004,39 +2959,37 @@ impl HelloTriangleApp {
         }
     }
 
-    fn draw_frame(&mut self) {
-        if (self.vulkan_context.frame_buffers.is_empty()) {
+    fn draw_frame(&mut self, gameobjects: &Vec<GameObject>, window: &Window) {
+        if (self.frame_buffers.is_empty()) {
             return;
         }
-        let Some(instance) = &self.vulkan_context.instance else {
+        let Some(instance) = &self.instance else {
             panic!("No instance when calling draw_frame... somehow..?");
         };
-        let Some(logical_device) = &self.vulkan_context.logical_device else {
+        let Some(logical_device) = &self.logical_device else {
             panic!("No logical_device when calling create_sync_object");
         };
-        let Some(swapchain) = self.vulkan_context.swap_chain else {
+        let Some(swapchain) = self.swap_chain else {
             panic!("No swap_chain when calling draw_frame");
         };
-        let Some(render_pass) = self.vulkan_context.render_pass else {
+        let Some(render_pass) = self.render_pass else {
             panic!();
         };
-        let Some(swapchain_extent) = self.vulkan_context.swap_chain_extent_used else {
+        let Some(swapchain_extent) = self.swap_chain_extent_used else {
             panic!();
         };
-        let Some(graphics_queue) = self.vulkan_context.graphics_queue else {
+        let Some(graphics_queue) = self.graphics_queue else {
             panic!();
         };
         let swapchain_device = ash::khr::swapchain::Device::new(instance, &logical_device);
 
         //Get all command buffers and sync objects for current frame
-        let current_frame = self.vulkan_context.current_frame as usize;
-        let fences = &[self.vulkan_context.in_flight_fences[current_frame]];
-        let current_image_available_semaphore =
-            self.vulkan_context.image_available_semaphores[current_frame];
-        let current_render_finished_semaphore =
-            self.vulkan_context.render_finished_semaphores[current_frame];
-        let current_fence = self.vulkan_context.in_flight_fences[current_frame];
-        let current_command_buffer = self.vulkan_context.command_buffers[current_frame];
+        let current_frame = self.current_frame as usize;
+        let fences = &[self.in_flight_fences[current_frame]];
+        let current_image_available_semaphore = self.image_available_semaphores[current_frame];
+        let current_render_finished_semaphore = self.render_finished_semaphores[current_frame];
+        let current_fence = self.in_flight_fences[current_frame];
+        let current_command_buffer = self.command_buffers[current_frame];
         unsafe {
             //Params: list of fences to wait for / should wait for all? / timeout
             logical_device.wait_for_fences(fences, true, u64::MAX);
@@ -3045,11 +2998,13 @@ impl HelloTriangleApp {
 
             //In case device driver doesn't handle ERROR_OUT_OF_DATE_KHR
             if (self.window_resized) {
-                self.recreate_swapchain();
+                self.recreate_swapchain(window);
                 self.window_resized = false;
+
                 if (!self.running) {
                     self.running = true;
                 }
+
                 return;
             }
 
@@ -3067,7 +3022,7 @@ impl HelloTriangleApp {
 
                     println!("\n\n\n recreating \n\n\n");
                     //panic!("LKSJD");
-                    self.recreate_swapchain();
+                    self.recreate_swapchain(window);
                     return;
                 }
                 Err(e) => {
@@ -3079,44 +3034,39 @@ impl HelloTriangleApp {
             logical_device
                 .reset_command_buffer(current_command_buffer, vk::CommandBufferResetFlags::empty()); //MIGHT
 
-            let Some(pipeline_layout) = self.vulkan_context.pipeline_layout else {
+            let Some(pipeline_layout) = self.pipeline_layout else {
                 panic!("I need to stop making these enums");
             };
-            HelloTriangleApp::record_command_buffer(
+            VulkanContext::record_command_buffer(
                 logical_device,
                 current_command_buffer,
                 render_pass,
                 swapchain_extent,
-                &self.vulkan_context.frame_buffers,
+                &self.frame_buffers,
                 image_index,
-                self.vulkan_context.graphics_pipelines[0],
-                self.vulkan_context.vertex_buffer,
-                self.vulkan_context.index_buffer,
+                self.graphics_pipelines[0],
+                self.vertex_buffer,
+                self.index_buffer,
                 self.indices.len() as u32,
                 pipeline_layout,
-                &self.vulkan_context.descriptor_sets,
+                &self.descriptor_sets,
                 current_frame,
-                &self.gameobjects,
+                gameobjects,
             );
             let wait_semaphores = [current_image_available_semaphore];
             let wait_stages = [vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];
             let signal_semaphores = [current_render_finished_semaphore];
 
-            let Some(extent) = self.vulkan_context.swap_chain_extent_used else {
+            let Some(extent) = self.swap_chain_extent_used else {
                 panic!("Really I should rework this");
             };
 
-            update_uniform_buffer(
-                current_frame as u32,
-                extent,
-                &self.vulkan_context.uniform_buffers_mapped,
-                self.start_time.expect("Nope"),
-            );
+            update_uniform_buffer(current_frame as u32, extent, &self.uniform_buffers_mapped);
 
             update_transform_buffer(
                 current_frame as u32,
-                &self.vulkan_context.transform_buffers_mapped,
-                &self.gameobjects,
+                &self.transform_buffers_mapped,
+                gameobjects,
             );
 
             let submit_info = vk::SubmitInfo {
@@ -3148,25 +3098,23 @@ impl HelloTriangleApp {
             match swapchain_device.queue_present(graphics_queue, &present_info) {
                 Ok(is_suboptimal) => {
                     if (is_suboptimal) {
-                        self.recreate_swapchain();
+                        self.recreate_swapchain(window);
                         return;
                     }
                 }
                 Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => {
-                    self.recreate_swapchain();
+                    self.recreate_swapchain(window);
                     return;
                 }
                 Err(e) => {
                     panic!("{:?}", e);
                 }
             }
-            self.vulkan_context.current_frame =
-                (self.vulkan_context.current_frame + 1) % MAX_FRAMES_IN_FLIGHT as i32;
+            self.current_frame = (self.current_frame + 1) % MAX_FRAMES_IN_FLIGHT as i32;
         }
     }
 }
 
-/*
 #[derive(Default)]
 #[repr(C)]
 #[repr(align(16))]
@@ -3220,7 +3168,7 @@ impl Vertex {
         attributes
     }
 }
-*/
+
 #[repr(C)]
 #[repr(align(16))]
 #[derive(Default)]
