@@ -137,6 +137,7 @@ impl ApplicationHandler for HelloTriangleApp {
         // update logic here
         if (!self.closing) {
             let mut avg_delta_time = self.game_context.calculate_delta_time();
+            println!("fps: {}", 1.0 / avg_delta_time);
             if (!self.vulkan_context.running) {
                 avg_delta_time = 0.0;
             }
@@ -612,6 +613,7 @@ fn main() {
         },
         transform: Transform {
             position: [0.0, 0.0, -2.0],
+            scale: [0.5, 0.5, 2.0],
         },
         ..Default::default()
     };
@@ -621,6 +623,7 @@ fn main() {
         id: 1,
         transform: Transform {
             position: [1.0, 0.0, 0.0],
+            scale: [1.0, 1.0, 1.0],
         },
         ..Default::default()
     };

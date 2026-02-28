@@ -207,14 +207,18 @@ impl Vertex {
 //---------------VulkanContext Helper Functions------------
 
 fn convert_vec_to_mat(position: [f32; 3]) -> glm::Mat4x4 {
-    if (position.len() != 3) {
-        panic!("Position does not have 3 elements");
-    }
-
     let mut transform = glm::Mat4::identity();
     transform[(0, 3)] = position[0];
     transform[(1, 3)] = position[1];
     transform[(2, 3)] = position[2];
+
+    transform
+}
+fn convert_scale_to_mat(scale: [f32; 3]) -> glm::Mat4x4 {
+    let mut transform = glm::Mat4::identity();
+    transform[(0, 0)] = scale[0];
+    transform[(1, 1)] = scale[1];
+    transform[(2, 2)] = scale[2];
 
     transform
 }
@@ -503,6 +507,7 @@ fn update_uniform_buffer(
         0.1,
         10.0,
     );
+    println!("width: {} height: {}", extent.width, extent.height);
     proj[(1, 1)] *= -1.0;
     let ubo = UniformBufferObject {
         model: model,
@@ -528,8 +533,9 @@ fn update_transform_buffer(
     let mut transforms: Vec<glm::Mat4> = Vec::new();
 
     for gameobject in gameobjects {
-        let converted_transform: glm::Mat4x4 = convert_vec_to_mat(gameobject.transform.position);
-        transforms.push(converted_transform);
+        let converted_position: glm::Mat4x4 = convert_vec_to_mat(gameobject.transform.position);
+        let converted_scale: glm::Mat4x4 = convert_scale_to_mat(gameobject.transform.scale);
+        transforms.push(converted_position * converted_scale);
     }
     unsafe {
         ptr::copy_nonoverlapping(
@@ -1787,6 +1793,7 @@ impl VulkanContext {
         let Some(logical_device) = &self.logical_device else {
             panic!("Cannot fetch logical_device durring recreate_swapchain");
         };
+
         unsafe {
             logical_device.device_wait_idle();
 
@@ -1796,6 +1803,7 @@ impl VulkanContext {
             self.create_image_views();
             self.create_depth_resources();
             self.create_frame_buffers();
+            self.create_graphics_pipeline();
         }
     }
 
