@@ -15,7 +15,7 @@ Current supported OS:
 - MacOS (only intel tested)
 - Linux support coming soon
 
-Recent Milestone: Loaded a 3D objec from a .obj file (Feb 21)
+<u>Recent Milestone: Loaded a 3D objec from a .obj file (Feb 21)</u>
 <img width="747" height="1028" alt="Object Example" src="https://github.com/user-attachments/assets/e00c756a-17e6-420e-9180-1c8acbac72e2" />
 
 Past Milestone: Added a texture image to the rotating plane (Feb 17)
@@ -27,6 +27,12 @@ Past Milestone: Made a rotating 3d square thats off-center of the origin with a 
 Past milestone: Drawing a shaded triangle on the screen as seen below (Jan 15, 2026).
 <img width="995" height="778" alt="foundry" src="https://github.com/user-attachments/assets/f8d3799e-a5ca-4a49-83db-b6776b08c7fc" />
 
+<u>Game Engine Features:</u>
+You can:
+* Instantiate game objects
+* Set the position of game objects
+
+<u>Tools</u>
 I've chosen each of my tools for specific reasons as stated below.
 * winit (window manager)
   - Cross platform
@@ -41,5 +47,7 @@ I've chosen each of my tools for specific reasons as stated below.
   - Lets me get my hands dirty and learn as much as possible
 
 For those of you wanting to create a similar project, or just want to know how vulkan works, I've created some documentation of this project with obsidian. So far I've explained all the interactions between the Vulkan Objects and the significance of each one, but I will keep these notes updated as I progress.
+- Documentation is pretty outdated but I plan to update it ASAP - 
 <img width="957" height="743" alt="Screenshot 2026-01-21 at 10 33 15 PM" src="https://github.com/user-attachments/assets/6bd7971d-d0c5-4c4a-91a5-f2ad3629e3c5" />
 Example of how all interactions are linked
+Last updated: Jan 21, 2026
