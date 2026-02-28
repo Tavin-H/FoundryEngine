@@ -52,25 +52,25 @@ const FIRST_PRIORITY: f32 = 1.0;
 const MAX_FRAMES_IN_FLIGHT: u32 = 2;
 
 //-------------------------Structs----------------------
-//
-//Holds all vulkan objects in a single struct to controll lifetimes more precisely
 #[derive(Default)]
-pub struct VulkanContextNew {
-    //Module references
-    game_context_reference: GameContext,
+pub struct VulkanContext {
+    pub vertices: Vec<Vertex>,
+    pub indices: Vec<u32>,
+    pub window_resized: bool,
+    pub running: bool,
 
     //Basics
-    instance: Option<ash::Instance>,
+    pub instance: Option<ash::Instance>,
     entry: Option<ash::Entry>,
     validation_layers_enabaled: bool,
     validation_layer_names: Vec<CString>,
     //Devices
-    physical_device: Option<vk::PhysicalDevice>,
-    logical_device: Option<ash::Device>,
+    pub physical_device: Option<vk::PhysicalDevice>,
+    pub logical_device: Option<ash::Device>,
     //Queue Indices Struct
     family_indicies: QueueFamilyIndices,
     //Queue Handles
-    graphics_queue: Option<vk::Queue>,
+    pub graphics_queue: Option<vk::Queue>,
     present_queue: Option<vk::Queue>,
     //Surface
     surface: Option<vk::SurfaceKHR>,
@@ -86,10 +86,6 @@ pub struct VulkanContextNew {
     texture_image_view: vk::ImageView,
     texture_image_memory: vk::DeviceMemory,
     texture_sampler: vk::Sampler,
-
-    //Model info
-    pub vertices: Vec<Vertex>,
-    pub indices: Vec<u32>,
 
     //Depth Buffering
     depth_image: vk::Image,
@@ -123,7 +119,7 @@ pub struct VulkanContextNew {
     transform_buffers_mapped: Vec<*mut glm::Mat4x4>,
 
     //Command stuff
-    command_pool: Option<vk::CommandPool>,
+    pub command_pool: Option<vk::CommandPool>,
     command_buffers: Vec<vk::CommandBuffer>,
 
     //Syncronization
@@ -131,10 +127,8 @@ pub struct VulkanContextNew {
     render_finished_semaphores: Vec<vk::Semaphore>,
     in_flight_fences: Vec<vk::Fence>,
     current_frame: i32,
-
-    //Random info
-    window_resized: bool,
 }
+//Holds all vulkan objects in a single struct to controll lifetimes more precisely
 struct SwapChainSupportDetails {
     capabilities: vk::SurfaceCapabilitiesKHR,
     formats: Vec<vk::SurfaceFormatKHR>,
@@ -150,7 +144,7 @@ struct QueueFamilyIndices {
 #[repr(C)]
 #[repr(align(16))]
 #[derive(Default)]
-struct UniformBufferObject {
+pub struct UniformBufferObject {
     model: glm::Mat4,
     view: glm::Mat4,
     proj: glm::Mat4,
@@ -210,7 +204,7 @@ impl Vertex {
     }
 }
 
-//---------------VulkanContextNew Helper Functions------------
+//---------------VulkanContext Helper Functions------------
 
 fn convert_vec_to_mat(position: [f32; 3]) -> glm::Mat4x4 {
     if (position.len() != 3) {
@@ -545,13 +539,14 @@ fn update_transform_buffer(
         );
     }
 }
+
 //Takes creation info and returns a buffer as well as the device memory where the buffer is
 //located
 fn create_buffer(
     size: vk::DeviceSize,
     usage: vk::BufferUsageFlags,
     property_flags: vk::MemoryPropertyFlags,
-    context: &VulkanContextNew,
+    context: &VulkanContext,
 ) -> (vk::Buffer, vk::DeviceMemory) {
     let Some(logical_device) = &context.logical_device else {
         panic!("No logical_device when calling create_vertex_buffer");
@@ -615,7 +610,7 @@ fn copy_buffer(
     src_buffer: vk::Buffer,
     dst_buffer: vk::Buffer,
     size: vk::DeviceSize,
-    context: &VulkanContextNew,
+    context: &VulkanContext,
 ) {
     let Some(logical_device) = &context.logical_device else {
         panic!("No logical_device when calling copy_buffer");
@@ -764,7 +759,7 @@ fn load_icon(file_path: &String) -> winit::window::Icon {
 }
 
 //Change to entry::linked() if having problems
-fn create_instance(context: &mut VulkanContextNew) -> Option<ash::Instance> {
+fn create_instance(context: &mut VulkanContext) -> Option<ash::Instance> {
     let Some(entry) = &context.entry else {
         panic!("Sent invalid entry to create_instance");
     };
@@ -1149,16 +1144,9 @@ fn record_command_buffer(
     }
 }
 
-//--------------------VulkanContextNew Methods----------------
-impl VulkanContextNew {
-    pub fn wait_idle(&mut self) {
-        let Some(logical_device) = &self.logical_device else {
-            panic!("AAA");
-        };
-        unsafe {
-            logical_device.device_wait_idle();
-        }
-    }
+//--------------------VulkanContext Methods----------------
+
+impl VulkanContext {
     pub fn init_vulkan(&mut self, window: &Window) {
         unsafe {
             match Entry::load() {
@@ -1174,7 +1162,6 @@ impl VulkanContextNew {
             panic!("uh oh");
         }
 
-        //self.create_entry();
         self.create_instance();
         self.create_surface(window);
         self.pick_physical_device();
@@ -1201,23 +1188,18 @@ impl VulkanContextNew {
         self.create_descriptor_sets();
         self.create_command_buffers();
         self.create_sync_object();
-    }
 
-    /*
-    fn create_entry(&mut self) {
+        //self.running = true;
+    }
+    fn main_loop(&self) {}
+    pub fn wait_idle(&mut self) {
+        let Some(logical_device) = &self.logical_device else {
+            panic!("AAA");
+        };
         unsafe {
-            match Entry::load() {
-                Err(result) => {
-                    panic!("Failed to load an entry");
-                }
-                Ok(entry) => {
-                    self.entry = Some(entry);
-                }
-            }
+            logical_device.device_wait_idle();
         }
     }
-    */
-
     fn create_instance(&mut self) {
         let Some(entry) = &self.entry else {
             panic!("Sent invalid entry to create_instance");
@@ -1308,9 +1290,7 @@ impl VulkanContextNew {
                 }
             }
         }
-        //panic!("Failure: No vk instance created");
     }
-
     pub fn cleanup(&mut self) {
         let Some(instance) = &self.instance else {
             println!("Instance does not exist");
@@ -1335,6 +1315,22 @@ impl VulkanContextNew {
             logical_device.destroy_image_view(self.texture_image_view, None);
             logical_device.destroy_image(self.texture_image, None);
             logical_device.free_memory(self.texture_image_memory, None);
+            //Syncronization
+            /*
+                        let Some(fence) = self.in_flight_fence else {
+                            panic!("No fence when cleaning up");
+                        };
+                        logical_device.destroy_fence(fence, None);
+                        let Some(image_semaphore) = self.image_available_semaphore else {
+                            panic!("No sephamore when cleaning up");
+                        };
+                        logical_device.destroy_semaphore(image_semaphore, None);
+
+                        let Some(render_semaphore) = self.render_finished_semaphore else {
+                            panic!("No sephamore when cleaning up");
+                        };
+                        logical_device.destroy_semaphore(render_semaphore, None);
+            */
 
             for i in 0..MAX_FRAMES_IN_FLIGHT {
                 logical_device.destroy_semaphore(self.render_finished_semaphores[i as usize], None);
@@ -2491,22 +2487,7 @@ impl VulkanContextNew {
             }
         }
     }
-
-    /*
-    fn instantiate(&mut self, mut gameobject: GameObject) {
-        let before_indices = self.indices.len();
-        gameobject._mesh.first_vertex = self.vertices.len() as i32;
-        //println!("RAHHHHHHHHHHHHHH {:?}", gameobject._mesh.first_index);
-        self.load_model();
-        let after_indices = self.indices.len();
-
-        gameobject._mesh.first_index = before_indices as u32;
-        gameobject._mesh.index_count = (after_indices - before_indices) as u32;
-        self.game_context_reference.game_objects.push(gameobject);
-    }
-    */
-
-    fn load_model(&mut self) {
+    pub fn load_model(&mut self) {
         //Maybe write this from scratch one day?
         let mut load_options = tobj::LoadOptions {
             ..Default::default()
@@ -2539,7 +2520,6 @@ impl VulkanContextNew {
     }
 
     fn create_vertex_buffer(&mut self) {
-        println!("vertices length = {}", self.vertices.len());
         let Some(logical_device) = &self.logical_device else {
             panic!("No logical device when calling create_vertex_buffer");
         };
@@ -2654,7 +2634,6 @@ impl VulkanContextNew {
             logical_device.destroy_buffer(staging_buffer, None);
             logical_device.free_memory(staging_buffer_memory, None);
         }
-        println!("WORKING????");
     }
 
     fn create_command_buffers(&mut self) {
@@ -2894,6 +2873,148 @@ impl VulkanContextNew {
         }
     }
 
+    fn record_command_buffer(
+        logical_device: &ash::Device,
+        command_buffer: vk::CommandBuffer,
+        render_pass: vk::RenderPass,
+        swapchain_extent: vk::Extent2D,
+        frame_buffers: &Vec<vk::Framebuffer>,
+        image_index: usize,
+        pipeline: vk::Pipeline,
+        vertex_buffer: vk::Buffer,
+        index_buffer: vk::Buffer,
+        indices_count: u32,
+        pipeline_layout: vk::PipelineLayout,
+        descriptor_sets: &Vec<vk::DescriptorSet>,
+        current_frame: usize,
+        gameobjects: &Vec<GameObject>,
+    ) {
+        let begin_info = vk::CommandBufferBeginInfo {
+            ..Default::default()
+        };
+        unsafe {
+            match logical_device.begin_command_buffer(command_buffer, &begin_info) {
+                Ok(some) => {
+                    ();
+                }
+                Err(e) => panic!("{:?}", e),
+            }
+        };
+        /*
+                let clear_color = vk::ClearValue {
+                    color: vk::ClearColorValue {
+                        float32: [0.0, 0.0, 0.0, 1.0],
+                    },
+                };
+        */
+        let clear_values = [
+            vk::ClearValue {
+                color: vk::ClearColorValue {
+                    float32: [0.0, 0.0, 0.0, 1.0],
+                },
+            },
+            vk::ClearValue {
+                depth_stencil: vk::ClearDepthStencilValue {
+                    depth: 1.0,
+                    stencil: 0,
+                },
+            },
+        ];
+        let render_pass_info = vk::RenderPassBeginInfo {
+            render_pass: render_pass,
+            render_area: vk::Rect2D {
+                offset: vk::Offset2D { x: 0, y: 0 },
+                extent: swapchain_extent,
+            },
+            framebuffer: frame_buffers[image_index],
+            clear_value_count: clear_values.len() as u32,
+            p_clear_values: clear_values.as_ptr(),
+            ..Default::default()
+        };
+        unsafe {
+            logical_device.cmd_begin_render_pass(
+                command_buffer,
+                &render_pass_info,
+                vk::SubpassContents::INLINE,
+            );
+            logical_device.cmd_bind_pipeline(
+                command_buffer,
+                vk::PipelineBindPoint::GRAPHICS,
+                pipeline,
+            );
+        };
+
+        //Coppied from create_graphics_pipeline if broken check if it matches
+        let viewport = vk::Viewport {
+            x: 0 as f32,
+            y: 0 as f32,
+            width: swapchain_extent.width as f32,
+            height: swapchain_extent.height as f32,
+            min_depth: 0.0,
+            max_depth: 1.0,
+            ..Default::default()
+        };
+
+        let viewports = [viewport];
+        unsafe {
+            logical_device.cmd_set_viewport(command_buffer, 0, &viewports);
+        }
+        let scissor = vk::Rect2D {
+            offset: vk::Offset2D { x: 0, y: 0 },
+            extent: swapchain_extent,
+        };
+        let scissors = [scissor];
+
+        unsafe {
+            logical_device.cmd_set_scissor(command_buffer, 0, &scissors);
+
+            //Added from Vertex Buffer
+            logical_device.cmd_bind_pipeline(
+                command_buffer,
+                vk::PipelineBindPoint::GRAPHICS,
+                pipeline,
+            );
+
+            let vertex_buffers = [vertex_buffer];
+            let index_buffers = [index_buffer];
+            let offsets: [vk::DeviceSize; 1] = [0];
+            logical_device.cmd_bind_vertex_buffers(command_buffer, 0, &vertex_buffers, &offsets);
+            logical_device.cmd_bind_index_buffer(
+                command_buffer,
+                index_buffer,
+                0,
+                vk::IndexType::UINT32,
+            );
+
+            logical_device.cmd_bind_descriptor_sets(
+                command_buffer,
+                vk::PipelineBindPoint::GRAPHICS,
+                pipeline_layout,
+                0,
+                &[descriptor_sets[current_frame]], //FIXME shoudl b current_frame but maybe this works?
+                &[],
+            );
+
+            //logical_device.cmd_draw(command_buffer, 3, 1, 0, 0);
+            for i in 0..gameobjects.len() {
+                let gameobject = &gameobjects[i];
+                logical_device.cmd_draw_indexed(
+                    command_buffer,
+                    gameobject._mesh.index_count,
+                    1,
+                    gameobject._mesh.first_index,
+                    //gameobject._mesh.first_vertex,
+                    0,
+                    i as u32,
+                );
+            }
+            //logical_device.cmd_draw_indexed(command_buffer, indices_count, 1, 0, 0, 0);
+            match logical_device.end_command_buffer(command_buffer) {
+                Ok(something) => (),
+                Err(e) => panic!("{}", e),
+            }
+        }
+    }
     fn create_sync_object(&mut self) {
         let Some(logical_device) = &self.logical_device else {
             panic!("No logical_device when calling create_sync_object");
@@ -2933,11 +3054,7 @@ impl VulkanContextNew {
         }
     }
 
-    pub fn draw_frame(&mut self, window: &Window, game_context: &mut GameContext) {
-        println!(
-            "{} {}",
-            game_context.game_objects[0].name, game_context.game_objects[0].transform.position[2]
-        );
+    pub fn draw_frame(&mut self, gameobjects: &Vec<GameObject>, window: &Window) {
         if (self.frame_buffers.is_empty()) {
             return;
         }
@@ -2978,9 +3095,11 @@ impl VulkanContextNew {
             if (self.window_resized) {
                 self.recreate_swapchain(window);
                 self.window_resized = false;
-                if (!game_context.game_active) {
-                    game_context.game_active = true;
+
+                if (!self.running) {
+                    self.running = true;
                 }
+
                 return;
             }
 
@@ -3013,7 +3132,7 @@ impl VulkanContextNew {
             let Some(pipeline_layout) = self.pipeline_layout else {
                 panic!("I need to stop making these enums");
             };
-            record_command_buffer(
+            VulkanContext::record_command_buffer(
                 logical_device,
                 current_command_buffer,
                 render_pass,
@@ -3027,7 +3146,7 @@ impl VulkanContextNew {
                 pipeline_layout,
                 &self.descriptor_sets,
                 current_frame,
-                &game_context.game_objects,
+                gameobjects,
             );
             let wait_semaphores = [current_image_available_semaphore];
             let wait_stages = [vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];
@@ -3042,7 +3161,7 @@ impl VulkanContextNew {
             update_transform_buffer(
                 current_frame as u32,
                 &self.transform_buffers_mapped,
-                &game_context.game_objects,
+                gameobjects,
             );
 
             let submit_info = vk::SubmitInfo {
