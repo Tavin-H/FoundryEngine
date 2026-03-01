@@ -41,9 +41,11 @@ impl UIHandler {
             .no_decoration()
             .build(|| {
                 ui.text(format!("FPS: {:.1}", fps));
-                if ui.button("Click me") {
-                    println!("ui clicked!");
-                }
+                /*
+                                if ui.button("Click me") {
+                                    println!("ui clicked!");
+                                }
+                */
             });
         platform.prepare_render(ui, window);
         context.render();

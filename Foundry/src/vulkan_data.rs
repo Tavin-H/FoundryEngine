@@ -525,12 +525,7 @@ fn update_uniform_buffer(
     };
 
     unsafe {
-        ptr::copy_nonoverlapping(
-            &ubo,
-            uniform_buffers_mapped[current_image as usize],
-            1,
-            //size_of::<UniformBufferObject>(),
-        );
+        ptr::copy_nonoverlapping(&ubo, uniform_buffers_mapped[current_image as usize], 1);
     }
 }
 fn update_transform_buffer(
@@ -1214,6 +1209,7 @@ impl VulkanContext {
         }
     }
     pub fn cleanup(&mut self) {
+        self.ui_renderer = None;
         let Some(instance) = &self.instance else {
             println!("Instance does not exist");
             return;
@@ -1229,6 +1225,7 @@ impl VulkanContext {
         let surface_instance = ash::khr::surface::Instance::new(entry, instance);
 
         unsafe {
+            logical_device.device_wait_idle();
             logical_device.destroy_image_view(self.depth_image_view, None);
             logical_device.destroy_image(self.depth_image, None);
             logical_device.free_memory(self.depth_image_memory, None);
@@ -1269,6 +1266,9 @@ impl VulkanContext {
             for frame_buffer in self.frame_buffers.iter() {
                 logical_device.destroy_framebuffer(*frame_buffer, None);
             }
+            for ui_frame_buffer in self.ui_frame_buffers.iter() {
+                logical_device.destroy_framebuffer(*ui_frame_buffer, None);
+            }
 
             //Buffers
             for i in 0..MAX_FRAMES_IN_FLIGHT {
@@ -1290,7 +1290,11 @@ impl VulkanContext {
             let Some(render_pass) = self.render_pass else {
                 panic!("No render_pass when cleaning up");
             };
+            let Some(ui_render_pass) = self.ui_render_pass else {
+                panic!("No render_pass when cleaning up");
+            };
             logical_device.destroy_render_pass(render_pass, None);
+            logical_device.destroy_render_pass(ui_render_pass, None);
 
             //Pipeline Layout
             let Some(pipeline_layout) = self.pipeline_layout else {
@@ -2981,13 +2985,6 @@ impl VulkanContext {
             p_clear_values: clear_values.as_ptr(),
             ..Default::default()
         };
-        /*
-
-                ui_renderer.set_render_pass(render_pass);
-                for (id, delta) in textures_delta.set.iter() {
-                    ui_renderer.set_textures(graphics_queue, command_pool, &[(*id, delta.clone())]);
-                }
-        */
 
         unsafe {
             logical_device.cmd_begin_render_pass(
@@ -3025,15 +3022,6 @@ impl VulkanContext {
 
         unsafe {
             logical_device.cmd_set_scissor(command_buffer, 0, &scissors);
-
-            //Added from Vertex Buffer
-            /*
-                        logical_device.cmd_bind_pipeline(
-                            command_buffer,
-                            vk::PipelineBindPoint::GRAPHICS,
-                            pipeline,
-                        );
-            */
 
             let vertex_buffers = [vertex_buffer];
             let index_buffers = [index_buffer];
