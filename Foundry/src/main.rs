@@ -103,7 +103,8 @@ impl ApplicationHandler for HelloTriangleApp {
         let Some(window) = &self.window else {
             panic!("");
         };
-        self.ui_handler.init(window);
+        //println!("init ui");
+        //self.ui_handler.init(window);
         let Some(context) = &mut self.ui_handler.context else {
             panic!();
         };
@@ -342,6 +343,7 @@ impl HelloTriangleApp {
     #[allow(deprecated)]
     //Depreciated code is using EventLoop<> instead of ActiveEventLoop
     fn load_window_early(&mut self) -> EventLoop<()> {
+        println!("Loaded window");
         let icon_path = String::from("F-example.jpg");
         let icon = load_icon(&icon_path);
         let mut window_attributes = Window::default_attributes()
@@ -349,7 +351,14 @@ impl HelloTriangleApp {
             .with_inner_size(self.size);
         window_attributes.window_icon = Some(icon);
         let event_loop = EventLoop::new().unwrap();
-        self.window = Some(event_loop.create_window(window_attributes).unwrap());
+        //self.window = Some(event_loop.create_window(window_attributes).unwrap());
+        match event_loop.create_window(window_attributes) {
+            Ok(window) => {
+                self.ui_handler.init(&window);
+                self.window = Some(window);
+            }
+            Err(e) => panic!("{}", e),
+        }
         event_loop
     }
     fn init_window(&mut self, event_loop: EventLoop<()>, window_width: f64, window_height: f64) {
