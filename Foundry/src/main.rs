@@ -114,7 +114,8 @@ impl ApplicationHandler for HelloTriangleApp {
         let Some(state) = &mut self.ui_handler.state else {
             panic!();
         };
-        let ui_response = state.on_window_event(&window, &event);
+        state.on_window_event(&window, &event);
+        //let ui_response = state.on_window_event(&window, &event);
         //Optimization?
         /*
                 if (ui_response.consumed) {
@@ -141,40 +142,39 @@ impl ApplicationHandler for HelloTriangleApp {
                         _ => (),
                     }
                     return;
-        */
         if (ui_response.consumed) {
             return;
         } else {
-            match event {
-                WindowEvent::CloseRequested => {
-                    self.closing = true;
-                    event_loop.exit();
-                    self.vulkan_context.wait_idle();
-                }
-                WindowEvent::RedrawRequested => {
-                    self.window.as_ref().unwrap();
-                }
-                WindowEvent::Resized(size) => {
-                    if (size.width == 0 && size.height == 0) {
-                        self.minimized = true;
-                        return;
-                    }
-                    //self.window_resized = true;
-                    self.vulkan_context.window_resized = true;
-                }
-                WindowEvent::KeyboardInput {
-                    device_id,
-                    event,
-                    is_synthetic,
-                } => {
-                    //println!("{:?} {:?}", event.physical_key, event.state);
-                    match event.state {
-                        winit::event::ElementState::Pressed => {}
-                        _ => {}
-                    }
-                }
-                _ => (),
+        */
+        match event {
+            WindowEvent::CloseRequested => {
+                self.closing = true;
+                event_loop.exit();
+                self.vulkan_context.wait_idle();
             }
+            WindowEvent::RedrawRequested => {
+                self.window.as_ref().unwrap();
+            }
+            WindowEvent::Resized(size) => {
+                if (size.width == 0 && size.height == 0) {
+                    self.minimized = true;
+                    return;
+                }
+                //self.window_resized = true;
+                self.vulkan_context.window_resized = true;
+            }
+            WindowEvent::KeyboardInput {
+                device_id,
+                event,
+                is_synthetic,
+            } => {
+                //println!("{:?} {:?}", event.physical_key, event.state);
+                match event.state {
+                    winit::event::ElementState::Pressed => {}
+                    _ => {}
+                }
+            }
+            _ => (),
         }
     }
 
@@ -221,6 +221,8 @@ impl ApplicationHandler for HelloTriangleApp {
             self.vulkan_context.draw_frame(
                 &self.game_context.game_objects,
                 &self.ui_handler.primitives,
+                &self.ui_handler.textures_delta,
+                self.ui_handler.pixels_per_point,
                 window,
             );
 

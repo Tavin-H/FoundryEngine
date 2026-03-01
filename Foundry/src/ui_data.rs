@@ -20,6 +20,8 @@ pub struct UIHandler {
     pub context: egui::Context,
     pub state: Option<egui_winit::State>,
     pub primitives: Vec<ClippedPrimitive>,
+    pub pixels_per_point: f32,
+    pub textures_delta: egui::TexturesDelta,
 }
 
 impl UIHandler {
@@ -33,14 +35,12 @@ impl UIHandler {
         //Simple function but seperated in case I add feature flags
     }
     fn create_state(&mut self, display_target: &Window) {
-        let id = egui::ViewportId {
-            0: egui::Id::new(1),
-        };
+        let id = egui::ViewportId::ROOT;
         let state = egui_winit::State::new(
             self.context.clone(),
             id,
             display_target,
-            None,
+            Some(display_target.scale_factor() as f32),
             Some(Theme::Dark),
             None,
         );
@@ -51,15 +51,33 @@ impl UIHandler {
             panic!("");
         };
         let raw_input = state.take_egui_input(&window);
+        /*
         self.context.begin_pass(raw_input);
 
-        egui::Window::new("Test").show(&self.context, |ui| {
-            ui.label("Hello Vulkan!");
-            if ui.button("click me").clicked() {
-                println!("button clicked");
-            }
-        });
+                egui::Window::new("Test").show(&self.context, |ui| {
+                    ui.label("Hello Vulkan!");
+                    if ui.button("click me").clicked() {
+                        println!("button clicked");
+                    }
+                });
+
         let output = self.context.end_pass();
+        */
+        let output = self.context.run(raw_input, |ctx| {
+            egui::Window::new("Test")
+                .fixed_pos([100.0, 100.0])
+                .show(ctx, |ui| {
+                    ui.label("Hello Vulkan!");
+                    if ui.button("click me").clicked() {
+                        println!("button clicked");
+                    }
+                });
+        });
+
+        let textures = output.textures_delta;
+        println!("textures in get data {}", textures.set.len());
+        self.textures_delta = textures;
+        self.pixels_per_point = output.pixels_per_point;
 
         state.handle_platform_output(window, output.platform_output);
         let clipped_primitives = self
