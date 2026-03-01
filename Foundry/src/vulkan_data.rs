@@ -23,9 +23,8 @@ use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 use winit::window::{self, Window, WindowAttributes, WindowId};
 
 //UI needed
-use egui::ClippedPrimitive;
-use egui_ash_renderer;
-use gpu_allocator::vulkan::Allocator;
+
+use imgui_rs_vulkan_renderer::{Options, Renderer};
 
 //General
 use bytemuck::{cast, offset_of};
@@ -135,7 +134,7 @@ pub struct VulkanContext {
     in_flight_fences: Vec<vk::Fence>,
     current_frame: i32,
 
-    ui_renderer: Option<egui_ash_renderer::Renderer>,
+    ui_renderer: Option<Renderer>,
 }
 use std::sync::Mutex;
 //Holds all vulkan objects in a single struct to controll lifetimes more precisely
@@ -517,7 +516,6 @@ fn update_uniform_buffer(
         0.1,
         10.0,
     );
-    println!("width: {} height: {}", extent.width, extent.height);
     proj[(1, 1)] *= -1.0;
     let ubo = UniformBufferObject {
         model: model,
@@ -1027,7 +1025,7 @@ fn print_cstring_as_i8(c_string: &CString, size: i8) {
 //--------------------VulkanContext Methods----------------
 
 impl VulkanContext {
-    pub fn init_vulkan(&mut self, window: &Window) {
+    pub fn init_vulkan(&mut self, window: &Window, ui_context: &mut imgui::Context) {
         unsafe {
             match Entry::load() {
                 Err(result) => {
@@ -1058,7 +1056,7 @@ impl VulkanContext {
         self.create_depth_resources();
         self.create_frame_buffers();
         self.create_ui_frame_buffers();
-        self.create_ui_renderer();
+        self.create_ui_renderer(ui_context);
         self.create_texture_image();
         self.create_texture_image_view();
         self.create_texture_sampler();
@@ -1083,7 +1081,7 @@ impl VulkanContext {
             logical_device.device_wait_idle();
         }
     }
-    fn create_ui_renderer(&mut self) {
+    fn create_ui_renderer(&mut self, context: &mut imgui::Context) {
         let Some(instance) = &self.instance else {
             panic!();
         };
@@ -1096,18 +1094,26 @@ impl VulkanContext {
         let Some(ui_render_pass) = self.ui_render_pass else {
             panic!();
         };
-        let renderer_result = egui_ash_renderer::Renderer::with_default_allocator(
+        let Some(graphics_queue) = self.graphics_queue else {
+            panic!();
+        };
+        let Some(command_pool) = self.command_pool else {
+            panic!();
+        };
+        let renderer_result = Renderer::with_default_allocator(
             &instance,
             physical_device,
             logical_device.clone(),
+            graphics_queue,
+            command_pool,
             ui_render_pass,
-            egui_ash_renderer::Options {
+            context,
+            Some(Options {
                 in_flight_frames: MAX_FRAMES_IN_FLIGHT as usize,
-                enable_depth_test: false,
-                enable_depth_write: false,
-                srgb_framebuffer: true,
-            },
+                ..Default::default()
+            }),
         );
+
         match renderer_result {
             Ok(renderer) => {
                 println!("Created UI renderer");
@@ -2935,11 +2941,9 @@ impl VulkanContext {
         descriptor_sets: &Vec<vk::DescriptorSet>,
         current_frame: usize,
         gameobjects: &Vec<GameObject>,
-        ui_renderer: &mut egui_ash_renderer::Renderer,
-        ui_primitives: &Vec<ClippedPrimitive>,
+        ui_renderer: &mut Renderer,
+        ui_context: &mut imgui::Context,
         ui_render_pass: vk::RenderPass,
-        textures_delta: &egui::TexturesDelta,
-        pixels_per_point: f32,
     ) {
         let begin_info = vk::CommandBufferBeginInfo {
             ..Default::default()
@@ -3079,26 +3083,17 @@ impl VulkanContext {
                     p_clear_values: std::ptr::null(),
                     ..Default::default()
                 };
-                for (id, delta) in textures_delta.set.iter() {
-                    ui_renderer.set_textures(graphics_queue, command_pool, &[(*id, delta.clone())]);
-                }
+
                 logical_device.cmd_begin_render_pass(
                     command_buffer,
                     &ui_render_pass_info,
                     vk::SubpassContents::INLINE,
                 );
 
-                println!("TESTINGGGG {}", ui_primitives.len());
-                ui_renderer.cmd_draw(
-                    command_buffer,
-                    swapchain_extent,
-                    pixels_per_point,
-                    ui_primitives,
-                );
+                let draw_data = ui_context.render();
+                ui_renderer.cmd_draw(command_buffer, draw_data).unwrap();
 
                 logical_device.cmd_end_render_pass(command_buffer);
-                let free_ids = &textures_delta.free;
-                ui_renderer.free_textures(free_ids);
             }
 
             //----------End the command_buffer------------
@@ -3150,9 +3145,7 @@ impl VulkanContext {
     pub fn draw_frame(
         &mut self,
         gameobjects: &Vec<GameObject>,
-        ui_primitives: &Vec<ClippedPrimitive>,
-        textures_delta: &egui::TexturesDelta,
-        pixels_per_point: f32,
+        ui_context: &mut imgui::Context,
         window: &Window,
     ) {
         if (self.frame_buffers.is_empty()) {
@@ -3261,10 +3254,8 @@ impl VulkanContext {
                 current_frame,
                 gameobjects,
                 ui_renderer,
-                ui_primitives,
+                ui_context,
                 ui_render_pass,
-                textures_delta,
-                pixels_per_point,
             );
             let wait_semaphores = [current_image_available_semaphore];
             let wait_stages = [vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];

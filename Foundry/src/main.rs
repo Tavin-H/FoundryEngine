@@ -103,18 +103,28 @@ impl ApplicationHandler for HelloTriangleApp {
         let Some(window) = &self.window else {
             panic!("");
         };
-        self.vulkan_context.init_vulkan(window);
-        self.ui_handler.init_ui(window);
+        self.ui_handler.init(window);
+        let Some(context) = &mut self.ui_handler.context else {
+            panic!();
+        };
+        self.vulkan_context.init_vulkan(window, context);
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, id: WindowId, event: WindowEvent) {
         let Some(window) = &self.window else {
             panic!("");
         };
-        let Some(state) = &mut self.ui_handler.state else {
+        let Some(platform) = &mut self.ui_handler.platform else {
             panic!();
         };
-        state.on_window_event(&window, &event);
+        let Some(context) = &mut self.ui_handler.context else {
+            panic!();
+        };
+        let event_wrapper: winit::event::Event<()> = winit::event::Event::WindowEvent {
+            window_id: id,
+            event: event.clone(),
+        };
+        platform.handle_event(context.io_mut(), window, &event_wrapper);
         //let ui_response = state.on_window_event(&window, &event);
         //Optimization?
         /*
@@ -174,6 +184,13 @@ impl ApplicationHandler for HelloTriangleApp {
                     _ => {}
                 }
             }
+            WindowEvent::MouseInput {
+                device_id,
+                state,
+                button,
+            } => {
+                println!("winit mouse input");
+            }
             _ => (),
         }
     }
@@ -182,7 +199,7 @@ impl ApplicationHandler for HelloTriangleApp {
         // update logic here
         if (!self.closing) {
             let mut avg_delta_time = self.game_context.calculate_delta_time();
-            println!("fps: {}", 1.0 / avg_delta_time);
+            let fps: f32 = 1.0 / avg_delta_time;
             if (!self.vulkan_context.running) {
                 avg_delta_time = 0.0;
             }
@@ -216,15 +233,13 @@ impl ApplicationHandler for HelloTriangleApp {
             let Some(window) = &self.window else {
                 panic!("");
             };
-            self.ui_handler.record_ui_data(window);
+            self.ui_handler.record_ui_data(window, fps);
+            let Some(ui_context) = &mut self.ui_handler.context else {
+                panic!();
+            };
 
-            self.vulkan_context.draw_frame(
-                &self.game_context.game_objects,
-                &self.ui_handler.primitives,
-                &self.ui_handler.textures_delta,
-                self.ui_handler.pixels_per_point,
-                window,
-            );
+            self.vulkan_context
+                .draw_frame(&self.game_context.game_objects, ui_context, window);
 
             if let Some(window) = &self.window {
                 window.request_redraw();
@@ -666,7 +681,7 @@ fn main() {
         },
         transform: Transform {
             position: [0.0, 0.0, -2.0],
-            scale: [0.5, 0.5, 2.0],
+            scale: [1.0, 1.0, 1.0],
         },
         ..Default::default()
     };
@@ -676,7 +691,7 @@ fn main() {
         id: 1,
         transform: Transform {
             position: [1.0, 0.0, 0.0],
-            scale: [1.0, 1.0, 0.3],
+            scale: [1.0, 1.0, 3.0],
         },
         ..Default::default()
     };
