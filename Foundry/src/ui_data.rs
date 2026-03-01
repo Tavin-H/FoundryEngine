@@ -46,7 +46,7 @@ impl UIHandler {
         );
         self.state = Some(state);
     }
-    pub fn record_ui_data(&mut self, window: &Window) -> Vec<ClippedPrimitive> {
+    pub fn record_ui_data(&mut self, window: &Window) {
         let Some(state) = &mut self.state else {
             panic!("");
         };
@@ -65,6 +65,6 @@ impl UIHandler {
         let clipped_primitives = self
             .context
             .tessellate(output.shapes, output.pixels_per_point);
-        clipped_primitives
+        self.primitives = clipped_primitives;
     }
 }

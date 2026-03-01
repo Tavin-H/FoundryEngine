@@ -24,7 +24,8 @@ use winit::window::{self, Window, WindowAttributes, WindowId};
 
 //UI needed
 use egui::ClippedPrimitive;
-use egui_ash;
+use egui_ash_renderer;
+use gpu_allocator::vulkan::Allocator;
 
 //General
 use bytemuck::{cast, offset_of};
@@ -106,6 +107,7 @@ pub struct VulkanContext {
     descriptor_sets: Vec<vk::DescriptorSet>,
     pipeline_layout: Option<vk::PipelineLayout>,
     render_pass: Option<vk::RenderPass>,
+    ui_render_pass: Option<vk::RenderPass>,
     graphics_pipelines: Vec<vk::Pipeline>,
 
     //Buffers
@@ -131,7 +133,10 @@ pub struct VulkanContext {
     render_finished_semaphores: Vec<vk::Semaphore>,
     in_flight_fences: Vec<vk::Fence>,
     current_frame: i32,
+
+    ui_renderer: Option<egui_ash_renderer::Renderer>,
 }
+use std::sync::Mutex;
 //Holds all vulkan objects in a single struct to controll lifetimes more precisely
 struct SwapChainSupportDetails {
     capabilities: vk::SurfaceCapabilitiesKHR,
@@ -1034,6 +1039,8 @@ fn record_command_buffer(
     descriptor_sets: &Vec<vk::DescriptorSet>,
     current_frame: usize,
     gameobjects: &Vec<GameObject>,
+    ui_renderer: &egui_ash_renderer::Renderer,
+    ui_primitives: &Vec<ClippedPrimitive>,
 ) {
     let begin_info = vk::CommandBufferBeginInfo {
         ..Default::default()
@@ -1146,6 +1153,8 @@ fn record_command_buffer(
                 i as u32,
             );
         }
+        //ui_renderer.cmd_draw(command_buffer, swapchain_extent, 2);
+
         //logical_device.cmd_draw_indexed(command_buffer, indices_count, 1, 0, 0, 0);
         match logical_device.end_command_buffer(command_buffer) {
             Ok(something) => (),
@@ -1181,6 +1190,8 @@ impl VulkanContext {
         self.create_swapchain(window);
         self.create_image_views();
         self.create_render_pass();
+        self.create_ui_render_pass();
+        self.create_ui_renderer();
         self.create_descriptor_set_layout();
         self.create_graphics_pipeline();
         self.create_command_pool();
@@ -1208,6 +1219,34 @@ impl VulkanContext {
         };
         unsafe {
             logical_device.device_wait_idle();
+        }
+    }
+    fn create_ui_renderer(&mut self) {
+        let Some(instance) = &self.instance else {
+            panic!();
+        };
+        let Some(physical_device) = self.physical_device else {
+            panic!();
+        };
+        let Some(logical_device) = &self.logical_device else {
+            panic!();
+        };
+        let Some(render_pass) = self.render_pass else {
+            panic!();
+        };
+        let renderer_result = egui_ash_renderer::Renderer::with_default_allocator(
+            &instance,
+            physical_device,
+            logical_device.clone(),
+            render_pass,
+            egui_ash_renderer::Options::default(),
+        );
+        match renderer_result {
+            Ok(renderer) => {
+                println!("Created UI renderer");
+                self.ui_renderer = Some(renderer);
+            }
+            Err(e) => panic!("{}", e),
         }
     }
     fn create_instance(&mut self) {
@@ -2153,7 +2192,9 @@ impl VulkanContext {
             stencil_load_op: vk::AttachmentLoadOp::DONT_CARE,
             stencil_store_op: vk::AttachmentStoreOp::DONT_CARE,
             initial_layout: vk::ImageLayout::UNDEFINED,
-            final_layout: vk::ImageLayout::PRESENT_SRC_KHR,
+            //final_layout: vk::ImageLayout::PRESENT_SRC_KHR,
+            final_layout: vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
+
             ..Default::default()
         };
         //let colour_attatchment_list: Vec<vk::AttachmentDescription> = vec![color_attatchment];
@@ -2222,6 +2263,89 @@ impl VulkanContext {
         unsafe {
             match logical_device.create_render_pass(&render_pass_info, None) {
                 Ok(render_pass) => self.render_pass = Some(render_pass),
+                Err(e) => panic!("NOOO"),
+            }
+        }
+    }
+    fn create_ui_render_pass(&mut self) {
+        let Some(swapchain_format) = self.swap_chain_format else {
+            panic!("No swapchain_format when calling create_render_pass");
+        };
+        let Some(instance) = &self.instance else {
+            panic!("");
+        };
+        let Some(physical_device) = &self.physical_device else {
+            panic!("");
+        };
+        let depth_format = find_depth_format(instance, physical_device);
+        let attachments = [
+            vk::AttachmentDescription {
+                format: swapchain_format.format,
+                samples: vk::SampleCountFlags::TYPE_1,
+                load_op: vk::AttachmentLoadOp::LOAD,
+                store_op: vk::AttachmentStoreOp::STORE,
+                stencil_load_op: vk::AttachmentLoadOp::DONT_CARE,
+                stencil_store_op: vk::AttachmentStoreOp::DONT_CARE,
+                initial_layout: vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
+                final_layout: vk::ImageLayout::PRESENT_SRC_KHR,
+                ..Default::default()
+            },
+            /*
+                        vk::AttachmentDescription {
+                            format: depth_format,
+                            samples: vk::SampleCountFlags::TYPE_1,
+                            load_op: vk::AttachmentLoadOp::DONT_CARE,
+                            store_op: vk::AttachmentStoreOp::DONT_CARE,
+                            initial_layout: vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+                            final_layout: vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+                            ..Default::default()
+                        },
+            */
+        ];
+        //let colour_attatchment_list: Vec<vk::AttachmentDescription> = vec![color_attatchment];
+
+        let colour_attatchment_ref = vk::AttachmentReference {
+            attachment: 0,
+            layout: vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
+        };
+
+        let colour_attatchment_ref_list: Vec<vk::AttachmentReference> =
+            vec![colour_attatchment_ref];
+
+        let subpass = vk::SubpassDescription {
+            pipeline_bind_point: vk::PipelineBindPoint::GRAPHICS,
+            color_attachment_count: 1,
+            p_color_attachments: &colour_attatchment_ref,
+            ..Default::default()
+        };
+        let subpass_list: Vec<vk::SubpassDescription> = vec![subpass];
+
+        let subpass_dependancy = vk::SubpassDependency {
+            dst_subpass: 0,
+            src_stage_mask: vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
+            dst_stage_mask: vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
+
+            src_access_mask: vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
+            dst_access_mask: vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
+            ..Default::default()
+        };
+
+        let render_pass_info = vk::RenderPassCreateInfo {
+            attachment_count: 1,
+            p_attachments: attachments.as_ptr(),
+            subpass_count: 1,
+            p_subpasses: &subpass,
+            dependency_count: 1,
+            p_dependencies: &subpass_dependancy,
+            ..Default::default()
+        };
+
+        let Some(logical_device) = &self.logical_device else {
+            panic!("No logical when calling create_render_pass");
+        };
+        unsafe {
+            match logical_device.create_render_pass(&render_pass_info, None) {
+                Ok(render_pass) => self.ui_render_pass = Some(render_pass),
                 Err(e) => panic!("NOOO"),
             }
         }
@@ -2900,10 +3024,14 @@ impl VulkanContext {
         descriptor_sets: &Vec<vk::DescriptorSet>,
         current_frame: usize,
         gameobjects: &Vec<GameObject>,
+        ui_renderer: &mut egui_ash_renderer::Renderer,
+        ui_primitives: &Vec<ClippedPrimitive>,
+        ui_render_pass: vk::RenderPass,
     ) {
         let begin_info = vk::CommandBufferBeginInfo {
             ..Default::default()
         };
+        //----------Begin command buffer-----------
         unsafe {
             match logical_device.begin_command_buffer(command_buffer, &begin_info) {
                 Ok(some) => {
@@ -2912,13 +3040,6 @@ impl VulkanContext {
                 Err(e) => panic!("{:?}", e),
             }
         };
-        /*
-                let clear_color = vk::ClearValue {
-                    color: vk::ClearColorValue {
-                        float32: [0.0, 0.0, 0.0, 1.0],
-                    },
-                };
-        */
         let clear_values = [
             vk::ClearValue {
                 color: vk::ClearColorValue {
@@ -3020,7 +3141,35 @@ impl VulkanContext {
                     i as u32,
                 );
             }
-            //logical_device.cmd_draw_indexed(command_buffer, indices_count, 1, 0, 0, 0);
+            logical_device.cmd_end_render_pass(command_buffer);
+
+            //---------------UI specific render_pass-----------------
+
+            unsafe {
+                let ui_render_pass_info = vk::RenderPassBeginInfo {
+                    render_pass: ui_render_pass,
+                    framebuffer: frame_buffers[image_index],
+                    render_area: vk::Rect2D {
+                        offset: vk::Offset2D { x: 0, y: 0 },
+                        extent: swapchain_extent,
+                    },
+                    clear_value_count: 0,
+                    p_clear_values: std::ptr::null(),
+                    ..Default::default()
+                };
+                logical_device.cmd_begin_render_pass(
+                    command_buffer,
+                    &ui_render_pass_info,
+                    vk::SubpassContents::INLINE,
+                );
+
+                println!("{}", ui_primitives.len());
+                ui_renderer.cmd_draw(command_buffer, swapchain_extent, 2.0, ui_primitives);
+
+                logical_device.cmd_end_render_pass(command_buffer);
+            }
+
+            //----------End the command_buffer------------
             match logical_device.end_command_buffer(command_buffer) {
                 Ok(something) => (),
                 Err(e) => panic!("{}", e),
@@ -3149,6 +3298,12 @@ impl VulkanContext {
             let Some(pipeline_layout) = self.pipeline_layout else {
                 panic!("I need to stop making these enums");
             };
+            let Some(ui_renderer) = &mut self.ui_renderer else {
+                panic!();
+            };
+            let Some(ui_render_pass) = self.ui_render_pass else {
+                panic!();
+            };
             VulkanContext::record_command_buffer(
                 logical_device,
                 current_command_buffer,
@@ -3164,6 +3319,9 @@ impl VulkanContext {
                 &self.descriptor_sets,
                 current_frame,
                 gameobjects,
+                ui_renderer,
+                ui_primitives,
+                ui_render_pass,
             );
             let wait_semaphores = [current_image_available_semaphore];
             let wait_stages = [vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];
