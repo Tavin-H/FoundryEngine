@@ -22,6 +22,10 @@ use nalgebra_glm::{self as glm, any, log, pi};
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 use winit::window::{self, Window, WindowAttributes, WindowId};
 
+//UI needed
+use egui::ClippedPrimitive;
+use egui_ash;
+
 //General
 use bytemuck::{cast, offset_of};
 use num::clamp;
@@ -3062,7 +3066,12 @@ impl VulkanContext {
         }
     }
 
-    pub fn draw_frame(&mut self, gameobjects: &Vec<GameObject>, window: &Window) {
+    pub fn draw_frame(
+        &mut self,
+        gameobjects: &Vec<GameObject>,
+        ui_primitives: &Vec<ClippedPrimitive>,
+        window: &Window,
+    ) {
         if (self.frame_buffers.is_empty()) {
             return;
         }

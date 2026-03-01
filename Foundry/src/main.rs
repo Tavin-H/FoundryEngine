@@ -24,6 +24,12 @@ use crate::game_data::Transform;
 mod vulkan_data;
 use crate::vulkan_data::{UniformBufferObject, VulkanContext};
 
+//UI Handler
+mod ui_data;
+use crate::ui_data::UIHandler;
+use egui;
+use egui_winit;
+
 //------------------Vulkan----------------------
 //Constants
 const MAX_GAME_OBJECTS_IN_SCENE: u64 = 1000;
@@ -98,38 +104,77 @@ impl ApplicationHandler for HelloTriangleApp {
             panic!("");
         };
         self.vulkan_context.init_vulkan(window);
+        self.ui_handler.init_ui(window);
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, id: WindowId, event: WindowEvent) {
-        match event {
-            WindowEvent::CloseRequested => {
-                self.closing = true;
-                event_loop.exit();
-                self.vulkan_context.wait_idle();
-            }
-            WindowEvent::RedrawRequested => {
-                self.window.as_ref().unwrap();
-            }
-            WindowEvent::Resized(size) => {
-                if (size.width == 0 && size.height == 0) {
-                    self.minimized = true;
+        let Some(window) = &self.window else {
+            panic!("");
+        };
+        let Some(state) = &mut self.ui_handler.state else {
+            panic!();
+        };
+        let ui_response = state.on_window_event(&window, &event);
+        //Optimization?
+        /*
+                if (ui_response.consumed) {
+                    match event {
+                        WindowEvent::KeyboardInput {
+                            device_id,
+                            event,
+                            is_synthetic,
+                        } => return,
+                        WindowEvent::CursorMoved {
+                            device_id,
+                            position,
+                        } => return,
+                        WindowEvent::MouseWheel {
+                            device_id,
+                            delta,
+                            phase,
+                        } => return,
+                        WindowEvent::MouseInput {
+                            device_id,
+                            state,
+                            button,
+                        } => return,
+                        _ => (),
+                    }
                     return;
+        */
+        if (ui_response.consumed) {
+            return;
+        } else {
+            match event {
+                WindowEvent::CloseRequested => {
+                    self.closing = true;
+                    event_loop.exit();
+                    self.vulkan_context.wait_idle();
                 }
-                //self.window_resized = true;
-                self.vulkan_context.window_resized = true;
-            }
-            WindowEvent::KeyboardInput {
-                device_id,
-                event,
-                is_synthetic,
-            } => {
-                //println!("{:?} {:?}", event.physical_key, event.state);
-                match event.state {
-                    winit::event::ElementState::Pressed => {}
-                    _ => {}
+                WindowEvent::RedrawRequested => {
+                    self.window.as_ref().unwrap();
                 }
+                WindowEvent::Resized(size) => {
+                    if (size.width == 0 && size.height == 0) {
+                        self.minimized = true;
+                        return;
+                    }
+                    //self.window_resized = true;
+                    self.vulkan_context.window_resized = true;
+                }
+                WindowEvent::KeyboardInput {
+                    device_id,
+                    event,
+                    is_synthetic,
+                } => {
+                    //println!("{:?} {:?}", event.physical_key, event.state);
+                    match event.state {
+                        winit::event::ElementState::Pressed => {}
+                        _ => {}
+                    }
+                }
+                _ => (),
             }
-            _ => (),
         }
     }
 
@@ -171,8 +216,13 @@ impl ApplicationHandler for HelloTriangleApp {
             let Some(window) = &self.window else {
                 panic!("");
             };
-            self.vulkan_context
-                .draw_frame(&self.game_context.game_objects, window);
+            self.ui_handler.record_ui_data(window);
+
+            self.vulkan_context.draw_frame(
+                &self.game_context.game_objects,
+                &self.ui_handler.primitives,
+                window,
+            );
 
             if let Some(window) = &self.window {
                 window.request_redraw();
@@ -534,6 +584,7 @@ struct HelloTriangleApp {
     event_loop: Option<EventLoop<()>>,
     vulkan_context: VulkanContext,
     game_context: GameContext,
+    ui_handler: UIHandler,
     closing: bool,
     running: bool,
 
@@ -623,7 +674,7 @@ fn main() {
         id: 1,
         transform: Transform {
             position: [1.0, 0.0, 0.0],
-            scale: [1.0, 1.0, 1.0],
+            scale: [1.0, 1.0, 0.3],
         },
         ..Default::default()
     };
