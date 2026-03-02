@@ -24,6 +24,12 @@ use crate::game_data::Transform;
 mod vulkan_data;
 use crate::vulkan_data::{UniformBufferObject, VulkanContext};
 
+//UI Handler
+mod ui_data;
+use crate::ui_data::UIHandler;
+use egui;
+use egui_winit;
+
 //------------------Vulkan----------------------
 //Constants
 const MAX_GAME_OBJECTS_IN_SCENE: u64 = 1000;
@@ -97,10 +103,60 @@ impl ApplicationHandler for HelloTriangleApp {
         let Some(window) = &self.window else {
             panic!("");
         };
-        self.vulkan_context.init_vulkan(window);
+        //println!("init ui");
+        //self.ui_handler.init(window);
+        let Some(context) = &mut self.ui_handler.context else {
+            panic!();
+        };
+        self.vulkan_context.init_vulkan(window, context);
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, id: WindowId, event: WindowEvent) {
+        let Some(window) = &self.window else {
+            panic!("");
+        };
+        let Some(platform) = &mut self.ui_handler.platform else {
+            panic!();
+        };
+        let Some(context) = &mut self.ui_handler.context else {
+            panic!();
+        };
+        let event_wrapper: winit::event::Event<()> = winit::event::Event::WindowEvent {
+            window_id: id,
+            event: event.clone(),
+        };
+        platform.handle_event(context.io_mut(), window, &event_wrapper);
+        //let ui_response = state.on_window_event(&window, &event);
+        //Optimization?
+        /*
+                if (ui_response.consumed) {
+                    match event {
+                        WindowEvent::KeyboardInput {
+                            device_id,
+                            event,
+                            is_synthetic,
+                        } => return,
+                        WindowEvent::CursorMoved {
+                            device_id,
+                            position,
+                        } => return,
+                        WindowEvent::MouseWheel {
+                            device_id,
+                            delta,
+                            phase,
+                        } => return,
+                        WindowEvent::MouseInput {
+                            device_id,
+                            state,
+                            button,
+                        } => return,
+                        _ => (),
+                    }
+                    return;
+        if (ui_response.consumed) {
+            return;
+        } else {
+        */
         match event {
             WindowEvent::CloseRequested => {
                 self.closing = true;
@@ -129,6 +185,13 @@ impl ApplicationHandler for HelloTriangleApp {
                     _ => {}
                 }
             }
+            WindowEvent::MouseInput {
+                device_id,
+                state,
+                button,
+            } => {
+                println!("winit mouse input");
+            }
             _ => (),
         }
     }
@@ -137,6 +200,11 @@ impl ApplicationHandler for HelloTriangleApp {
         // update logic here
         if (!self.closing) {
             let mut avg_delta_time = self.game_context.calculate_delta_time();
+            self.frame_count += 1;
+            if self.frame_count > 1000 {
+                self.frame_count = 0;
+                self.fps = 1.0 / avg_delta_time;
+            }
             if (!self.vulkan_context.running) {
                 avg_delta_time = 0.0;
             }
@@ -170,8 +238,13 @@ impl ApplicationHandler for HelloTriangleApp {
             let Some(window) = &self.window else {
                 panic!("");
             };
+            self.ui_handler.record_ui_data(window, self.fps);
+            let Some(ui_context) = &mut self.ui_handler.context else {
+                panic!();
+            };
+
             self.vulkan_context
-                .draw_frame(&self.game_context.game_objects, window);
+                .draw_frame(&self.game_context.game_objects, ui_context, window);
 
             if let Some(window) = &self.window {
                 window.request_redraw();
@@ -181,307 +254,6 @@ impl ApplicationHandler for HelloTriangleApp {
 }
 
 //----------------Helper functions-----------------
-
-fn convert_vec_to_mat(position: [f32; 3]) -> Mat4x4 {
-    if (position.len() != 3) {
-        panic!("Position does not have 3 elements");
-    }
-
-    let mut transform = glm::Mat4::identity();
-    transform[(0, 3)] = position[0];
-    transform[(1, 3)] = position[1];
-    transform[(2, 3)] = position[2];
-
-    transform
-}
-
-fn find_supported_format(
-    instance: &Instance,
-    physical_device: &vk::PhysicalDevice,
-    candidates: Vec<vk::Format>,
-    tiling: vk::ImageTiling,
-    features: vk::FormatFeatureFlags,
-) -> vk::Format {
-    for format in candidates.iter() {
-        unsafe {
-            let properties =
-                instance.get_physical_device_format_properties(*physical_device, *format);
-            if (tiling == vk::ImageTiling::LINEAR
-                && (properties.linear_tiling_features & features) == features)
-            {
-                return *format;
-            } else if (tiling == vk::ImageTiling::OPTIMAL
-                && (properties.optimal_tiling_features & features) == features)
-            {
-                return *format;
-            }
-        }
-    }
-    //If all else fails
-    panic!("No supported format found");
-}
-
-fn find_depth_format(instance: &Instance, physical_device: &vk::PhysicalDevice) -> vk::Format {
-    let format = find_supported_format(
-        instance,
-        physical_device,
-        vec![
-            vk::Format::D32_SFLOAT,
-            vk::Format::D32_SFLOAT_S8_UINT,
-            vk::Format::D24_UNORM_S8_UINT,
-        ],
-        vk::ImageTiling::OPTIMAL,
-        vk::FormatFeatureFlags::DEPTH_STENCIL_ATTACHMENT,
-    );
-    println!("using: {:?} for depth buffering", format);
-    return format;
-}
-
-fn has_stencil_component(format: vk::Format) -> bool {
-    return format == vk::Format::D32_SFLOAT_S8_UINT || format == vk::Format::D24_UNORM_S8_UINT;
-}
-
-fn copy_buffer_to_image(
-    logical_device: &ash::Device,
-    instance: &Instance,
-    buffer: vk::Buffer,
-    image: vk::Image,
-    width: u32,
-    height: u32,
-    command_pool: vk::CommandPool,
-    graphics_queue: vk::Queue,
-) {
-    let command_buffer = begin_single_time_commands(logical_device, command_pool);
-
-    let region = vk::BufferImageCopy {
-        buffer_offset: 0,
-        buffer_row_length: 0,
-        buffer_image_height: 0,
-        image_subresource: vk::ImageSubresourceLayers {
-            aspect_mask: vk::ImageAspectFlags::COLOR,
-            mip_level: 0,
-            base_array_layer: 0,
-            layer_count: 1,
-        },
-        image_offset: vk::Offset3D {
-            ..Default::default()
-        },
-        image_extent: vk::Extent3D {
-            width: width,
-            height: height,
-            depth: 1,
-        },
-        ..Default::default()
-    };
-    unsafe {
-        logical_device.cmd_copy_buffer_to_image(
-            command_buffer,
-            buffer,
-            image,
-            vk::ImageLayout::TRANSFER_DST_OPTIMAL,
-            &[region],
-        );
-    }
-    end_single_time_commands(logical_device, command_buffer, command_pool, graphics_queue);
-}
-
-fn create_image(
-    logical_device: &ash::Device,
-    instance: &ash::Instance,
-    physical_device: &vk::PhysicalDevice,
-    height: u32,
-    width: u32,
-    format: vk::Format,
-    tiling: vk::ImageTiling,
-    usage: vk::ImageUsageFlags,
-    properties: vk::MemoryPropertyFlags,
-    image_memory: &vk::DeviceMemory,
-    command_pool: vk::CommandPool,
-    graphics_queue: vk::Queue,
-) -> (vk::Image, vk::DeviceMemory) {
-    let mut image: Option<vk::Image> = None;
-    let mut image_memory: Option<vk::DeviceMemory> = None;
-
-    let image_create_info = vk::ImageCreateInfo {
-        image_type: vk::ImageType::TYPE_2D,
-        extent: vk::Extent2D {
-            width: width,
-            height: height,
-        }
-        .into(),
-        mip_levels: 1,
-        array_layers: 1,
-        format: format,
-        tiling: tiling,
-        initial_layout: vk::ImageLayout::UNDEFINED,
-        usage: usage,
-        sharing_mode: vk::SharingMode::EXCLUSIVE,
-        samples: vk::SampleCountFlags::TYPE_1,
-
-        ..Default::default()
-    };
-    unsafe {
-        match logical_device.create_image(&image_create_info, None) {
-            Ok(created_image) => {
-                image = Some(created_image);
-                println!("Created Texture Successfully");
-            }
-            Err(e) => panic!("{}", e),
-        }
-    }
-
-    //Load image into memory
-    unsafe {
-        let device_memory_properties =
-            instance.get_physical_device_memory_properties(*physical_device);
-
-        let Some(image_value) = image else {
-            panic!("Image is not a value");
-        };
-        let memory_requirements = logical_device.get_image_memory_requirements(image_value);
-        let alloc_info = vk::MemoryAllocateInfo {
-            allocation_size: memory_requirements.size,
-            memory_type_index: find_memory_type(
-                memory_requirements.memory_type_bits,
-                vk::MemoryPropertyFlags::DEVICE_LOCAL,
-                device_memory_properties,
-            ),
-            ..Default::default()
-        };
-
-        match logical_device.allocate_memory(&alloc_info, None) {
-            Ok(memory_pointer) => {
-                logical_device.bind_image_memory(image_value, memory_pointer, 0);
-                image_memory = Some(memory_pointer);
-            }
-            Err(e) => panic!("{}", e),
-        }
-    }
-    let Some(image_value) = image else {
-        panic!("");
-    };
-    let Some(image_memory_value) = image_memory else {
-        panic!("");
-    };
-
-    return (image_value, image_memory_value);
-}
-
-fn create_image_view(
-    image: vk::Image,
-    format: vk::Format,
-    aspect_flags: vk::ImageAspectFlags,
-    logical_device: &ash::Device,
-) -> vk::ImageView {
-    let view_info = vk::ImageViewCreateInfo {
-        image: image,
-        view_type: vk::ImageViewType::TYPE_2D,
-        format: format,
-        subresource_range: vk::ImageSubresourceRange {
-            aspect_mask: aspect_flags,
-            base_mip_level: 0,
-            base_array_layer: 0,
-            level_count: 1,
-            layer_count: 1,
-            ..Default::default()
-        },
-        components: vk::ComponentMapping {
-            r: vk::ComponentSwizzle::IDENTITY,
-            g: vk::ComponentSwizzle::IDENTITY,
-            b: vk::ComponentSwizzle::IDENTITY,
-            a: vk::ComponentSwizzle::IDENTITY,
-        },
-        ..Default::default()
-    };
-    unsafe {
-        match logical_device.create_image_view(&view_info, None) {
-            Ok(image_view) => {
-                return image_view;
-            }
-            Err(e) => panic!("{}", e),
-        }
-    }
-}
-
-fn begin_single_time_commands(
-    logical_device: &ash::Device,
-    command_pool: vk::CommandPool,
-) -> vk::CommandBuffer {
-    let alloc_info = vk::CommandBufferAllocateInfo {
-        level: vk::CommandBufferLevel::PRIMARY,
-        command_pool: command_pool,
-        command_buffer_count: 1,
-        ..Default::default()
-    };
-    let begin_info = vk::CommandBufferBeginInfo {
-        flags: vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT,
-        ..Default::default()
-    };
-    unsafe {
-        match logical_device.allocate_command_buffers(&alloc_info) {
-            Ok(command_buffers) => {
-                println!("allocated command buffer thingy");
-                logical_device.begin_command_buffer(command_buffers[0], &begin_info);
-                return command_buffers[0]; //FIXME potential dangling pointer if indexing returns a
-                //reference and not the value
-            }
-            Err(e) => panic!("{}", e),
-        }
-    }
-}
-
-fn end_single_time_commands(
-    logical_device: &ash::Device,
-    command_buffer: vk::CommandBuffer,
-    command_pool: vk::CommandPool,
-    graphics_queue: vk::Queue,
-) {
-    unsafe {
-        logical_device.end_command_buffer(command_buffer);
-    }
-
-    let submit_info = vk::SubmitInfo {
-        command_buffer_count: 1,
-        p_command_buffers: &command_buffer,
-        ..Default::default()
-    };
-
-    unsafe {
-        logical_device.queue_submit(graphics_queue, &[submit_info], vk::Fence::null());
-        logical_device.device_wait_idle();
-
-        logical_device.free_command_buffers(command_pool, &[command_buffer]);
-    }
-}
-//Takes creation info and returns a buffer as well as the device memory where the buffer is
-//located
-fn find_memory_type(
-    type_filter: u32,
-    property_flags: vk::MemoryPropertyFlags,
-    device_memory_properties: vk::PhysicalDeviceMemoryProperties,
-) -> u32 {
-    for i in 0..device_memory_properties.memory_type_count {
-        //Check if it's the right memory type
-        if (type_filter & (1 << i) != 0) {
-            //Check if it has the right property
-            if (device_memory_properties.memory_types[i as usize].property_flags & property_flags
-                == property_flags)
-            {
-                return i;
-            }
-        }
-    }
-    panic!("Failed to find suitible memory type!");
-}
-fn debug_call_back(
-    message_severity: vk::DebugUtilsMessageSeverityFlagsEXT,
-    message_type: vk::DebugUtilsMessageTypeFlagsEXT,
-    p_callback_data: vk::DebugUtilsMessengerCallbackDataEXT,
-) -> vk::Bool32 {
-    println!("Validation layer: {:?}", p_callback_data.p_message);
-    return vk::FALSE;
-}
-
 fn load_icon(file_path: &String) -> winit::window::Icon {
     let bytes = read_file(file_path);
     let (icon_rgba, icon_width, icon_height) = {
@@ -533,6 +305,7 @@ struct HelloTriangleApp {
     event_loop: Option<EventLoop<()>>,
     vulkan_context: VulkanContext,
     game_context: GameContext,
+    ui_handler: UIHandler,
     closing: bool,
     running: bool,
 
@@ -543,6 +316,7 @@ struct HelloTriangleApp {
     window_resized: bool,
     start_time: Option<std::time::Instant>,
     frame_count: u64,
+    fps: f32,
 }
 //Holds all vulkan objects in a single struct to controll lifetimes more precisely
 struct SwapChainSupportDetails {
@@ -569,6 +343,7 @@ impl HelloTriangleApp {
     #[allow(deprecated)]
     //Depreciated code is using EventLoop<> instead of ActiveEventLoop
     fn load_window_early(&mut self) -> EventLoop<()> {
+        println!("Loaded window");
         let icon_path = String::from("F-example.jpg");
         let icon = load_icon(&icon_path);
         let mut window_attributes = Window::default_attributes()
@@ -576,7 +351,14 @@ impl HelloTriangleApp {
             .with_inner_size(self.size);
         window_attributes.window_icon = Some(icon);
         let event_loop = EventLoop::new().unwrap();
-        self.window = Some(event_loop.create_window(window_attributes).unwrap());
+        //self.window = Some(event_loop.create_window(window_attributes).unwrap());
+        match event_loop.create_window(window_attributes) {
+            Ok(window) => {
+                self.ui_handler.init(&window);
+                self.window = Some(window);
+            }
+            Err(e) => panic!("{}", e),
+        }
         event_loop
     }
     fn init_window(&mut self, event_loop: EventLoop<()>, window_width: f64, window_height: f64) {
@@ -612,6 +394,7 @@ fn main() {
         },
         transform: Transform {
             position: [0.0, 0.0, -2.0],
+            scale: [1.0, 1.0, 1.0],
         },
         ..Default::default()
     };
@@ -621,6 +404,7 @@ fn main() {
         id: 1,
         transform: Transform {
             position: [1.0, 0.0, 0.0],
+            scale: [1.0, 1.0, 3.0],
         },
         ..Default::default()
     };

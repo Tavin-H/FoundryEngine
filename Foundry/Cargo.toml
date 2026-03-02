@@ -5,7 +5,7 @@ edition = "2024"
 
 [dependencies]
 winit = "0.30"
-ash = "0.38"
+ash = "0.38.0"
 ash-window = "0.13.0"
 nalgebra-glm = "0.19"
 raw-window-handle = "0.6" 
@@ -15,6 +15,14 @@ image = "0.25.9"
 glam = "0.31.0"
 stb_image = "0.3.0"
 tobj = "4.0.3"
+egui = "0.33.3"
+egui-ash = {version = "0.4.0", features = ["gpu-allocator"]}
+egui-winit = "0.33.3"
+gpu-allocator = "0.28.0"
+egui-ash-renderer = "0.11.0"
+imgui = "0.12.0"
+imgui-winit-support = "0.13.0"
+imgui-rs-vulkan-renderer = "1.16.0"
 
 [dependencies.vulkan-headers]
 version = "0.1.1+1.4.336"

@@ -23,8 +23,9 @@ use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 use winit::window::{self, Window, WindowAttributes, WindowId};
 
 //UI needed
-
-use imgui_rs_vulkan_renderer::{Options, Renderer};
+use egui::ClippedPrimitive;
+use egui_ash_renderer;
+use gpu_allocator::vulkan::Allocator;
 
 //General
 use bytemuck::{cast, offset_of};
@@ -111,7 +112,6 @@ pub struct VulkanContext {
 
     //Buffers
     frame_buffers: Vec<vk::Framebuffer>,
-    ui_frame_buffers: Vec<vk::Framebuffer>,
     vertex_buffer: vk::Buffer,
     vertex_buffer_memory: vk::DeviceMemory,
     index_buffer: vk::Buffer,
@@ -134,7 +134,7 @@ pub struct VulkanContext {
     in_flight_fences: Vec<vk::Fence>,
     current_frame: i32,
 
-    ui_renderer: Option<Renderer>,
+    ui_renderer: Option<egui_ash_renderer::Renderer>,
 }
 use std::sync::Mutex;
 //Holds all vulkan objects in a single struct to controll lifetimes more precisely
@@ -516,6 +516,7 @@ fn update_uniform_buffer(
         0.1,
         10.0,
     );
+    println!("width: {} height: {}", extent.width, extent.height);
     proj[(1, 1)] *= -1.0;
     let ubo = UniformBufferObject {
         model: model,
@@ -525,7 +526,12 @@ fn update_uniform_buffer(
     };
 
     unsafe {
-        ptr::copy_nonoverlapping(&ubo, uniform_buffers_mapped[current_image as usize], 1);
+        ptr::copy_nonoverlapping(
+            &ubo,
+            uniform_buffers_mapped[current_image as usize],
+            1,
+            //size_of::<UniformBufferObject>(),
+        );
     }
 }
 fn update_transform_buffer(
@@ -1017,10 +1023,150 @@ fn print_cstring_as_i8(c_string: &CString, size: i8) {
     }
 }
 
+//------------Functions for VulkanContext------------
+fn record_command_buffer(
+    logical_device: &ash::Device,
+    command_buffer: vk::CommandBuffer,
+    render_pass: vk::RenderPass,
+    swapchain_extent: vk::Extent2D,
+    frame_buffers: &Vec<vk::Framebuffer>,
+    image_index: usize,
+    pipeline: vk::Pipeline,
+    vertex_buffer: vk::Buffer,
+    index_buffer: vk::Buffer,
+    indices_count: u32,
+    pipeline_layout: vk::PipelineLayout,
+    descriptor_sets: &Vec<vk::DescriptorSet>,
+    current_frame: usize,
+    gameobjects: &Vec<GameObject>,
+    ui_renderer: &egui_ash_renderer::Renderer,
+    ui_primitives: &Vec<ClippedPrimitive>,
+) {
+    let begin_info = vk::CommandBufferBeginInfo {
+        ..Default::default()
+    };
+    unsafe {
+        match logical_device.begin_command_buffer(command_buffer, &begin_info) {
+            Ok(some) => {
+                ();
+            }
+            Err(e) => panic!("{:?}", e),
+        }
+    };
+    /*
+            let clear_color = vk::ClearValue {
+                color: vk::ClearColorValue {
+                    float32: [0.0, 0.0, 0.0, 1.0],
+                },
+            };
+    */
+    let clear_values = [
+        vk::ClearValue {
+            color: vk::ClearColorValue {
+                float32: [0.0, 0.0, 0.0, 1.0],
+            },
+        },
+        vk::ClearValue {
+            depth_stencil: vk::ClearDepthStencilValue {
+                depth: 1.0,
+                stencil: 0,
+            },
+        },
+    ];
+    let render_pass_info = vk::RenderPassBeginInfo {
+        render_pass: render_pass,
+        render_area: vk::Rect2D {
+            offset: vk::Offset2D { x: 0, y: 0 },
+            extent: swapchain_extent,
+        },
+        framebuffer: frame_buffers[image_index],
+        clear_value_count: clear_values.len() as u32,
+        p_clear_values: clear_values.as_ptr(),
+        ..Default::default()
+    };
+    unsafe {
+        logical_device.cmd_begin_render_pass(
+            command_buffer,
+            &render_pass_info,
+            vk::SubpassContents::INLINE,
+        );
+        logical_device.cmd_bind_pipeline(command_buffer, vk::PipelineBindPoint::GRAPHICS, pipeline);
+    };
+
+    //Coppied from create_graphics_pipeline if broken check if it matches
+    let viewport = vk::Viewport {
+        x: 0 as f32,
+        y: 0 as f32,
+        width: swapchain_extent.width as f32,
+        height: swapchain_extent.height as f32,
+        min_depth: 0.0,
+        max_depth: 1.0,
+        ..Default::default()
+    };
+
+    let viewports = [viewport];
+    unsafe {
+        logical_device.cmd_set_viewport(command_buffer, 0, &viewports);
+    }
+    let scissor = vk::Rect2D {
+        offset: vk::Offset2D { x: 0, y: 0 },
+        extent: swapchain_extent,
+    };
+    let scissors = [scissor];
+
+    unsafe {
+        logical_device.cmd_set_scissor(command_buffer, 0, &scissors);
+
+        //Added from Vertex Buffer
+        logical_device.cmd_bind_pipeline(command_buffer, vk::PipelineBindPoint::GRAPHICS, pipeline);
+
+        let vertex_buffers = [vertex_buffer];
+        let index_buffers = [index_buffer];
+        let offsets: [vk::DeviceSize; 1] = [0];
+        logical_device.cmd_bind_vertex_buffers(command_buffer, 0, &vertex_buffers, &offsets);
+        logical_device.cmd_bind_index_buffer(
+            command_buffer,
+            index_buffer,
+            0,
+            vk::IndexType::UINT32,
+        );
+
+        logical_device.cmd_bind_descriptor_sets(
+            command_buffer,
+            vk::PipelineBindPoint::GRAPHICS,
+            pipeline_layout,
+            0,
+            &[descriptor_sets[current_frame]], //FIXME shoudl b current_frame but maybe this works?
+            &[],
+        );
+
+        //logical_device.cmd_draw(command_buffer, 3, 1, 0, 0);
+        for i in 0..gameobjects.len() {
+            let gameobject = &gameobjects[i];
+            logical_device.cmd_draw_indexed(
+                command_buffer,
+                gameobject._mesh.index_count,
+                1,
+                gameobject._mesh.first_index,
+                //gameobject._mesh.first_vertex,
+                0,
+                i as u32,
+            );
+        }
+        //ui_renderer.cmd_draw(command_buffer, swapchain_extent, 2);
+
+        //logical_device.cmd_draw_indexed(command_buffer, indices_count, 1, 0, 0, 0);
+        match logical_device.end_command_buffer(command_buffer) {
+            Ok(something) => (),
+            Err(e) => panic!("{}", e),
+        }
+    }
+}
+
 //--------------------VulkanContext Methods----------------
 
 impl VulkanContext {
-    pub fn init_vulkan(&mut self, window: &Window, ui_context: &mut imgui::Context) {
+    pub fn init_vulkan(&mut self, window: &Window) {
         unsafe {
             match Entry::load() {
                 Err(result) => {
@@ -1045,13 +1191,12 @@ impl VulkanContext {
         self.create_image_views();
         self.create_render_pass();
         self.create_ui_render_pass();
+        self.create_ui_renderer();
         self.create_descriptor_set_layout();
         self.create_graphics_pipeline();
         self.create_command_pool();
         self.create_depth_resources();
         self.create_frame_buffers();
-        self.create_ui_frame_buffers();
-        self.create_ui_renderer(ui_context);
         self.create_texture_image();
         self.create_texture_image_view();
         self.create_texture_sampler();
@@ -1076,7 +1221,7 @@ impl VulkanContext {
             logical_device.device_wait_idle();
         }
     }
-    fn create_ui_renderer(&mut self, context: &mut imgui::Context) {
+    fn create_ui_renderer(&mut self) {
         let Some(instance) = &self.instance else {
             panic!();
         };
@@ -1086,29 +1231,20 @@ impl VulkanContext {
         let Some(logical_device) = &self.logical_device else {
             panic!();
         };
-        let Some(ui_render_pass) = self.ui_render_pass else {
+        let Some(render_pass) = self.render_pass else {
             panic!();
         };
-        let Some(graphics_queue) = self.graphics_queue else {
-            panic!();
-        };
-        let Some(command_pool) = self.command_pool else {
-            panic!();
-        };
-        let renderer_result = Renderer::with_default_allocator(
+        let renderer_result = egui_ash_renderer::Renderer::with_default_allocator(
             &instance,
             physical_device,
             logical_device.clone(),
-            graphics_queue,
-            command_pool,
-            ui_render_pass,
-            context,
-            Some(Options {
-                in_flight_frames: MAX_FRAMES_IN_FLIGHT as usize,
-                ..Default::default()
-            }),
+            render_pass,
+            egui_ash_renderer::Options {
+                in_flight_frames: MAX_FRAMES_IN_FLIGHT,
+                enable_depth_test: false,
+                enable_depth_write: false,
+            },
         );
-
         match renderer_result {
             Ok(renderer) => {
                 println!("Created UI renderer");
@@ -1209,7 +1345,6 @@ impl VulkanContext {
         }
     }
     pub fn cleanup(&mut self) {
-        self.ui_renderer = None;
         let Some(instance) = &self.instance else {
             println!("Instance does not exist");
             return;
@@ -1225,7 +1360,6 @@ impl VulkanContext {
         let surface_instance = ash::khr::surface::Instance::new(entry, instance);
 
         unsafe {
-            logical_device.device_wait_idle();
             logical_device.destroy_image_view(self.depth_image_view, None);
             logical_device.destroy_image(self.depth_image, None);
             logical_device.free_memory(self.depth_image_memory, None);
@@ -1266,9 +1400,6 @@ impl VulkanContext {
             for frame_buffer in self.frame_buffers.iter() {
                 logical_device.destroy_framebuffer(*frame_buffer, None);
             }
-            for ui_frame_buffer in self.ui_frame_buffers.iter() {
-                logical_device.destroy_framebuffer(*ui_frame_buffer, None);
-            }
 
             //Buffers
             for i in 0..MAX_FRAMES_IN_FLIGHT {
@@ -1290,11 +1421,7 @@ impl VulkanContext {
             let Some(render_pass) = self.render_pass else {
                 panic!("No render_pass when cleaning up");
             };
-            let Some(ui_render_pass) = self.ui_render_pass else {
-                panic!("No render_pass when cleaning up");
-            };
             logical_device.destroy_render_pass(render_pass, None);
-            logical_device.destroy_render_pass(ui_render_pass, None);
 
             //Pipeline Layout
             let Some(pipeline_layout) = self.pipeline_layout else {
@@ -1693,17 +1820,12 @@ impl VulkanContext {
             for frame_buffer in self.frame_buffers.iter() {
                 logical_device.destroy_framebuffer(*frame_buffer, None);
             }
-            for ui_frame_buffer in self.ui_frame_buffers.iter() {
-                logical_device.destroy_framebuffer(*ui_frame_buffer, None);
-            }
-
             let Some(swapchain) = self.swap_chain else {
                 panic!("No swapchain when cleaning up");
             };
 
             //Clear old lists to avoid dangling pointers
             self.frame_buffers.clear();
-            self.ui_frame_buffers.clear();
             self.swap_chain_image_views.clear();
 
             swapchain_device.destroy_swapchain(swapchain, None);
@@ -1728,7 +1850,6 @@ impl VulkanContext {
             self.create_image_views();
             self.create_depth_resources();
             self.create_frame_buffers();
-            self.create_ui_frame_buffers();
             self.create_graphics_pipeline();
         }
     }
@@ -2117,7 +2238,6 @@ impl VulkanContext {
             dst_access_mask: vk::AccessFlags::COLOR_ATTACHMENT_WRITE
                 | vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_WRITE,
             dependency_flags: vk::DependencyFlags::BY_REGION,
-            src_subpass: vk::SUBPASS_EXTERNAL,
             ..Default::default()
         };
         let subpass = vk::SubpassDescription {
@@ -2205,7 +2325,6 @@ impl VulkanContext {
         let subpass_list: Vec<vk::SubpassDescription> = vec![subpass];
 
         let subpass_dependancy = vk::SubpassDependency {
-            src_subpass: vk::SUBPASS_EXTERNAL,
             dst_subpass: 0,
             src_stage_mask: vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
             dst_stage_mask: vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
@@ -2264,39 +2383,6 @@ impl VulkanContext {
             unsafe {
                 match logical_device.create_framebuffer(&frame_buffer_info, None) {
                     Ok(frame_buffer) => self.frame_buffers.push(frame_buffer),
-                    Err(e) => panic!("{}", e),
-                };
-            }
-        }
-    }
-    fn create_ui_frame_buffers(&mut self) {
-        let Some(ui_render_pass) = self.ui_render_pass else {
-            panic!("No render_pass when calling create_frame_buffers");
-        };
-        let Some(swapchain_extent) = self.swap_chain_extent_used else {
-            panic!("No swap_chain_extent_used when calling create_frame_buffers");
-        };
-        let Some(logical_device) = &self.logical_device else {
-            panic!("No logical_device when calling create_frame_buffers");
-        };
-        let image_views = &self.swap_chain_image_views;
-
-        let swapchain_frame_frame_buffers: Vec<vk::Framebuffer> = Vec::new();
-        let frame_buffer_count = image_views.len();
-        for i in 0..frame_buffer_count {
-            let attatchments: [vk::ImageView; 1] = [image_views[i]];
-            let frame_buffer_info = vk::FramebufferCreateInfo {
-                render_pass: ui_render_pass,
-                attachment_count: attatchments.len() as u32,
-                p_attachments: attatchments.as_ptr(),
-                width: swapchain_extent.width,
-                height: swapchain_extent.height,
-                layers: 1,
-                ..Default::default()
-            };
-            unsafe {
-                match logical_device.create_framebuffer(&frame_buffer_info, None) {
-                    Ok(frame_buffer) => self.ui_frame_buffers.push(frame_buffer),
                     Err(e) => panic!("{}", e),
                 };
             }
@@ -2930,12 +3016,9 @@ impl VulkanContext {
     fn record_command_buffer(
         logical_device: &ash::Device,
         command_buffer: vk::CommandBuffer,
-        graphics_queue: vk::Queue,
-        command_pool: vk::CommandPool,
         render_pass: vk::RenderPass,
         swapchain_extent: vk::Extent2D,
         frame_buffers: &Vec<vk::Framebuffer>,
-        ui_frame_buffers: &Vec<vk::Framebuffer>,
         image_index: usize,
         pipeline: vk::Pipeline,
         vertex_buffer: vk::Buffer,
@@ -2945,8 +3028,8 @@ impl VulkanContext {
         descriptor_sets: &Vec<vk::DescriptorSet>,
         current_frame: usize,
         gameobjects: &Vec<GameObject>,
-        ui_renderer: &mut Renderer,
-        ui_context: &mut imgui::Context,
+        ui_renderer: &mut egui_ash_renderer::Renderer,
+        ui_primitives: &Vec<ClippedPrimitive>,
         ui_render_pass: vk::RenderPass,
     ) {
         let begin_info = vk::CommandBufferBeginInfo {
@@ -2985,7 +3068,6 @@ impl VulkanContext {
             p_clear_values: clear_values.as_ptr(),
             ..Default::default()
         };
-
         unsafe {
             logical_device.cmd_begin_render_pass(
                 command_buffer,
@@ -3023,6 +3105,13 @@ impl VulkanContext {
         unsafe {
             logical_device.cmd_set_scissor(command_buffer, 0, &scissors);
 
+            //Added from Vertex Buffer
+            logical_device.cmd_bind_pipeline(
+                command_buffer,
+                vk::PipelineBindPoint::GRAPHICS,
+                pipeline,
+            );
+
             let vertex_buffers = [vertex_buffer];
             let index_buffers = [index_buffer];
             let offsets: [vk::DeviceSize; 1] = [0];
@@ -3043,6 +3132,7 @@ impl VulkanContext {
                 &[],
             );
 
+            //logical_device.cmd_draw(command_buffer, 3, 1, 0, 0);
             for i in 0..gameobjects.len() {
                 let gameobject = &gameobjects[i];
                 logical_device.cmd_draw_indexed(
@@ -3062,7 +3152,7 @@ impl VulkanContext {
             unsafe {
                 let ui_render_pass_info = vk::RenderPassBeginInfo {
                     render_pass: ui_render_pass,
-                    framebuffer: ui_frame_buffers[image_index],
+                    framebuffer: frame_buffers[image_index],
                     render_area: vk::Rect2D {
                         offset: vk::Offset2D { x: 0, y: 0 },
                         extent: swapchain_extent,
@@ -3071,15 +3161,14 @@ impl VulkanContext {
                     p_clear_values: std::ptr::null(),
                     ..Default::default()
                 };
-
                 logical_device.cmd_begin_render_pass(
                     command_buffer,
                     &ui_render_pass_info,
                     vk::SubpassContents::INLINE,
                 );
 
-                let draw_data = ui_context.render();
-                ui_renderer.cmd_draw(command_buffer, draw_data).unwrap();
+                println!("{}", ui_primitives.len());
+                ui_renderer.cmd_draw(command_buffer, swapchain_extent, 2.0, ui_primitives);
 
                 logical_device.cmd_end_render_pass(command_buffer);
             }
@@ -3133,7 +3222,7 @@ impl VulkanContext {
     pub fn draw_frame(
         &mut self,
         gameobjects: &Vec<GameObject>,
-        ui_context: &mut imgui::Context,
+        ui_primitives: &Vec<ClippedPrimitive>,
         window: &Window,
     ) {
         if (self.frame_buffers.is_empty()) {
@@ -3210,9 +3299,6 @@ impl VulkanContext {
             logical_device
                 .reset_command_buffer(current_command_buffer, vk::CommandBufferResetFlags::empty()); //MIGHT
 
-            let Some(command_pool) = self.command_pool else {
-                panic!();
-            };
             let Some(pipeline_layout) = self.pipeline_layout else {
                 panic!("I need to stop making these enums");
             };
@@ -3222,16 +3308,12 @@ impl VulkanContext {
             let Some(ui_render_pass) = self.ui_render_pass else {
                 panic!();
             };
-
             VulkanContext::record_command_buffer(
                 logical_device,
                 current_command_buffer,
-                graphics_queue,
-                command_pool,
                 render_pass,
                 swapchain_extent,
                 &self.frame_buffers,
-                &self.ui_frame_buffers,
                 image_index,
                 self.graphics_pipelines[0],
                 self.vertex_buffer,
@@ -3242,7 +3324,7 @@ impl VulkanContext {
                 current_frame,
                 gameobjects,
                 ui_renderer,
-                ui_context,
+                ui_primitives,
                 ui_render_pass,
             );
             let wait_semaphores = [current_image_available_semaphore];

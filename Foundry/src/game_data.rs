@@ -12,6 +12,7 @@ pub struct MeshAllocation {
 #[derive(Default, Clone, Copy)]
 pub struct Transform {
     pub position: [f32; 3],
+    pub scale: [f32; 3],
 }
 
 #[derive(Default)]
