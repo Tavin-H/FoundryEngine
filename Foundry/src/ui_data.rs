@@ -48,6 +48,14 @@ impl UIHandler {
                                 }
                 */
             });
+        ui.window("Editor")
+            .size([200.0, 400.0], imgui::Condition::Always)
+            .build(|| {
+                ui.text("Game Object creation");
+                if ui.button("Create new") {
+                    println!("Create a game object");
+                }
+            });
         platform.prepare_render(ui, window);
         context.render();
     }

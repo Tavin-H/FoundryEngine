@@ -48,6 +48,7 @@ use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 use vulkan_headers::vulkan::vulkan::VkExternalMemoryTensorCreateInfoARM;
 use winit::application::ApplicationHandler;
 use winit::dpi::LogicalSize;
+use winit::event::ElementState;
 use winit::event::WindowEvent;
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::window::{self, Window, WindowAttributes, WindowId};
@@ -88,6 +89,7 @@ use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::io::BufReader;
 
+use rand::Rng;
 //Setup winit boilerplate
 #[derive(Default)]
 struct WinitApp {
@@ -106,7 +108,9 @@ impl ApplicationHandler for HelloTriangleApp {
         let Some(context) = &mut self.ui_handler.context else {
             panic!();
         };
+        println!("{}", self.vulkan_context.vertices.len());
         self.vulkan_context.init_vulkan(window, context);
+        println!("{}", self.vulkan_context.vertices.len());
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, id: WindowId, event: WindowEvent) {
@@ -188,7 +192,33 @@ impl ApplicationHandler for HelloTriangleApp {
                 state,
                 button,
             } => {
-                println!("winit mouse input");
+                if state == ElementState::Pressed {
+                    let rng = rand::rng();
+                    let x = rand::random_range(-2.0..2.0);
+                    let y = rand::random_range(-2.0..2.0);
+                    let mut gameobject_example = GameObject {
+                        name: String::from("Example"),
+                        id: 0,
+                        _mesh: MeshAllocation {
+                            index_count: 0, //Hardcoded - change when loading the object
+                            first_index: 0,
+                            first_vertex: 0,
+                        },
+                        transform: Transform {
+                            position: [x, y, 0.0],
+                            scale: [1.0, 1.0, 1.0],
+                        },
+                        ..Default::default()
+                    };
+
+                    self.game_context.instantiate(
+                        gameobject_example,
+                        &mut self.vulkan_context,
+                        true,
+                    );
+
+                    println!("winit mouse input");
+                }
             }
             _ => (),
         }
@@ -334,7 +364,7 @@ impl HelloTriangleApp {
         self.size = winit::dpi::LogicalSize::new(window_width, window_height);
         let event_loop = self.load_window_early();
         self.init_window(event_loop, window_width, window_height);
-        self.vulkan_context.cleanup();
+        //self.vulkan_context.cleanup();
         println!("Shutdown complete");
     }
 
@@ -368,7 +398,6 @@ impl HelloTriangleApp {
     fn instantiate(&mut self, mut gameobject: GameObject) {
         let before_indices = self.vulkan_context.indices.len();
         gameobject._mesh.first_vertex = self.vulkan_context.vertices.len() as i32;
-        //println!("RAHHHHHHHHHHHHHH {:?}", gameobject._mesh.first_index);
         self.vulkan_context.load_model();
         let after_indices = self.vulkan_context.indices.len();
 
@@ -402,7 +431,21 @@ fn main() {
         id: 1,
         transform: Transform {
             position: [1.0, 0.0, 0.0],
-            scale: [10.0, 10.0, 0.5],
+            scale: [1.0, 1.0, 0.5],
+        },
+        ..Default::default()
+    };
+    let mut gameobject_example3 = GameObject {
+        name: String::from("Example"),
+        id: 0,
+        _mesh: MeshAllocation {
+            index_count: 0, //Hardcoded - change when loading the object
+            first_index: 0,
+            first_vertex: 0,
+        },
+        transform: Transform {
+            position: [1.0, 0.0, -2.0],
+            scale: [1.0, 1.0, 1.0],
         },
         ..Default::default()
     };
@@ -414,11 +457,17 @@ fn main() {
         running: false,
         ..Default::default()
     };
-    app.instantiate(gameobject_example_2);
-    app.instantiate(gameobject_example);
+    //app.instantiate(gameobject_example_2);
+    //app.instantiate(gameobject_example);
+    app.game_context
+        .instantiate(gameobject_example_2, &mut app.vulkan_context, false);
+    println!("1: {:?}", app.game_context.game_objects[0]._mesh);
+
+    app.game_context
+        .instantiate(gameobject_example, &mut app.vulkan_context, false);
+    println!("1: {:?}", app.game_context.game_objects[1]._mesh);
     app.run(800.0, 800.0);
 }
 
 //TODO to expand
 //Put all buffers in one buffer with offsets for cache friendly design
-//

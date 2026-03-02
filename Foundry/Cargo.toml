@@ -19,6 +19,7 @@ gpu-allocator = "0.28.0"
 imgui = "0.12.0"
 imgui-winit-support = "0.13.0"
 imgui-rs-vulkan-renderer = "1.16.0"
+rand = "0.10.0"
 
 [dependencies.vulkan-headers]
 version = "0.1.1+1.4.336"
