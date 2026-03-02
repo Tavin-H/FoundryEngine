@@ -27,8 +27,6 @@ use crate::vulkan_data::{UniformBufferObject, VulkanContext};
 //UI Handler
 mod ui_data;
 use crate::ui_data::UIHandler;
-use egui;
-use egui_winit;
 
 //------------------Vulkan----------------------
 //Constants
@@ -404,7 +402,7 @@ fn main() {
         id: 1,
         transform: Transform {
             position: [1.0, 0.0, 0.0],
-            scale: [1.0, 1.0, 3.0],
+            scale: [10.0, 10.0, 0.5],
         },
         ..Default::default()
     };

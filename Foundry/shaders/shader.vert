@@ -11,7 +11,7 @@ struct Transform {
 	mat4 pos;
 };
 
-layout(std430, set = 0, binding = 2) buffer TransformBuffer {
+layout(std430, set = 0, binding = 2) readonly buffer TransformBuffer {
 	mat4 transforms[];
 } tra;
 

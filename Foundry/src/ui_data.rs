@@ -38,6 +38,7 @@ impl UIHandler {
 
         ui.window("Foundry Engine Debug Window")
             .position([0.0, 0.0], imgui::Condition::Always)
+            .size([100.0, 20.0], Condition::Always)
             .no_decoration()
             .build(|| {
                 ui.text(format!("FPS: {:.1}", fps));
