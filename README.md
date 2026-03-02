@@ -15,7 +15,10 @@ Current supported OS:
 - MacOS (only intel tested)
 - Linux support coming soon
 
-<u>Recent Milestone: Loaded a 3D objec from a .obj file (Feb 21)</u>
+Recent Milestone: Multiple objects in a scene as well as UI element for displaying fps (March 1)
+<img width="1000" height="1031" alt="fps counter" src="https://github.com/user-attachments/assets/1bcda4dc-9d07-4b2c-8fce-d876c8505c5f" />
+
+Past Milestone: Loaded a 3D objec from a .obj file (Feb 21)
 <img width="747" height="1028" alt="Object Example" src="https://github.com/user-attachments/assets/e00c756a-17e6-420e-9180-1c8acbac72e2" />
 
 Past Milestone: Added a texture image to the rotating plane (Feb 17)
