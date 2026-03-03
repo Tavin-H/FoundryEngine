@@ -13,6 +13,10 @@
 #![allow(unused)]
 
 //-----------Foundry Engine Modules------------
+//Delagator (very important)
+mod delegator;
+use crate::delegator::Delagator;
+
 //Game Data
 mod game_data;
 use crate::game_data::GameContext;
@@ -105,22 +109,20 @@ impl ApplicationHandler for HelloTriangleApp {
         };
         //println!("init ui");
         //self.ui_handler.init(window);
-        let Some(context) = &mut self.ui_handler.context else {
+        let Some(context) = &mut self.delegator.ui_handler.context else {
             panic!();
         };
-        println!("{}", self.vulkan_context.vertices.len());
-        self.vulkan_context.init_vulkan(window, context);
-        println!("{}", self.vulkan_context.vertices.len());
+        self.delegator.vulkan_context.init_vulkan(window, context);
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, id: WindowId, event: WindowEvent) {
         let Some(window) = &self.window else {
             panic!("");
         };
-        let Some(platform) = &mut self.ui_handler.platform else {
+        let Some(platform) = &mut self.delegator.ui_handler.platform else {
             panic!();
         };
-        let Some(context) = &mut self.ui_handler.context else {
+        let Some(context) = &mut self.delegator.ui_handler.context else {
             panic!();
         };
         let event_wrapper: winit::event::Event<()> = winit::event::Event::WindowEvent {
@@ -128,42 +130,12 @@ impl ApplicationHandler for HelloTriangleApp {
             event: event.clone(),
         };
         platform.handle_event(context.io_mut(), window, &event_wrapper);
-        //let ui_response = state.on_window_event(&window, &event);
-        //Optimization?
-        /*
-                if (ui_response.consumed) {
-                    match event {
-                        WindowEvent::KeyboardInput {
-                            device_id,
-                            event,
-                            is_synthetic,
-                        } => return,
-                        WindowEvent::CursorMoved {
-                            device_id,
-                            position,
-                        } => return,
-                        WindowEvent::MouseWheel {
-                            device_id,
-                            delta,
-                            phase,
-                        } => return,
-                        WindowEvent::MouseInput {
-                            device_id,
-                            state,
-                            button,
-                        } => return,
-                        _ => (),
-                    }
-                    return;
-        if (ui_response.consumed) {
-            return;
-        } else {
-        */
+
         match event {
             WindowEvent::CloseRequested => {
                 self.closing = true;
                 event_loop.exit();
-                self.vulkan_context.wait_idle();
+                self.delegator.vulkan_context.wait_idle();
             }
             WindowEvent::RedrawRequested => {
                 self.window.as_ref().unwrap();
@@ -174,7 +146,7 @@ impl ApplicationHandler for HelloTriangleApp {
                     return;
                 }
                 //self.window_resized = true;
-                self.vulkan_context.window_resized = true;
+                self.delegator.vulkan_context.window_resized = true;
             }
             WindowEvent::KeyboardInput {
                 device_id,
@@ -193,31 +165,31 @@ impl ApplicationHandler for HelloTriangleApp {
                 button,
             } => {
                 if state == ElementState::Pressed {
-                    let rng = rand::rng();
-                    let x = rand::random_range(-2.0..2.0);
-                    let y = rand::random_range(-2.0..2.0);
-                    let mut gameobject_example = GameObject {
-                        name: String::from("Example"),
-                        id: 0,
-                        _mesh: MeshAllocation {
-                            index_count: 0, //Hardcoded - change when loading the object
-                            first_index: 0,
-                            first_vertex: 0,
-                        },
-                        transform: Transform {
-                            position: [x, y, 0.0],
-                            scale: [1.0, 1.0, 1.0],
-                        },
-                        ..Default::default()
-                    };
+                    /*
+                                        let rng = rand::rng();
+                                        let x = rand::random_range(-2.0..2.0);
+                                        let y = rand::random_range(-2.0..2.0);
+                                        let mut gameobject_example = GameObject {
+                                            name: String::from("Example"),
+                                            id: 0,
+                                            _mesh: MeshAllocation {
+                                                index_count: 0, //Hardcoded - change when loading the object
+                                                first_index: 0,
+                                                first_vertex: 0,
+                                            },
+                                            transform: Transform {
+                                                position: [x, y, 0.0],
+                                                scale: [1.0, 1.0, 1.0],
+                                            },
+                                            ..Default::default()
+                                        };
 
-                    self.game_context.instantiate(
-                        gameobject_example,
-                        &mut self.vulkan_context,
-                        true,
-                    );
-
-                    println!("winit mouse input");
+                                        self.game_context.instantiate(
+                                            gameobject_example,
+                                            &mut self.vulkan_context,
+                                            true,
+                                        );
+                    */
                 }
             }
             _ => (),
@@ -227,38 +199,54 @@ impl ApplicationHandler for HelloTriangleApp {
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
         // update logic here
         if (!self.closing) {
-            let mut avg_delta_time = self.game_context.calculate_delta_time();
+            self.delegator.check_states();
+            let mut avg_delta_time = self.delegator.game_context.calculate_delta_time();
             self.frame_count += 1;
             if self.frame_count > 1000 {
                 self.frame_count = 0;
                 self.fps = 1.0 / avg_delta_time;
             }
-            if (!self.vulkan_context.running) {
+
+            if (!self.delegator.vulkan_context.running) {
                 avg_delta_time = 0.0;
             }
-            if (self.game_context.game_objects[0].transform.position[2] > 1.0) {
+            if (self.delegator.game_context.game_objects[0]
+                .transform
+                .position[2]
+                > 1.0)
+            {
                 self.rising = false;
             }
-            if (self.game_context.game_objects[0].transform.position[2] < -1.0) {
+            if (self.delegator.game_context.game_objects[0]
+                .transform
+                .position[2]
+                < -1.0)
+            {
                 self.rising = true;
             }
             if (!self.rising) {
-                self.game_context.game_objects[0].transform.position[2] -= 1.0 * avg_delta_time;
+                self.delegator.game_context.game_objects[0]
+                    .transform
+                    .position[2] -= 1.0 * avg_delta_time;
             } else {
-                self.game_context.game_objects[0].transform.position[2] += 1.0 * avg_delta_time;
+                self.delegator.game_context.game_objects[0]
+                    .transform
+                    .position[2] += 1.0 * avg_delta_time;
             }
-            //////
-            if (self.game_context.game_objects[1].transform.position[2] > 1.0) {
-                self.rising2 = false;
-            }
-            if (self.game_context.game_objects[1].transform.position[2] < -1.0) {
-                self.rising2 = true;
-            }
-            if (!self.rising2) {
-                self.game_context.game_objects[1].transform.position[2] -= 3.0 * avg_delta_time;
-            } else {
-                self.game_context.game_objects[1].transform.position[2] += 3.0 * avg_delta_time;
-            }
+            /*
+                        //////
+                        if (self.game_context.game_objects[1].transform.position[2] > 1.0) {
+                            self.rising2 = false;
+                        }
+                        if (self.game_context.game_objects[1].transform.position[2] < -1.0) {
+                            self.rising2 = true;
+                        }
+                        if (!self.rising2) {
+                            self.game_context.game_objects[1].transform.position[2] -= 3.0 * avg_delta_time;
+                        } else {
+                            self.game_context.game_objects[1].transform.position[2] += 3.0 * avg_delta_time;
+                        }
+            */
 
             //println!("{} {}", delta_time, self.running);
 
@@ -266,13 +254,16 @@ impl ApplicationHandler for HelloTriangleApp {
             let Some(window) = &self.window else {
                 panic!("");
             };
-            self.ui_handler.record_ui_data(window, self.fps);
-            let Some(ui_context) = &mut self.ui_handler.context else {
+            self.delegator.ui_handler.record_ui_data(window, self.fps);
+            let Some(ui_context) = &mut self.delegator.ui_handler.context else {
                 panic!();
             };
 
-            self.vulkan_context
-                .draw_frame(&self.game_context.game_objects, ui_context, window);
+            self.delegator.vulkan_context.draw_frame(
+                &self.delegator.game_context.game_objects,
+                ui_context,
+                window,
+            );
 
             if let Some(window) = &self.window {
                 window.request_redraw();
@@ -326,14 +317,11 @@ fn print_cstring_as_i8(c_string: &CString, size: i8) {
 
 //Vulkan app struct that ties everything together (winit, vulkan, and game engine stuff in the
 //future)
-#[derive(Default)]
 struct HelloTriangleApp {
     window: Option<Window>,
     size: winit::dpi::LogicalSize<f64>,
     event_loop: Option<EventLoop<()>>,
-    vulkan_context: VulkanContext,
-    game_context: GameContext,
-    ui_handler: UIHandler,
+    delegator: Delagator,
     closing: bool,
     running: bool,
 
@@ -342,9 +330,27 @@ struct HelloTriangleApp {
 
     minimized: bool,
     window_resized: bool,
-    start_time: Option<std::time::Instant>,
     frame_count: u64,
     fps: f32,
+}
+impl Default for HelloTriangleApp {
+    fn default() -> Self {
+        let delegator = Delagator::new(VulkanContext::new(), GameContext::new(), UIHandler::new());
+        Self {
+            delegator: delegator,
+            window: None,
+            size: winit::dpi::LogicalSize::new(800.0, 600.0),
+            event_loop: None,
+            closing: false,
+            running: false,
+            rising: false,
+            rising2: false,
+            minimized: false,
+            window_resized: false,
+            frame_count: 0,
+            fps: 0.0,
+        }
+    }
 }
 //Holds all vulkan objects in a single struct to controll lifetimes more precisely
 struct SwapChainSupportDetails {
@@ -360,6 +366,7 @@ struct QueueFamilyIndices {
 }
 
 impl HelloTriangleApp {
+    fn init(&mut self) {}
     fn run(&mut self, window_width: f64, window_height: f64) {
         self.size = winit::dpi::LogicalSize::new(window_width, window_height);
         let event_loop = self.load_window_early();
@@ -382,7 +389,7 @@ impl HelloTriangleApp {
         //self.window = Some(event_loop.create_window(window_attributes).unwrap());
         match event_loop.create_window(window_attributes) {
             Ok(window) => {
-                self.ui_handler.init(&window);
+                self.delegator.ui_handler.init(&window);
                 self.window = Some(window);
             }
             Err(e) => panic!("{}", e),
@@ -395,6 +402,7 @@ impl HelloTriangleApp {
         event_loop.run_app(self);
     }
 
+    /*
     fn instantiate(&mut self, mut gameobject: GameObject) {
         let before_indices = self.vulkan_context.indices.len();
         gameobject._mesh.first_vertex = self.vulkan_context.vertices.len() as i32;
@@ -405,6 +413,7 @@ impl HelloTriangleApp {
         gameobject._mesh.index_count = (after_indices - before_indices) as u32;
         self.game_context.game_objects.push(gameobject);
     }
+    */
 }
 fn main() {
     let start_time = std::time::Instant::now();
@@ -451,21 +460,25 @@ fn main() {
     };
 
     let mut app: HelloTriangleApp = HelloTriangleApp {
-        start_time: Some(start_time),
         rising: false,
         rising2: true,
         running: false,
         ..Default::default()
     };
-    //app.instantiate(gameobject_example_2);
-    //app.instantiate(gameobject_example);
-    app.game_context
-        .instantiate(gameobject_example_2, &mut app.vulkan_context, false);
-    println!("1: {:?}", app.game_context.game_objects[0]._mesh);
+    //let delegator = Delagator::new(vulkan, game, ui);
+    app.delegator.game_context.instantiate(
+        gameobject_example_2,
+        &mut app.delegator.vulkan_context,
+        false,
+    );
+    println!("1: {:?}", app.delegator.game_context.game_objects[0]._mesh);
 
-    app.game_context
-        .instantiate(gameobject_example, &mut app.vulkan_context, false);
-    println!("1: {:?}", app.game_context.game_objects[1]._mesh);
+    app.delegator.game_context.instantiate(
+        gameobject_example,
+        &mut app.delegator.vulkan_context,
+        false,
+    );
+    println!("1: {:?}", app.delegator.game_context.game_objects[1]._mesh);
     app.run(800.0, 800.0);
 }
 

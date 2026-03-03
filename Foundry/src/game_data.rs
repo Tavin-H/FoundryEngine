@@ -1,9 +1,9 @@
-use std::{collections::VecDeque, time};
+use std::{collections::VecDeque, io::Seek, time};
 
 use crate::vulkan_data::VulkanContext;
 use nalgebra_glm::{self as glm};
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 pub struct MeshAllocation {
     pub index_count: u32,
     pub first_index: u32,
@@ -16,7 +16,7 @@ pub struct Transform {
     pub scale: [f32; 3],
 }
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 pub struct GameObject {
     pub id: u32,
     pub name: String,
@@ -45,6 +45,11 @@ impl Default for GameContext {
 }
 
 impl GameContext {
+    pub fn new() -> Self {
+        Self {
+            ..Default::default()
+        }
+    }
     pub fn calculate_delta_time(&mut self) -> f32 {
         let mut delta_time = (time::Instant::now() - self.delta_time_previous_frame).as_nanos()
             as f32

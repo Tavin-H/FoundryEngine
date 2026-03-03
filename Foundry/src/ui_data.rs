@@ -8,13 +8,38 @@ use imgui::*;
 use imgui_winit_support::{HiDpiMode, WinitPlatform};
 
 use winit::window::{self, Window};
-#[derive(Default)]
+
+use crate::game_data::GameObject;
+use crate::game_data::Transform;
+
+//'jobs' that can be done
+pub enum UIState {
+    None,
+    InstatiateObject(GameObject),
+}
+
 pub struct UIHandler {
     pub context: Option<imgui::Context>,
     pub platform: Option<WinitPlatform>,
+    pub state: UIState,
+}
+
+impl Default for UIHandler {
+    fn default() -> Self {
+        Self {
+            context: None,
+            platform: None,
+            state: UIState::None,
+        }
+    }
 }
 
 impl UIHandler {
+    pub fn new() -> Self {
+        Self {
+            ..Default::default()
+        }
+    }
     pub fn init(&mut self, window: &Window) {
         let mut context = imgui::Context::create();
         context.set_ini_filename(None); // disable imgui.ini file
@@ -53,7 +78,20 @@ impl UIHandler {
             .build(|| {
                 ui.text("Game Object creation");
                 if ui.button("Create new") {
-                    println!("Create a game object");
+                    let rng = rand::rng();
+                    let x = rand::random_range(-2.0..2.0);
+                    let y = rand::random_range(-2.0..2.0);
+                    let mut gameobject = GameObject {
+                        name: String::from("Example"),
+                        id: 0,
+                        transform: Transform {
+                            position: [x, y, 0.0],
+                            scale: [1.0, 1.0, 1.0],
+                        },
+                        ..Default::default()
+                    };
+                    self.state = UIState::InstatiateObject(gameobject);
+                    println!("Set state to create");
                 }
             });
         platform.prepare_render(ui, window);

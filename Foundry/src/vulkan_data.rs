@@ -1022,6 +1022,12 @@ fn print_cstring_as_i8(c_string: &CString, size: i8) {
 //--------------------VulkanContext Methods----------------
 
 impl VulkanContext {
+    pub fn new() -> Self {
+        VulkanContext {
+            ..Default::default()
+        }
+    }
+
     pub fn init_vulkan(&mut self, window: &Window, ui_context: &mut imgui::Context) {
         unsafe {
             match Entry::load() {
@@ -3232,7 +3238,6 @@ impl VulkanContext {
                 panic!();
             };
 
-            println!("{}", self.indices.len());
             VulkanContext::record_command_buffer(
                 logical_device,
                 current_command_buffer,
