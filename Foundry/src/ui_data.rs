@@ -22,6 +22,7 @@ pub struct UIHandler {
     pub context: Option<imgui::Context>,
     pub platform: Option<WinitPlatform>,
     pub state: UIState,
+    x_val: f32,
 }
 
 impl Default for UIHandler {
@@ -30,6 +31,7 @@ impl Default for UIHandler {
             context: None,
             platform: None,
             state: UIState::None,
+            x_val: 0.0,
         }
     }
 }
@@ -74,7 +76,7 @@ impl UIHandler {
                 */
             });
         ui.window("Editor")
-            .size([200.0, 400.0], imgui::Condition::Always)
+            .size([250.0, 400.0], imgui::Condition::Always)
             .build(|| {
                 ui.text("Game Object creation");
                 if ui.button("Create new") {
@@ -93,6 +95,23 @@ impl UIHandler {
                     self.state = UIState::InstatiateObject(gameobject);
                     println!("Set state to create");
                 }
+                ui.set_next_item_width(50.0);
+                imgui::Drag::new("x")
+                    .speed(0.01)
+                    .range(-2.0, 2.0)
+                    .build(ui, &mut self.x_val);
+                ui.same_line();
+                ui.set_next_item_width(50.0);
+                imgui::Drag::new("y")
+                    .speed(0.01)
+                    .range(-2.0, 2.0)
+                    .build(ui, &mut self.x_val);
+                ui.same_line();
+                ui.set_next_item_width(50.0);
+                imgui::Drag::new("z")
+                    .speed(0.01)
+                    .range(-2.0, 2.0)
+                    .build(ui, &mut self.x_val);
             });
         platform.prepare_render(ui, window);
         context.render();

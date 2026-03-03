@@ -32,9 +32,4 @@ impl Delagator {
 
         self.ui_handler.state = UIState::None;
     }
-
-    fn simple_call_test(self) {
-        println!("{}", self.game_context.game_objects.len());
-        println!("{}", self.vulkan_context.indices.len());
-    }
 }
