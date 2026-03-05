@@ -26,6 +26,7 @@ impl Delagator {
                 println!("UI state is create");
                 self.game_context
                     .instantiate(gameobject.clone(), &mut self.vulkan_context, true);
+                self.ui_handler.game_objects.push(gameobject.clone());
             }
             UIState::None => {}
         }
