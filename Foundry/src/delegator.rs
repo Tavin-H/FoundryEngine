@@ -21,6 +21,10 @@ impl Delagator {
     }
 
     pub fn check_states(&mut self) {
+        self.check_ui_state();
+    }
+
+    pub fn check_ui_state(&mut self) {
         match &self.ui_handler.state {
             UIState::InstatiateObject(gameobject) => {
                 println!("UI state is create");

@@ -24,6 +24,8 @@ use crate::game_data::GameObject;
 use crate::game_data::MeshAllocation;
 use crate::game_data::Transform;
 
+mod ECS;
+
 //Vulkan Data
 mod vulkan_data;
 use crate::vulkan_data::{UniformBufferObject, VulkanContext};
