@@ -1,11 +1,5 @@
-           ______                    _               ______             _
-          |  ____|                  | |             |  ____|           (_)
-          | |__ ___  _   _ _ __   __| |_ __ _   _   | |__   _ __   __ _ _ _ __   ___
-          |  __/ _ \| | | | '_ \ / _` | '__| | | |  |  __| | '_ \ / _` | | '_ \ / _ \
-          | | | (_) | |_| | | | | (_| | |  | |_| |  | |____| | | | (_| | | | | |  __/
-          |_|  \___/ \__,_|_| |_|\__,_|_|   \__, |  |______|_| |_|\__, |_|_| |_|\___|
-                                             __/ |                 __/ |
-                                            |___/                 |___/
+<img width="5679" height="2227" alt="Foundry Banner" src="https://github.com/user-attachments/assets/428e4a52-ee6b-44eb-9215-e08f3b5d802f" />
+
 A lightweight graphics engine using Rust and VulkanAPI. In the future I plan to expand this into a full game engine.
 
 The main goal of this project was to teach myself about computer graphics, as well as give myself a way to work on game ideas without relying on Unity/Unreal.
