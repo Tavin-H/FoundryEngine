@@ -4,6 +4,8 @@ use std::any::TypeId;
 use std::collections::HashMap;
 use std::hash::Hash;
 
+use ash::vk::PipelineLayout;
+
 //Type Aliases
 type EntityID = u64;
 type ComponentID = u64;
@@ -17,34 +19,37 @@ struct EntityRecord {
 }
 
 struct EntityBuilder {
-    required_components: Vec<Box<dyn Any>>,
+    id: EntityID,
+    pending_components: Vec<TypeId>,
 }
 
 impl EntityBuilder {
-    fn with<T: Component>(self, component: T) -> Self {
-        //self.required_components.push(Box::new(component));
+    fn with<T: Component + 'static>(mut self, component: T) -> Self {
+        let id = TypeId::of::<T>();
+        self.pending_components.push(id);
         self
     }
 
-    fn build(self) {
+    fn build(self) -> EntityID {
+        //Find archetype / create if non existing
+        //Populate Archetype
+        //Make an entity record (last?)
         println!("Building");
+        self.id
     }
 }
 
 //------Components
-trait Component {
-    fn get_id(&self) -> u64;
-}
+trait Component {}
 struct Health {
-    component_id: u64,
+    current: u32,
+    max: u32,
 }
-impl Component for Health {
-    fn get_id(&self) -> u64 {
-        self.component_id
-    }
-}
-
 struct Position {}
+
+impl Component for Position {}
+impl Component for Health {}
+
 //---------------
 
 //Columns will map a TypeId to a box containing the vector of associated components
@@ -84,6 +89,8 @@ struct World {
 
     //Used to find the archetypes that contain a component (used for systems)
     component_index: HashMap<ComponentID, ArchetypeSet>,
+
+    registry: TypeRegister,
 }
 
 type ColumnCreator = fn() -> Box<dyn Any>;
@@ -102,13 +109,38 @@ impl TypeRegister {
 }
 
 impl World {
-    fn create(&mut self) {
-        //Create logic
+    fn spawn(&mut self) -> EntityBuilder {
+        let new_entity = EntityBuilder {
+            id: self.next_available_entity_id,
+            pending_components: Vec::new(),
+        };
+        //Eventually change this to an ID pool?
         self.next_available_entity_id += 1;
+
+        new_entity
+    }
+
+    //Example:
+    fn spawn_player(mut self) {
+        let player = self
+            .spawn()
+            .with::<Position>(Position {})
+            .with::<Health>(Health {
+                current: 20,
+                max: 20,
+            })
+            .build();
     }
 
     fn locate_archetype(components: Vec<Box<dyn Any>>) {
         for component in components {}
+    }
+
+    fn ensure_registered<T: 'static>(&mut self) {
+        let id: TypeId = TypeId::of::<T>();
+        if (!self.registry.column_creators.contains_key(&id)) {
+            self.registry.register::<T>();
+        }
     }
 
     fn generate_archetype_signature(components: Vec<Box<dyn Any>>) -> Vec<TypeId> {
