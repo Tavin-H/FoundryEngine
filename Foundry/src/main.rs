@@ -381,7 +381,7 @@ impl HelloTriangleApp {
     //Depreciated code is using EventLoop<> instead of ActiveEventLoop
     fn load_window_early(&mut self) -> EventLoop<()> {
         println!("Loaded window");
-        let icon_path = String::from("F-example.jpg");
+        let icon_path = String::from("Foundry-Icon.png");
         let icon = load_icon(&icon_path);
         let mut window_attributes = Window::default_attributes()
             .with_title("Foundry Engine")
