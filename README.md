@@ -1,14 +1,110 @@
-<img width="5679" height="2227" alt="Foundry Banner" src="https://github.com/user-attachments/assets/428e4a52-ee6b-44eb-9215-e08f3b5d802f" />
 
+<img width="5679" height="1917" alt="Foundry Banner" src="https://github.com/user-attachments/assets/64d3b090-c955-423a-b90a-34f8d6db500d" />
+
+# FoundryEngine
+<p align="center">
+  <img src="https://img.shields.io/badge/Rust-red?style=for-the-badge&logo=rust" />
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="https://img.shields.io/badge/Vulkan-DC143C?style=for-the-badge&logo=Vulkan" />
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="https://img.shields.io/badge/Version-pre--alpha-white?style=for-the-badge&logo=Git&logoColor=white&labelColor=2d3146&color=%234cb083" />
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="https://img.shields.io/badge/License-MIT-white?style=for-the-badge&labelColor=2d3146&color=yellow" />
+
+</p>
+
+
+## 📝Description
 A lightweight graphics engine using Rust and VulkanAPI. In the future I plan to expand this into a full game engine.
 
 The main goal of this project was to teach myself about computer graphics, as well as give myself a way to work on game ideas without relying on Unity/Unreal.
 
-Current supported OS:
+---
+## ⚡ Game Engine Features:
+
+### General
+* Custom 3D graphics engine
+* Input handeling with Winit
+* UI system
+
+### ECS (Entity Component System)
+* Data oriented design to allow for super fast and efficient system lookups
+* Add components to game objects (represented as 'Game Entities')
+
+### Scene Manager
+* Instantiate game objects
+* Set the position of game objects
+
+---
+## 🖥️ Current supported Operating Systems:
 - Windows 10/11
 - MacOS (only intel tested)
-- Linux support coming soon
+> Linux support coming soon
 
+---
+## 🚀 Usage
+
+Clone the repo
+```
+git clone https://github.com/your-username/FoundryEngine.git
+```
+Make sure to cd into foundry
+```
+cd clone-location/FoundryEngine/Foundry
+```
+
+Run the demo scene
+```
+cargo run --release
+```
+> Note: Foundry is still in pre-beta and isn't ready to make full games with. Check out the roadmap to see when new features are coming.
+
+---
+## 🛠️ Tools
+I've chosen each of my tools for specific reasons as stated below.
+
+| Tool | Choice | Why |
+| :--- | :--- | :--- |
+| **Programming Language** | Rust |• As fast as the competitors (like C & C++) <br> • Superior memory management <br> • Fast to develop in comparison to competitors |
+| **Graphics API** | Vulkan | • Newer, more modern API compared to others like OpenGLNewer, more modern API compared to others like OpenGL <br> • Platform agnostic <br> • Extremely customizable <br> • Lets me get my hands dirty and learn as much as possible|
+| **Window Manager** | Winit |• Cross platform <br> • Written in Rust <br> • Easy window events to use for input handeling <br> • Easy integration with ImGUI|
+---
+## 🗺️ Roadmap
+### Features currently in development
+* Custom components
+
+### Features to come
+* Drag and drop mesh files to use for game objects
+* Scene graph in scene manager
+* Adjusting game object positions from scene graph
+* Attaching scripts to game objects
+* Lighting engine
+* UI manager to use in scripts
+* Sound manager to use in scripts
+
+---
+## 👷 Contributing
+First off, thank you for considering contributing! I'm happy to have others involved in the project.
+
+#### How to get started
+1. Check the Issues: See if what you want to work on is already being discussed.
+
+2. Start a Conversation: Open a new issue or comment on an existing one to pitch your idea.
+
+3. Fork & Branch: Once we've touched base, feel free to fork the repo and create a descriptive branch.
+
+4. Submit a PR: Reference your issue in the Pull Request description.
+
+> Small fixes (like typos or minor bugs) are always welcome as direct Pull Requests!
+
+---
+## 🆘 Support
+### Options
+1. Open a Github issue and I will work to fix it as soon as possible.
+2. Use Discussions to get my attention
+
+---
+## 📜 History
 Recent Milestone: Multiple objects in a scene as well as UI element for displaying fps (March 1)
 <img width="1000" height="1031" alt="fps counter" src="https://github.com/user-attachments/assets/1bcda4dc-9d07-4b2c-8fce-d876c8505c5f" />
 
@@ -23,25 +119,6 @@ Past Milestone: Made a rotating 3d square thats off-center of the origin with a 
 
 Past milestone: Drawing a shaded triangle on the screen as seen below (Jan 15, 2026).
 <img width="995" height="778" alt="foundry" src="https://github.com/user-attachments/assets/f8d3799e-a5ca-4a49-83db-b6776b08c7fc" />
-
-<u>Game Engine Features:</u>
-You can:
-* Instantiate game objects
-* Set the position of game objects
-
-<u>Tools</u>
-I've chosen each of my tools for specific reasons as stated below.
-* winit (window manager)
-  - Cross platform
-  - Easy window events which will allow me to expand this project into a game engine
-* Rust (programming language)
-  - As fast as the competitors (like C & C++)
-  - Superior memory management
-  - Fast to develop in compared to competitors
-* Vulkan
-  - Newer, more modern API compared to others like OpenGL
-  - Extremely customizable
-  - Lets me get my hands dirty and learn as much as possible
 
 For those of you wanting to create a similar project, or just want to know how vulkan works, I've created some documentation of this project with obsidian. So far I've explained all the interactions between the Vulkan Objects and the significance of each one, but I will keep these notes updated as I progress.
 - Documentation is pretty outdated but I plan to update it ASAP - 
