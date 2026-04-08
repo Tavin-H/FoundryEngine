@@ -9,26 +9,27 @@
   &nbsp;&nbsp;&nbsp;&nbsp;
   <img src="https://img.shields.io/badge/Version-pre--alpha-white?style=for-the-badge&logo=Git&logoColor=white&labelColor=2d3146&color=%234cb083" />
   &nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="https://img.shields.io/badge/Downloads-17-white?style=for-the-badge&labelColor=2d3146&color=blue" />
+   &nbsp;&nbsp;&nbsp;&nbsp;
   <img src="https://img.shields.io/badge/License-MIT-white?style=for-the-badge&labelColor=2d3146&color=yellow" />
-
 </p>
 
 
 ## 📝Description
-A lightweight graphics engine using Rust and VulkanAPI. In the future I plan to expand this into a full game engine.
+A lightweight, open-source game engine written in Rust and using Vulkan API. 
 
-The main goal of this project was to teach myself about computer graphics, as well as give myself a way to work on game ideas without relying on Unity/Unreal.
+The main goal of this project was to teach myself computer graphics and give myself a way to work on game ideas without relying on Unity/Unreal.
 
 ---
 ## ⚡ Game Engine Features:
 
 ### General
 * Custom 3D graphics engine
-* Input handeling with Winit
+* Input handling with Winit
 * UI system
 
 ### ECS (Entity Component System)
-* Data oriented design to allow for super fast and efficient system lookups
+* Data-oriented design to allow for super-fast and efficient system lookups
 * Add components to game objects (represented as 'Game Entities')
 
 ### Scene Manager
@@ -67,7 +68,7 @@ I've chosen each of my tools for specific reasons as stated below.
 | :--- | :--- | :--- |
 | **Programming Language** | Rust |• As fast as the competitors (like C & C++) <br> • Superior memory management <br> • Fast to develop in comparison to competitors |
 | **Graphics API** | Vulkan | • Newer, more modern API compared to others like OpenGLNewer, more modern API compared to others like OpenGL <br> • Platform agnostic <br> • Extremely customizable <br> • Lets me get my hands dirty and learn as much as possible|
-| **Window Manager** | Winit |• Cross platform <br> • Written in Rust <br> • Easy window events to use for input handeling <br> • Easy integration with ImGUI|
+| **Window Manager** | Winit |• Cross platform <br> • Written in Rust <br> • Easy window events to use for input handling <br> • Easy integration with ImGUI|
 ---
 ## 🗺️ Roadmap
 ### Features currently in development
