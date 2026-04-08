@@ -16,39 +16,54 @@ type ArchetypeSignature = Vec<TypeId>;
 //Structs
 struct EntityRecord {
     row_index: usize,
-    archetype_id: ArchetypeID,
+    archetype_signature: ArchetypeSignature,
 }
 
-struct EntityBuilder {
+pub struct EntityBuilder {
     id: EntityID,
-    pending_components: Vec<TypeId>,
+    //Making this obsolete
+    //pending_components: HashMap<TypeId, Box<dyn Any>>,
+    signature: Vec<TypeId>,
+    //Box because Size of dyn Fn is not known at compile time
+    push_component_functions: Vec<Box<dyn Fn(&mut Archetype)>>,
 }
 
 impl EntityBuilder {
     fn with<T: Component + 'static>(mut self, component: T) -> Self {
         let id = TypeId::of::<T>();
-        self.pending_components.push(id);
+        let push_function = |archetype: &mut Archetype| {
+            let id = TypeId::of::<T>();
+            let column = archetype.columns.get_mut(&id).expect("Push function fail");
+            let downcast_column = column.downcast_mut::<Vec<T>>();
+        };
+        self.push_component_functions.push(Box::new(push_function));
+        self.signature.push(id);
         self
     }
 
     fn build(self, world: &mut World) -> EntityID {
         //Find archetype / create if non existing
+        //Populate Archetype
+        //Make an entity record (last?)
         //
-        let signature = Archetype::generate_signature(&self.pending_components);
+        //let ids: Vec<TypeId> = self.pending_components.keys().cloned().collect();
+        let signature = Archetype::generate_signature(&self.signature);
         match world.archetype_index.get(&signature) {
             Some(archetype) => {}
             None => {
                 world.build_archetype(&signature);
             }
         }
-        let Some(archetype) = world.archetype_index.get(&signature) else {
+        let Some(archetype) = world.archetype_index.get_mut(&signature) else {
             panic!("Failed to generate or get archetype");
         };
-        //archetype.add_entity WIP
+        let row_index = archetype.add_entity(self.id, self.push_component_functions);
 
-        //Populate Archetype
-
-        //Make an entity record (last?)
+        let record = EntityRecord {
+            archetype_signature: signature,
+            row_index: row_index,
+        };
+        world.entity_index.insert(self.id, record);
 
         println!("Building");
         self.id
@@ -69,6 +84,7 @@ struct Health {
     current: u32,
     max: u32,
 }
+
 struct Position {}
 
 impl Component for Position {}
@@ -118,10 +134,17 @@ impl Archetype {
         }
     }
 
-    //TypeId gets lost in Box<dyn Any> so bundle it in a tuple
-    fn add_entity(&mut self, components: Vec<(TypeId, Box<dyn Any>)>) -> usize {
-        for (id, comp) in components {}
-        self.entity_ids.len() as usize
+    fn add_entity(
+        &mut self,
+        id: EntityID,
+        push_components: Vec<Box<dyn Fn(&mut Archetype)>>,
+    ) -> usize {
+        for push_fn in push_components {
+            push_fn(self);
+        }
+        let row_index = self.entity_ids.len() as usize;
+        self.entity_ids.push(id as u64);
+        row_index
     }
 }
 
@@ -161,6 +184,11 @@ pub struct World {
 }
 
 impl World {
+    pub fn new() -> World {
+        World {
+            ..Default::default()
+        }
+    }
     pub fn debug_world_data(&self) {
         for archetype in &self.archetypes {}
     }
@@ -168,7 +196,9 @@ impl World {
     pub fn spawn(&mut self) -> EntityBuilder {
         let new_entity = EntityBuilder {
             id: self.next_available_entity_id,
-            pending_components: Vec::new(),
+            //pending_components: HashMap::new(),
+            push_component_functions: Vec::new(),
+            signature: Vec::new(),
         };
         //Eventually change this to an ID pool?
         self.next_available_entity_id += 1;
@@ -213,10 +243,23 @@ impl World {
         }
     }
 
-    fn get_component<T: 'static>(self, entity: EntityID) {
+    fn get_component<T: 'static>(&mut self, entity: EntityID) -> Option<&T> {
+        let component_id = TypeId::of::<T>();
         let Some(record) = self.entity_index.get(&entity) else {
             panic!("No record for entity!");
         };
-        let archetype = &self.archetypes[record.archetype_id];
+        let archetype = self
+            .archetype_index
+            .get_mut(&record.archetype_signature)
+            .expect("Failed to get archetpye");
+        let raw_vec = archetype
+            .columns
+            .get_mut(&component_id)
+            .expect("Failed to get column");
+
+        let downcast_vec = raw_vec
+            .downcast_mut::<Vec<T>>()
+            .expect("Failed to downcast column in get_component");
+        downcast_vec.get(record.row_index)
     }
 }

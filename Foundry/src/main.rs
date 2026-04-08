@@ -15,6 +15,7 @@
 //-----------Foundry Engine Modules------------
 //Delagator (very important)
 mod delegator;
+use crate::ECS::World;
 use crate::delegator::Delagator;
 
 //Game Data
@@ -337,7 +338,12 @@ struct HelloTriangleApp {
 }
 impl Default for HelloTriangleApp {
     fn default() -> Self {
-        let delegator = Delagator::new(VulkanContext::new(), GameContext::new(), UIHandler::new());
+        let delegator = Delagator::new(
+            VulkanContext::new(),
+            GameContext::new(),
+            UIHandler::new(),
+            World::new(),
+        );
         Self {
             delegator: delegator,
             window: None,
