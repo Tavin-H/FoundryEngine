@@ -9,7 +9,7 @@
   &nbsp;&nbsp;&nbsp;&nbsp;
   <img src="https://img.shields.io/badge/Version-pre--alpha-white?style=for-the-badge&logo=Git&logoColor=white&labelColor=2d3146&color=%234cb083" />
   &nbsp;&nbsp;&nbsp;&nbsp;
-  <img src="https://img.shields.io/badge/Downloads-17-white?style=for-the-badge&labelColor=2d3146&color=blue" />
+  <img src="https://img.shields.io/badge/Downloads-35-white?style=for-the-badge&labelColor=2d3146&color=blue" />
    &nbsp;&nbsp;&nbsp;&nbsp;
   <img src="https://img.shields.io/badge/License-MIT-white?style=for-the-badge&labelColor=2d3146&color=yellow" />
 </p>
@@ -31,6 +31,7 @@ The main goal of this project was to teach myself computer graphics and give mys
 ### ECS (Entity Component System)
 * Data-oriented design to allow for super-fast and efficient system lookups
 * Add components to game objects (represented as 'Game Entities')
+* Get components from game objects with turbofish syntax
 
 ### Scene Manager
 * Instantiate game objects
@@ -47,11 +48,11 @@ The main goal of this project was to teach myself computer graphics and give mys
 
 Clone the repo
 ```
-git clone https://github.com/your-username/FoundryEngine.git
+git clone https://github.com/Tavin-H/FoundryEngine.git
 ```
 Make sure to cd into foundry
 ```
-cd clone-location/FoundryEngine/Foundry
+cd your-clone-location/FoundryEngine/Foundry
 ```
 
 Run the demo scene
