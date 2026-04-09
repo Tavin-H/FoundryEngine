@@ -535,6 +535,8 @@ fn update_transform_buffer(
 ) {
     let mut transforms: Vec<glm::Mat4> = Vec::new();
 
+    //println!("gameobject count:{}", gameobjects.len());
+
     for gameobject in gameobjects {
         let converted_position: glm::Mat4x4 = convert_vec_to_mat(gameobject.transform.position);
         let converted_scale: glm::Mat4x4 = convert_scale_to_mat(gameobject.transform.scale);
@@ -1020,6 +1022,12 @@ fn print_cstring_as_i8(c_string: &CString, size: i8) {
 //--------------------VulkanContext Methods----------------
 
 impl VulkanContext {
+    pub fn new() -> Self {
+        VulkanContext {
+            ..Default::default()
+        }
+    }
+
     pub fn init_vulkan(&mut self, window: &Window, ui_context: &mut imgui::Context) {
         unsafe {
             match Entry::load() {
@@ -2573,121 +2581,128 @@ impl VulkanContext {
         }
     }
 
-    fn create_vertex_buffer(&mut self) {
+    pub fn create_vertex_buffer(&mut self) {
         let Some(logical_device) = &self.logical_device else {
             panic!("No logical device when calling create_vertex_buffer");
         };
         let vertices = &self.vertices;
-        let vertex_buffer_size = size_of::<Vertex>() * vertices.len();
+        let vertex_buffer_size = size_of::<Vertex>() * self.vertices.len(); //FIXME
 
-        //Create Staging buffer
-        let (staging_buffer, staging_buffer_memory) = create_buffer(
-            vertex_buffer_size as u64,
-            vk::BufferUsageFlags::TRANSFER_SRC,
-            vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
-            &self,
-        );
-
-        //MAP MEMORY
-        unsafe {
-            let staging_map_memory_result = logical_device.map_memory(
-                staging_buffer_memory,
-                0,
+        if vertex_buffer_size > 0 {
+            //Create Staging buffer
+            let (staging_buffer, staging_buffer_memory) = create_buffer(
                 vertex_buffer_size as u64,
-                vk::MemoryMapFlags::empty(),
+                vk::BufferUsageFlags::TRANSFER_SRC,
+                vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
+                &self,
             );
 
-            let Ok(staging_memory_pointer) = staging_map_memory_result else {
-                panic!("Failed to map memory for vertex buffer");
-            };
+            //MAP MEMORY
+            unsafe {
+                let staging_map_memory_result = logical_device.map_memory(
+                    staging_buffer_memory,
+                    0,
+                    vertex_buffer_size as u64,
+                    vk::MemoryMapFlags::empty(),
+                );
 
-            ptr::copy_nonoverlapping(
-                self.vertices.as_ptr(),
-                staging_memory_pointer as *mut Vertex, //Cast void to Vertex Data Type
-                self.vertices.len(),
+                let Ok(staging_memory_pointer) = staging_map_memory_result else {
+                    panic!("Failed to map memory for vertex buffer");
+                };
+
+                ptr::copy_nonoverlapping(
+                    self.vertices.as_ptr(),
+                    staging_memory_pointer as *mut Vertex, //Cast void to Vertex Data Type
+                    self.vertices.len(),
+                );
+                logical_device.unmap_memory(staging_buffer_memory);
+            }
+
+            //Create Vertex buffer
+            let (vertex_buffer, vertex_buffer_memory) = create_buffer(
+                vertex_buffer_size as u64,
+                vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::VERTEX_BUFFER,
+                vk::MemoryPropertyFlags::DEVICE_LOCAL,
+                &self,
             );
-            logical_device.unmap_memory(staging_buffer_memory);
-        }
+            self.vertex_buffer_memory = vertex_buffer_memory;
+            self.vertex_buffer = vertex_buffer;
 
-        //Create Vertex buffer
-        let (vertex_buffer, vertex_buffer_memory) = create_buffer(
-            vertex_buffer_size as u64,
-            vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::VERTEX_BUFFER,
-            vk::MemoryPropertyFlags::DEVICE_LOCAL,
-            &self,
-        );
-        self.vertex_buffer_memory = vertex_buffer_memory;
-        self.vertex_buffer = vertex_buffer;
-
-        copy_buffer(
-            staging_buffer,
-            vertex_buffer,
-            vertex_buffer_size as u64,
-            &self,
-        );
-        unsafe {
-            logical_device.destroy_buffer(staging_buffer, None);
-            logical_device.free_memory(staging_buffer_memory, None);
+            copy_buffer(
+                staging_buffer,
+                vertex_buffer,
+                vertex_buffer_size as u64,
+                &self,
+            );
+            unsafe {
+                logical_device.destroy_buffer(staging_buffer, None);
+                logical_device.free_memory(staging_buffer_memory, None);
+            }
         }
     }
 
     //Almost the same as create_vertex_buffer
-    fn create_index_buffer(&mut self) {
+    pub fn create_index_buffer(&mut self) {
         let Some(logical_device) = &self.logical_device else {
             panic!("No logical device when calling create_vertex_buffer");
         };
         let indices = &self.indices;
-        let indices_buffer_size = size_of::<u32>() * indices.len();
-
-        //Create Staging buffer
-        let (staging_buffer, staging_buffer_memory) = create_buffer(
-            indices_buffer_size as u64,
-            vk::BufferUsageFlags::TRANSFER_SRC,
-            vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
-            &self,
-        );
-
-        //MAP MEMORY
-        unsafe {
-            let staging_map_memory_result = logical_device.map_memory(
-                staging_buffer_memory,
-                0,
+        let indices_buffer_size = size_of::<u32>() * self.indices.len();
+        if indices_buffer_size > 0 {
+            //Create Staging buffer
+            let (staging_buffer, staging_buffer_memory) = create_buffer(
                 indices_buffer_size as u64,
-                vk::MemoryMapFlags::empty(),
+                vk::BufferUsageFlags::TRANSFER_SRC,
+                vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
+                &self,
             );
 
-            let Ok(staging_memory_pointer) = staging_map_memory_result else {
-                panic!("Failed to map memory for vertex buffer");
-            };
+            //MAP MEMORY
+            unsafe {
+                let staging_map_memory_result = logical_device.map_memory(
+                    staging_buffer_memory,
+                    0,
+                    indices_buffer_size as u64,
+                    vk::MemoryMapFlags::empty(),
+                );
 
-            ptr::copy_nonoverlapping(
-                self.indices.as_ptr(),
-                staging_memory_pointer as *mut u32, //Cast void to Vertex Data Type
-                self.indices.len(),
+                let Ok(staging_memory_pointer) = staging_map_memory_result else {
+                    panic!("Failed to map memory for vertex buffer");
+                };
+
+                ptr::copy_nonoverlapping(
+                    self.indices.as_ptr(),
+                    staging_memory_pointer as *mut u32, //Cast void to Vertex Data Type
+                    self.indices.len(),
+                );
+                logical_device.unmap_memory(staging_buffer_memory);
+            }
+
+            //Create Index buffer
+            let (indices_buffer, indices_buffer_memory) = create_buffer(
+                indices_buffer_size as u64,
+                vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::INDEX_BUFFER,
+                vk::MemoryPropertyFlags::DEVICE_LOCAL,
+                &self,
             );
-            logical_device.unmap_memory(staging_buffer_memory);
-        }
+            self.index_buffer = indices_buffer;
+            self.index_buffer_memory = indices_buffer_memory;
 
-        //Create Index buffer
-        let (indices_buffer, indices_buffer_memory) = create_buffer(
-            indices_buffer_size as u64,
-            vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::INDEX_BUFFER,
-            vk::MemoryPropertyFlags::DEVICE_LOCAL,
-            &self,
-        );
-        self.index_buffer = indices_buffer;
-        self.index_buffer_memory = indices_buffer_memory;
-
-        copy_buffer(
-            staging_buffer,
-            indices_buffer,
-            indices_buffer_size as u64,
-            &self,
-        );
-        unsafe {
-            logical_device.destroy_buffer(staging_buffer, None);
-            logical_device.free_memory(staging_buffer_memory, None);
+            copy_buffer(
+                staging_buffer,
+                indices_buffer,
+                indices_buffer_size as u64,
+                &self,
+            );
+            unsafe {
+                logical_device.destroy_buffer(staging_buffer, None);
+                logical_device.free_memory(staging_buffer_memory, None);
+            }
         }
+    }
+    pub fn upload_mesh_data(&mut self) {
+        self.create_index_buffer();
+        self.create_vertex_buffer();
     }
 
     fn create_command_buffers(&mut self) {
