@@ -14,7 +14,7 @@ type ArchetypeSet = Vec<ArchetypeID>;
 type ArchetypeSignature = Vec<TypeId>;
 
 //Structs
-struct EntityRecord {
+pub struct EntityRecord {
     row_index: usize,
     archetype_signature: ArchetypeSignature,
 }
@@ -25,28 +25,42 @@ pub struct EntityBuilder {
     //pending_components: HashMap<TypeId, Box<dyn Any>>,
     signature: Vec<TypeId>,
     //Box because Size of dyn Fn is not known at compile time
-    push_component_functions: Vec<Box<dyn Fn(&mut Archetype)>>,
+    push_component_functions: Vec<Box<dyn FnOnce(&mut Archetype)>>,
+    ensure_functions: Vec<Box<dyn Fn(&mut World)>>,
 }
 
 impl EntityBuilder {
-    fn with<T: Component + 'static>(mut self, component: T) -> Self {
+    pub fn with<T: Component + 'static>(mut self, component: T) -> Self {
         let id = TypeId::of::<T>();
+
         let push_function = |archetype: &mut Archetype| {
             let id = TypeId::of::<T>();
             let column = archetype.columns.get_mut(&id).expect("Push function fail");
-            let downcast_column = column.downcast_mut::<Vec<T>>();
+            let downcast_column = column
+                .downcast_mut::<Vec<T>>()
+                .expect("Failed to downcast in push");
+            downcast_column.push(component);
         };
+        let ensure_function = |world: &mut World| {
+            world.ensure_registered::<T>();
+        };
+        self.ensure_functions.push(Box::new(ensure_function));
         self.push_component_functions.push(Box::new(push_function));
         self.signature.push(id);
         self
     }
 
-    fn build(self, world: &mut World) -> EntityID {
+    pub fn build(self, world: &mut World) -> EntityID {
         //Find archetype / create if non existing
         //Populate Archetype
         //Make an entity record (last?)
         //
         //let ids: Vec<TypeId> = self.pending_components.keys().cloned().collect();
+
+        //Ensure Initialized
+        for ensure in &self.ensure_functions {
+            ensure(world);
+        }
         let signature = Archetype::generate_signature(&self.signature);
         match world.archetype_index.get(&signature) {
             Some(archetype) => {}
@@ -71,7 +85,7 @@ impl EntityBuilder {
 }
 
 //------Components
-trait Component {}
+pub trait Component {}
 
 struct GameObject {
     name: String,
@@ -80,9 +94,14 @@ struct GameObject {
 
 struct MeshRenderer {}
 
-struct Health {
-    current: u32,
-    max: u32,
+pub struct Health {
+    pub current: u32,
+    pub max: u32,
+}
+impl Health {
+    pub fn new(current: u32, max: u32) -> Self {
+        Health { current, max }
+    }
 }
 
 struct Position {}
@@ -93,7 +112,7 @@ impl Component for Health {}
 //---------------
 
 //Columns will map a TypeId to a box containing the vector of associated components
-struct Archetype {
+pub struct Archetype {
     id: ArchetypeID,
     columns: HashMap<TypeId, Box<dyn Any>>,
     entity_ids: Vec<EntityID>,
@@ -137,7 +156,7 @@ impl Archetype {
     fn add_entity(
         &mut self,
         id: EntityID,
-        push_components: Vec<Box<dyn Fn(&mut Archetype)>>,
+        push_components: Vec<Box<dyn FnOnce(&mut Archetype)>>,
     ) -> usize {
         for push_fn in push_components {
             push_fn(self);
@@ -171,11 +190,10 @@ pub struct World {
     next_available_entity_id: EntityID,
     next_available_archtype_id: ArchetypeID,
 
-    archetypes: Vec<Archetype>, //Outdated?
-    archetype_index: HashMap<ArchetypeSignature, Archetype>,
+    pub archetype_index: HashMap<ArchetypeSignature, Archetype>,
 
     //Used to find the components of any entity instantly
-    entity_index: HashMap<EntityID, EntityRecord>,
+    pub entity_index: HashMap<EntityID, EntityRecord>,
 
     //Used to find the archetypes that contain a component (used for systems)
     component_index: HashMap<ComponentID, ArchetypeSet>,
@@ -189,14 +207,15 @@ impl World {
             ..Default::default()
         }
     }
-    pub fn debug_world_data(&self) {
-        for archetype in &self.archetypes {}
-    }
+
+    //THIS WOULD BE GOOD TO MAKE
+    pub fn debug_world_data(&self) {}
 
     pub fn spawn(&mut self) -> EntityBuilder {
         let new_entity = EntityBuilder {
             id: self.next_available_entity_id,
             //pending_components: HashMap::new(),
+            ensure_functions: Vec::new(),
             push_component_functions: Vec::new(),
             signature: Vec::new(),
         };
@@ -243,7 +262,7 @@ impl World {
         }
     }
 
-    fn get_component<T: 'static>(&mut self, entity: EntityID) -> Option<&T> {
+    pub fn get_component<T: 'static>(&mut self, entity: EntityID) -> &T {
         let component_id = TypeId::of::<T>();
         let Some(record) = self.entity_index.get(&entity) else {
             panic!("No record for entity!");
@@ -260,6 +279,6 @@ impl World {
         let downcast_vec = raw_vec
             .downcast_mut::<Vec<T>>()
             .expect("Failed to downcast column in get_component");
-        downcast_vec.get(record.row_index)
+        &downcast_vec[record.row_index]
     }
 }

@@ -15,7 +15,6 @@
 //-----------Foundry Engine Modules------------
 //Delagator (very important)
 mod delegator;
-use crate::ECS::World;
 use crate::delegator::Delagator;
 
 //Game Data
@@ -26,6 +25,7 @@ use crate::game_data::MeshAllocation;
 use crate::game_data::Transform;
 
 mod ECS;
+use crate::ECS::{Archetype, EntityRecord, Health, World};
 
 //Vulkan Data
 mod vulkan_data;
@@ -486,6 +486,20 @@ fn main() {
         &mut app.delegator.vulkan_context,
         false,
     );
+
+    //ECS TESTING
+    let test = app
+        .delegator
+        .ecs_world
+        .spawn()
+        .with::<Health>(Health::new(20, 20))
+        .build(&mut app.delegator.ecs_world);
+
+    let health = app.delegator.ecs_world.get_component::<Health>(test);
+    println!("HEALTH THING {}", health.max);
+
+    //END OF TESTING
+
     println!("1: {:?}", app.delegator.game_context.game_objects[1]._mesh);
     app.run(800.0, 800.0);
 }
