@@ -8,10 +8,14 @@
   <img src="https://img.shields.io/badge/Vulkan-DC143C?style=for-the-badge&logo=Vulkan" />
   &nbsp;&nbsp;&nbsp;&nbsp;
   <img src="https://img.shields.io/badge/Version-pre--alpha-white?style=for-the-badge&logo=Git&logoColor=white&labelColor=2d3146&color=%234cb083" />
-  &nbsp;&nbsp;&nbsp;&nbsp;
-  <img src="https://img.shields.io/badge/Downloads-35-white?style=for-the-badge&labelColor=2d3146&color=blue" />
+</br>
+  <img src="https://img.shields.io/badge/Downloads-64-white?style=for-the-badge&labelColor=2d3146&color=blue" />
    &nbsp;&nbsp;&nbsp;&nbsp;
   <img src="https://img.shields.io/badge/License-MIT-white?style=for-the-badge&labelColor=2d3146&color=yellow" />
+  &nbsp;&nbsp;&nbsp;&nbsp;
+    <a href="https://foundry-engine.gitbook.io/foundry-engine-docs/">
+      <img src="https://img.shields.io/badge/Documentation-WIP-white?style=for-the-badge&logo=Gitbook&labelColor=2d3146&color=9370db" />
+    </a>
 </p>
 
 
