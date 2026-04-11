@@ -24,6 +24,9 @@ use crate::game_data::GameObject;
 use crate::game_data::MeshAllocation;
 use crate::game_data::Transform;
 
+//Components
+mod components;
+
 mod ECS;
 use crate::ECS::{Archetype, EntityRecord, Health, World};
 
@@ -102,7 +105,7 @@ use rand::Rng;
 struct WinitApp {
     window: Option<Window>,
     size: winit::dpi::LogicalSize<f64>,
-    instance: Option<ash::Instance>,
+    //instance: Option<ash::Instance>,
 }
 
 impl ApplicationHandler for HelloTriangleApp {
@@ -257,17 +260,7 @@ impl ApplicationHandler for HelloTriangleApp {
             let Some(window) = &self.window else {
                 panic!("");
             };
-            self.delegator.ui_handler.record_ui_data(window, self.fps);
-            let Some(ui_context) = &mut self.delegator.ui_handler.context else {
-                panic!();
-            };
-
-            self.delegator.vulkan_context.draw_frame(
-                &self.delegator.game_context.game_objects,
-                ui_context,
-                window,
-            );
-
+            self.delegator.run_constants(window);
             if let Some(window) = &self.window {
                 window.request_redraw();
             }
@@ -494,9 +487,17 @@ fn main() {
         .spawn()
         .with::<Health>(Health::new(20, 20))
         .build(&mut app.delegator.ecs_world);
+    let test2 = app
+        .delegator
+        .ecs_world
+        .spawn()
+        .with::<Health>(Health::new(10, 10))
+        .build(&mut app.delegator.ecs_world);
 
-    let health = app.delegator.ecs_world.get_component::<Health>(test);
+    let mut health = app.delegator.ecs_world.get_component::<Health>(test);
     println!("HEALTH THING {}", health.max);
+    health = app.delegator.ecs_world.get_component::<Health>(test2);
+    println!("HEALTH THING2 {}", health.max);
 
     //END OF TESTING
 

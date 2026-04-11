@@ -21,8 +21,6 @@ pub struct EntityRecord {
 
 pub struct EntityBuilder {
     id: EntityID,
-    //Making this obsolete
-    //pending_components: HashMap<TypeId, Box<dyn Any>>,
     signature: Vec<TypeId>,
     //Box because Size of dyn Fn is not known at compile time
     push_component_functions: Vec<Box<dyn FnOnce(&mut Archetype)>>,
@@ -35,7 +33,10 @@ impl EntityBuilder {
 
         let push_function = |archetype: &mut Archetype| {
             let id = TypeId::of::<T>();
-            let column = archetype.columns.get_mut(&id).expect("Push function fail");
+            let column = archetype
+                .columns
+                .get_mut(&id)
+                .expect("No matching column in archetype");
             let downcast_column = column
                 .downcast_mut::<Vec<T>>()
                 .expect("Failed to downcast in push");
@@ -54,8 +55,6 @@ impl EntityBuilder {
         //Find archetype / create if non existing
         //Populate Archetype
         //Make an entity record (last?)
-        //
-        //let ids: Vec<TypeId> = self.pending_components.keys().cloned().collect();
 
         //Ensure Initialized
         for ensure in &self.ensure_functions {
@@ -120,13 +119,6 @@ pub struct Archetype {
 
 impl Archetype {
     fn generate_signature(ids: &Vec<TypeId>) -> Vec<TypeId> {
-        /* Old code that used Vec<Box<dyn Any>> for components
-                let mut ids = Vec::new();
-                for component in components {
-                    let id = component.as_ref().type_id();
-                    ids.push(id);
-                }
-        */
         let mut ret: Vec<TypeId> = ids.to_owned();
         ret.sort();
         ret
@@ -135,10 +127,8 @@ impl Archetype {
     //Removed because it creates a mental dependancy for the Archetype API
     //Might bite me in the butt but who knows
     fn new(id: ArchetypeID, components: Vec<TypeId>, registry: &TypeRegister) -> Self {
-        //
         //Use the reference before moving each TypeID into columns
         let signature = Archetype::generate_signature(&components);
-
         let mut columns = HashMap::new();
         for comp in components {
             if let Some(column_creator) = registry.column_creators.get(&comp) {
@@ -208,8 +198,12 @@ impl World {
         }
     }
 
-    //THIS WOULD BE GOOD TO MAKE
-    pub fn debug_world_data(&self) {}
+    //FIXME - THIS WOULD BE GOOD TO MAKE
+    pub fn debug_world_data(&self) {
+        for i in 0..self.next_available_entity_id {
+            println!();
+        }
+    }
 
     pub fn spawn(&mut self) -> EntityBuilder {
         let new_entity = EntityBuilder {
@@ -219,13 +213,13 @@ impl World {
             push_component_functions: Vec::new(),
             signature: Vec::new(),
         };
-        //Eventually change this to an ID pool?
+        //FIXME Eventually change this to an ID pool?
         self.next_available_entity_id += 1;
 
         new_entity
     }
 
-    //Example:
+    //Example usage of builder pattern:
     pub fn spawn_player(&mut self) {
         let player = self
             .spawn()
