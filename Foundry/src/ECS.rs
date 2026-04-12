@@ -4,6 +4,9 @@ use std::any::TypeId;
 use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
 
+//Built-in Components
+use crate::components::{MeshAllocation, Transform};
+
 use ash::vk::PipelineLayout;
 
 //Type Aliases
@@ -125,7 +128,18 @@ impl Archetype {
     fn has_id(&self, id: &TypeId) -> bool {
         self.columns.contains_key(id)
     }
-    //fn get_slice<T: 'static>(&self) -> &[T] {}
+    fn get_components_as_slice<T: 'static>(&self) -> &[T] {
+        let id = TypeId::of::<T>();
+
+        let raw_column = self
+            .columns
+            .get(&id)
+            .expect("Filed to find column in get_components_as_slice");
+        let downcast_column = raw_column
+            .downcast_ref::<Vec<T>>()
+            .expect("Failed to downcast column in get_components_as_slice");
+        downcast_column.as_slice()
+    }
 
     fn generate_signature(ids: &Vec<TypeId>) -> Vec<TypeId> {
         let mut ret: Vec<TypeId> = ids.to_owned();
@@ -296,9 +310,24 @@ impl World {
             })
             .collect()
     }
-    pub fn get_render_data(&self) {
+    pub fn get_render_batches(&mut self) -> Vec<(&[Transform], &[MeshAllocation])> {
         //Get all the components of type MeshAllocation and Transform
         //Uses get_archetypes and sees overlap
         //Passes to vulkan.draw_frame(List<(transform, meshallocation))
+        let mut render_batches: Vec<(&[Transform], &[MeshAllocation])> = Vec::new();
+        let mut archetypes = self.get_archetypes_by_ids(&vec![
+            TypeId::of::<Transform>(),
+            TypeId::of::<MeshAllocation>(),
+        ]);
+
+        for archetype in archetypes.iter_mut() {
+            //Get components
+            //Call vulkan to record stuff
+            let transforms = archetype.get_components_as_slice::<Transform>();
+            let mesh_allocation = archetype.get_components_as_slice::<MeshAllocation>();
+            render_batches.push((transforms, mesh_allocation));
+        }
+        render_batches
+        //Use render_batches in draw_frame()
     }
 }

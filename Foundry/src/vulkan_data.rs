@@ -534,8 +534,8 @@ fn update_uniform_buffer(
 fn update_transform_buffer(
     current_image: u32,
     transform_buffers_mapped: &Vec<*mut glm::Mat4>,
-    //gameobjects: &Vec<GameObject>,
-    transforms: &Vec<Transform>,
+    gameobjects: &Vec<GameObject>,
+    //transforms: &Vec<Transform>,
 ) {
     //println!("gameobject count:{}", gameobjects.len());
     let mut mat_transforms: Vec<glm::Mat4> = Vec::new();
@@ -547,16 +547,16 @@ fn update_transform_buffer(
             transforms.push(converted_position * converted_scale);
         }
     */
-    for transform in transforms {
-        let converted_position: glm::Mat4x4 = convert_vec_to_mat(transform.position);
-        let converted_scale: glm::Mat4x4 = convert_scale_to_mat(transform.scale);
+    for gameobject in gameobjects {
+        let converted_position: glm::Mat4x4 = convert_vec_to_mat(gameobject.transform.position);
+        let converted_scale: glm::Mat4x4 = convert_scale_to_mat(gameobject.transform.scale);
         mat_transforms.push(converted_position * converted_scale);
     }
     unsafe {
         ptr::copy_nonoverlapping(
             mat_transforms.as_ptr(),
             transform_buffers_mapped[current_image as usize],
-            transforms.len(),
+            gameobjects.len(),
         );
     }
 }
