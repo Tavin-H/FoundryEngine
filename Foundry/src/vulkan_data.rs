@@ -1,8 +1,11 @@
 //Game Data
 use crate::game_data::GameContext;
 use crate::game_data::GameObject;
-use crate::game_data::MeshAllocation;
-use crate::game_data::Transform;
+//use crate::game_data::MeshAllocation;
+//use crate::game_data::Transform;
+
+//Components
+use crate::components::{MeshAllocation, Transform};
 
 //Ash
 use ash::ext::{device_memory_report, surface_maintenance1};
@@ -531,20 +534,27 @@ fn update_uniform_buffer(
 fn update_transform_buffer(
     current_image: u32,
     transform_buffers_mapped: &Vec<*mut glm::Mat4>,
-    gameobjects: &Vec<GameObject>,
+    //gameobjects: &Vec<GameObject>,
+    transforms: &Vec<Transform>,
 ) {
-    let mut transforms: Vec<glm::Mat4> = Vec::new();
-
     //println!("gameobject count:{}", gameobjects.len());
+    let mut mat_transforms: Vec<glm::Mat4> = Vec::new();
 
-    for gameobject in gameobjects {
-        let converted_position: glm::Mat4x4 = convert_vec_to_mat(gameobject.transform.position);
-        let converted_scale: glm::Mat4x4 = convert_scale_to_mat(gameobject.transform.scale);
-        transforms.push(converted_position * converted_scale);
+    /*
+        for gameobject in gameobjects {
+            let converted_position: glm::Mat4x4 = convert_vec_to_mat(gameobject.transform.position);
+            let converted_scale: glm::Mat4x4 = convert_scale_to_mat(gameobject.transform.scale);
+            transforms.push(converted_position * converted_scale);
+        }
+    */
+    for transform in transforms {
+        let converted_position: glm::Mat4x4 = convert_vec_to_mat(transform.position);
+        let converted_scale: glm::Mat4x4 = convert_scale_to_mat(transform.scale);
+        mat_transforms.push(converted_position * converted_scale);
     }
     unsafe {
         ptr::copy_nonoverlapping(
-            transforms.as_ptr(),
+            mat_transforms.as_ptr(),
             transform_buffers_mapped[current_image as usize],
             transforms.len(),
         );
@@ -3270,6 +3280,7 @@ impl VulkanContext {
 
             update_uniform_buffer(current_frame as u32, extent, &self.uniform_buffers_mapped);
 
+            //Place before draw?
             update_transform_buffer(
                 current_frame as u32,
                 &self.transform_buffers_mapped,

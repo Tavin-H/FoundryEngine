@@ -1,7 +1,7 @@
 //Imports
 use std::any::Any;
 use std::any::TypeId;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
 
 use ash::vk::PipelineLayout;
@@ -118,6 +118,15 @@ pub struct Archetype {
 }
 
 impl Archetype {
+    fn has_component<T: 'static>(&self) -> bool {
+        let id = TypeId::of::<T>();
+        self.columns.contains_key(&id)
+    }
+    fn has_id(&self, id: &TypeId) -> bool {
+        self.columns.contains_key(id)
+    }
+    //fn get_slice<T: 'static>(&self) -> &[T] {}
+
     fn generate_signature(ids: &Vec<TypeId>) -> Vec<TypeId> {
         let mut ret: Vec<TypeId> = ids.to_owned();
         ret.sort();
@@ -274,5 +283,22 @@ impl World {
             .downcast_mut::<Vec<T>>()
             .expect("Failed to downcast column in get_component");
         &downcast_vec[record.row_index]
+    }
+
+    pub fn get_archetypes_by_ids(&self, ids: &Vec<TypeId>) -> Vec<&Archetype> {
+        //Gets all archetypes with component T
+        self.archetype_index
+            .values() // Iterate over the archetypes
+            .filter(|archetype| {
+                // Check if EVERY search_id exists in this archetype's columns
+                // .all() stops early (short-circuits) if it finds a missing ID
+                ids.iter().all(|id| archetype.has_id(id))
+            })
+            .collect()
+    }
+    pub fn get_render_data(&self) {
+        //Get all the components of type MeshAllocation and Transform
+        //Uses get_archetypes and sees overlap
+        //Passes to vulkan.draw_frame(List<(transform, meshallocation))
     }
 }

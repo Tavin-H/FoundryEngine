@@ -43,6 +43,7 @@ impl Delagator {
         //Draw the frame
         self.vulkan_context
             .draw_frame(&self.game_context.game_objects, ui_context, window);
+        //Reduce game_objects to just uh idk
     }
 
     pub fn check_ui_state(&mut self) {
