@@ -41,8 +41,14 @@ impl Delagator {
         //Get transform component data
         //
         //Draw the frame
-        self.vulkan_context
-            .draw_frame(&self.game_context.game_objects, ui_context, window);
+        let render_batches = self.ecs_world.get_render_batches();
+        println!("{}", render_batches[0].0.len());
+        self.vulkan_context.draw_frame(
+            &self.game_context.game_objects,
+            render_batches,
+            ui_context,
+            window,
+        );
         //Reduce game_objects to just uh idk
     }
 
@@ -50,8 +56,12 @@ impl Delagator {
         match &self.ui_handler.state {
             UIState::InstatiateObject(gameobject) => {
                 println!("UI state is create");
-                self.game_context
-                    .instantiate(gameobject.clone(), &mut self.vulkan_context, true);
+                self.game_context.instantiate(
+                    gameobject.clone(),
+                    &mut self.vulkan_context,
+                    &mut self.ecs_world,
+                    true,
+                );
                 self.ui_handler.game_objects.push(gameobject.clone());
 
                 self.ecs_world.spawn_player();

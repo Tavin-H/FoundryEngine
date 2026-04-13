@@ -1,8 +1,10 @@
 use std::{collections::VecDeque, io::Seek, time};
 
-use crate::vulkan_data::VulkanContext;
+use crate::components::{MeshAllocation, Transform};
+use crate::{ECS::World, vulkan_data::VulkanContext};
 use nalgebra_glm::{self as glm};
 
+/*
 #[derive(Default, Debug, Clone)]
 pub struct MeshAllocation {
     pub index_count: u32,
@@ -15,6 +17,7 @@ pub struct Transform {
     pub position: [f32; 3],
     pub scale: [f32; 3],
 }
+*/
 
 #[derive(Default, Debug, Clone)]
 pub struct GameObject {
@@ -75,6 +78,7 @@ impl GameContext {
         &mut self,
         mut gameobject: GameObject,
         mut vulkan_context: &mut VulkanContext,
+        ecs_world: &mut World,
         running: bool,
     ) {
         let before_indices = vulkan_context.indices.len();
@@ -82,8 +86,26 @@ impl GameContext {
         vulkan_context.load_model();
         let after_indices = vulkan_context.indices.len();
 
+        let index_count = (after_indices - before_indices) as u32;
         gameobject._mesh.first_index = before_indices as u32;
         gameobject._mesh.index_count = (after_indices - before_indices) as u32;
+
+        ecs_world
+            .spawn()
+            .with::<MeshAllocation>(MeshAllocation {
+                index_count: index_count,
+                first_index: before_indices as u32,
+                first_vertex: 0,
+            })
+            .with::<Transform>(Transform {
+                position: [
+                    gameobject.transform.position[0],
+                    gameobject.transform.position[1],
+                    gameobject.transform.position[2],
+                ],
+                scale: [1.0, 1.0, 1.0],
+            })
+            .build(ecs_world);
         //println!("1: {:?}", gameobject._mesh);
         self.game_objects.push(gameobject);
         if (running) {

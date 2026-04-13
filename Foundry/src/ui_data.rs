@@ -9,8 +9,8 @@ use imgui_winit_support::{HiDpiMode, WinitPlatform};
 
 use winit::window::{self, Window};
 
+use crate::components::Transform;
 use crate::game_data::GameObject;
-use crate::game_data::Transform;
 
 //-------CONSTANTS--------
 //colors

@@ -19,10 +19,9 @@ use crate::delegator::Delagator;
 
 //Game Data
 mod game_data;
+use crate::components::{MeshAllocation, Transform};
 use crate::game_data::GameContext;
 use crate::game_data::GameObject;
-use crate::game_data::MeshAllocation;
-use crate::game_data::Transform;
 
 //Components
 mod components;
@@ -430,7 +429,7 @@ fn main() {
             first_vertex: 0,
         },
         transform: Transform {
-            position: [0.0, 0.0, -2.0],
+            position: [0.0, 0.0, -0.0],
             scale: [1.0, 1.0, 1.0],
         },
         ..Default::default()
@@ -440,7 +439,7 @@ fn main() {
         name: String::from("Example"),
         id: 1,
         transform: Transform {
-            position: [1.0, 0.0, 0.0],
+            position: [0.0, 0.0, 0.0],
             scale: [1.0, 1.0, 0.5],
         },
         ..Default::default()
@@ -470,6 +469,7 @@ fn main() {
     app.delegator.game_context.instantiate(
         gameobject_example_2,
         &mut app.delegator.vulkan_context,
+        &mut app.delegator.ecs_world,
         false,
     );
     println!("1: {:?}", app.delegator.game_context.game_objects[0]._mesh);
@@ -477,6 +477,7 @@ fn main() {
     app.delegator.game_context.instantiate(
         gameobject_example,
         &mut app.delegator.vulkan_context,
+        &mut app.delegator.ecs_world,
         false,
     );
 

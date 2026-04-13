@@ -5,7 +5,7 @@ use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
 
 //Built-in Components
-use crate::components::{MeshAllocation, Transform};
+use crate::components::{Component, MeshAllocation, Transform};
 
 use ash::vk::PipelineLayout;
 
@@ -87,7 +87,6 @@ impl EntityBuilder {
 }
 
 //------Components
-pub trait Component {}
 
 struct GameObject {
     name: String,
