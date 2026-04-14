@@ -9,7 +9,7 @@
   &nbsp;&nbsp;&nbsp;&nbsp;
   <img src="https://img.shields.io/badge/Version-pre--alpha-white?style=for-the-badge&logo=Git&logoColor=white&labelColor=2d3146&color=%234cb083" />
 </br>
-  <img src="https://img.shields.io/badge/Downloads-64-white?style=for-the-badge&labelColor=2d3146&color=blue" />
+  <img src="https://img.shields.io/badge/Downloads-89-white?style=for-the-badge&labelColor=2d3146&color=blue" />
    &nbsp;&nbsp;&nbsp;&nbsp;
   <img src="https://img.shields.io/badge/License-MIT-white?style=for-the-badge&labelColor=2d3146&color=yellow" />
   &nbsp;&nbsp;&nbsp;&nbsp;
