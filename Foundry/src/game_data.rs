@@ -131,8 +131,6 @@ impl GameContext {
                 .build(ecs_world);
         }
 
-        //println!("1: {:?}", gameobject._mesh);
-        //self.game_objects.push(gameobject);
         if (running) {
             vulkan_context.upload_mesh_data();
         }

@@ -536,16 +536,9 @@ fn update_transform_buffer(
     transform_buffers_mapped: &Vec<*mut glm::Mat4>,
     // gameobjects: &Vec<GameObject>,
     render_batch_transforms: &[Transform],
+    index_offset: usize,
 ) {
     let mut mat_transforms: Vec<glm::Mat4> = Vec::new();
-
-    /*
-        for gameobject in gameobjects {
-            let converted_position: glm::Mat4x4 = convert_vec_to_mat(gameobject.transform.position);
-            let converted_scale: glm::Mat4x4 = convert_scale_to_mat(gameobject.transform.scale);
-            mat_transforms.push(converted_position * converted_scale);
-        }
-    */
     for transform in render_batch_transforms {
         let converted_position: glm::Mat4x4 = convert_vec_to_mat(transform.position);
         let converted_scale: glm::Mat4x4 = convert_scale_to_mat(transform.scale);
@@ -554,7 +547,8 @@ fn update_transform_buffer(
     unsafe {
         ptr::copy_nonoverlapping(
             mat_transforms.as_ptr(),
-            transform_buffers_mapped[current_image as usize],
+            //.add() will account for any potential overlapping
+            transform_buffers_mapped[current_image as usize].add(index_offset),
             render_batch_transforms.len(),
         );
     }
@@ -615,7 +609,6 @@ fn create_buffer(
 
         match logical_device.allocate_memory(&alloc_info, None) {
             Ok(buffer_memory) => {
-                //self.vertex_buffer_memory = buffer_memory;
                 logical_device.bind_buffer_memory(buffer, buffer_memory, 0);
 
                 println!("Allocated Vertex Buffer Memory");
@@ -3069,15 +3062,17 @@ impl VulkanContext {
                 &[],
             );
 
-            //Loop over render_batches
-            // {
-            let mut instance_index: i32 = 0;
-            println!("RENDER BATCH COUNT : {}", render_batches.len());
+            let mut instance_index: usize = 0;
+            //Render batch count needed because transform buffer can't be overridden before
+            //submitting
+            let mut render_batch_count: usize = 0;
+            let mut test = 0;
             for (transform_slice, allocation_slice) in render_batches {
                 update_transform_buffer(
                     current_frame as u32,
                     transform_buffers_mapped,
                     transform_slice,
+                    render_batch_count,
                 );
                 for mesh_allocation in allocation_slice {
                     logical_device.cmd_draw_indexed(
@@ -3091,6 +3086,7 @@ impl VulkanContext {
                     );
                     instance_index += 1;
                 }
+                render_batch_count += 1;
             }
 
             logical_device.cmd_end_render_pass(command_buffer);

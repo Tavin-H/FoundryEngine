@@ -318,7 +318,6 @@ impl World {
             TypeId::of::<Transform>(),
             TypeId::of::<MeshAllocation>(),
         ]);
-        println!("RENDER ARCHETYPES FOUND {}", archetypes.len());
 
         for archetype in archetypes.iter_mut() {
             //Get components
