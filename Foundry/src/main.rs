@@ -215,29 +215,31 @@ impl ApplicationHandler for HelloTriangleApp {
             if (!self.delegator.vulkan_context.running) {
                 avg_delta_time = 0.0;
             }
-            if (self.delegator.game_context.game_objects[0]
-                .transform
-                .position[2]
-                > 1.0)
-            {
-                self.rising = false;
-            }
-            if (self.delegator.game_context.game_objects[0]
-                .transform
-                .position[2]
-                < -1.0)
-            {
-                self.rising = true;
-            }
-            if (!self.rising) {
-                self.delegator.game_context.game_objects[0]
-                    .transform
-                    .position[2] -= 1.0 * avg_delta_time;
-            } else {
-                self.delegator.game_context.game_objects[0]
-                    .transform
-                    .position[2] += 1.0 * avg_delta_time;
-            }
+            /*
+                        if (self.delegator.game_context.game_objects[0]
+                            .transform
+                            .position[2]
+                            > 1.0)
+                        {
+                            self.rising = false;
+                        }
+                        if (self.delegator.game_context.game_objects[0]
+                            .transform
+                            .position[2]
+                            < -1.0)
+                        {
+                            self.rising = true;
+                        }
+                        if (!self.rising) {
+                            self.delegator.game_context.game_objects[0]
+                                .transform
+                                .position[2] -= 1.0 * avg_delta_time;
+                        } else {
+                            self.delegator.game_context.game_objects[0]
+                                .transform
+                                .position[2] += 1.0 * avg_delta_time;
+                        }
+            */
             /*
                         //////
                         if (self.game_context.game_objects[1].transform.position[2] > 1.0) {
@@ -429,7 +431,7 @@ fn main() {
             first_vertex: 0,
         },
         transform: Transform {
-            position: [0.0, 0.0, -0.0],
+            position: [0.5, 0.0, 0.0],
             scale: [1.0, 1.0, 1.0],
         },
         ..Default::default()
@@ -439,7 +441,7 @@ fn main() {
         name: String::from("Example"),
         id: 1,
         transform: Transform {
-            position: [0.0, 0.0, 0.0],
+            position: [0.0, 0.0, 0.5],
             scale: [1.0, 1.0, 0.5],
         },
         ..Default::default()
@@ -471,14 +473,15 @@ fn main() {
         &mut app.delegator.vulkan_context,
         &mut app.delegator.ecs_world,
         false,
+        false,
     );
-    println!("1: {:?}", app.delegator.game_context.game_objects[0]._mesh);
 
     app.delegator.game_context.instantiate(
         gameobject_example,
         &mut app.delegator.vulkan_context,
         &mut app.delegator.ecs_world,
         false,
+        true,
     );
 
     //ECS TESTING
@@ -502,8 +505,7 @@ fn main() {
 
     //END OF TESTING
 
-    println!("1: {:?}", app.delegator.game_context.game_objects[1]._mesh);
-    app.run(800.0, 800.0);
+    app.run(1800.0, 1000.0);
 }
 
 //TODO to expand

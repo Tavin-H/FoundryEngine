@@ -34,7 +34,9 @@ impl Delagator {
 
     pub fn vulkan_draw_frame(&mut self, window: &winit::window::Window) {
         //Get the UI data
-        self.ui_handler.record_ui_data(window, 1000.0);
+        //
+        let fps = 1.0 / self.game_context.calculate_delta_time();
+        self.ui_handler.record_ui_data(window, fps);
         let Some(ui_context) = &mut self.ui_handler.context else {
             panic!();
         };
@@ -42,7 +44,6 @@ impl Delagator {
         //
         //Draw the frame
         let render_batches = self.ecs_world.get_render_batches();
-        println!("{}", render_batches[0].0.len());
         self.vulkan_context.draw_frame(
             &self.game_context.game_objects,
             render_batches,
@@ -61,6 +62,7 @@ impl Delagator {
                     &mut self.vulkan_context,
                     &mut self.ecs_world,
                     true,
+                    false,
                 );
                 self.ui_handler.game_objects.push(gameobject.clone());
 

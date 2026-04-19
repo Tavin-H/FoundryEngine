@@ -1,5 +1,6 @@
 use std::{collections::VecDeque, io::Seek, time};
 
+use crate::ECS::Health;
 use crate::components::{MeshAllocation, Transform};
 use crate::{ECS::World, vulkan_data::VulkanContext};
 use nalgebra_glm::{self as glm};
@@ -80,6 +81,7 @@ impl GameContext {
         mut vulkan_context: &mut VulkanContext,
         ecs_world: &mut World,
         running: bool,
+        test: bool,
     ) {
         let before_indices = vulkan_context.indices.len();
         gameobject._mesh.first_vertex = vulkan_context.vertices.len() as i32;
@@ -89,25 +91,48 @@ impl GameContext {
         let index_count = (after_indices - before_indices) as u32;
         gameobject._mesh.first_index = before_indices as u32;
         gameobject._mesh.index_count = (after_indices - before_indices) as u32;
+        if (test) {
+            ecs_world
+                .spawn()
+                .with::<MeshAllocation>(MeshAllocation {
+                    index_count: index_count,
+                    first_index: before_indices as u32,
+                    first_vertex: 0,
+                })
+                .with::<Transform>(Transform {
+                    position: [
+                        gameobject.transform.position[0],
+                        gameobject.transform.position[1],
+                        gameobject.transform.position[2],
+                    ],
+                    scale: [1.0, 1.0, 1.0],
+                })
+                .build(ecs_world);
+        } else {
+            ecs_world
+                .spawn()
+                .with::<MeshAllocation>(MeshAllocation {
+                    index_count: index_count,
+                    first_index: before_indices as u32,
+                    first_vertex: 0,
+                })
+                .with::<Health>(Health {
+                    current: 10,
+                    max: 10,
+                })
+                .with::<Transform>(Transform {
+                    position: [
+                        gameobject.transform.position[0],
+                        gameobject.transform.position[1],
+                        gameobject.transform.position[2],
+                    ],
+                    scale: [1.0, 1.0, 1.0],
+                })
+                .build(ecs_world);
+        }
 
-        ecs_world
-            .spawn()
-            .with::<MeshAllocation>(MeshAllocation {
-                index_count: index_count,
-                first_index: before_indices as u32,
-                first_vertex: 0,
-            })
-            .with::<Transform>(Transform {
-                position: [
-                    gameobject.transform.position[0],
-                    gameobject.transform.position[1],
-                    gameobject.transform.position[2],
-                ],
-                scale: [1.0, 1.0, 1.0],
-            })
-            .build(ecs_world);
         //println!("1: {:?}", gameobject._mesh);
-        self.game_objects.push(gameobject);
+        //self.game_objects.push(gameobject);
         if (running) {
             vulkan_context.upload_mesh_data();
         }

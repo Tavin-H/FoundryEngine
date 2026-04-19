@@ -514,8 +514,8 @@ fn update_uniform_buffer(
         &glm::vec3(0.0, 0.0, 1.0),
     );
     let mut proj = glm::perspective_rh_zo(
-        std::f32::consts::PI / 4.0,
         extent.width as f32 / extent.height as f32,
+        std::f32::consts::PI / 4.0,
         0.1,
         10.0,
     );
@@ -3072,6 +3072,7 @@ impl VulkanContext {
             //Loop over render_batches
             // {
             let mut instance_index: i32 = 0;
+            println!("RENDER BATCH COUNT : {}", render_batches.len());
             for (transform_slice, allocation_slice) in render_batches {
                 update_transform_buffer(
                     current_frame as u32,
@@ -3088,25 +3089,9 @@ impl VulkanContext {
                         0,
                         instance_index as u32,
                     );
+                    instance_index += 1;
                 }
-                instance_index += 1;
             }
-            /*
-                            for i in 0..gameobjects.len() {
-                                let gameobject = &gameobjects[i];
-                                logical_device.cmd_draw_indexed(
-                                    command_buffer,
-                                    gameobject._mesh.index_count,
-                                    1,
-                                    gameobject._mesh.first_index,
-                                    //gameobject._mesh.first_vertex,
-                                    0,
-                                    i as u32,
-                                );
-                            }
-            */
-
-            // }
 
             logical_device.cmd_end_render_pass(command_buffer);
 
