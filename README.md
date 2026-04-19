@@ -1,5 +1,5 @@
 
-<img width="5679" height="1917" alt="Foundry Banner" src="https://github.com/user-attachments/assets/64d3b090-c955-423a-b90a-34f8d6db500d" />
+<img width="1481" height="500" alt="Foundry Banner" src="https://github.com/user-attachments/assets/64d3b090-c955-423a-b90a-34f8d6db500d" />
 
 # FoundryEngine
 <p align="center">
