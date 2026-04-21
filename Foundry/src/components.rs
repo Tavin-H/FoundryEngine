@@ -1,4 +1,6 @@
+use crate::delegator::InputBuffer;
 use std::any::Any;
+use winit::keyboard::KeyCode;
 pub trait Component {}
 
 type EntityID = u64;
@@ -34,7 +36,7 @@ pub enum Command {
 
 pub trait Script: Any {
     fn start(&mut self);
-    fn update(&mut self) -> Vec<(EntityID, Command)>;
+    fn update(&mut self, input_buffer: &InputBuffer) -> Vec<(EntityID, Command)>;
 }
 
 pub struct ScriptComponent {
@@ -47,18 +49,32 @@ pub struct WorldView {
 }
 //-------Test----------
 
-pub struct TestScriptInstance {
-    pub message: String,
-}
+pub struct TestScriptInstance {}
 
 impl Script for TestScriptInstance {
     fn start(&mut self) {
         let mut commands: Vec<Command> = Vec::new();
-        self.message = String::from("Hello");
     }
-    fn update(&mut self) -> Vec<(EntityID, Command)> {
+
+    fn update(&mut self, input: &InputBuffer) -> Vec<(EntityID, Command)> {
+        //start command buffer
         let mut command_buffer: Vec<(EntityID, Command)> = Vec::new();
-        command_buffer.push((1, Command::Translate([0.001, 0.001, 0.0])));
+
+        //Logic
+        if input.get_key(KeyCode::KeyS) {
+            command_buffer.push((1, Command::Translate([0.01, 0.01, 0.0])));
+        }
+        if input.get_key(KeyCode::KeyW) {
+            command_buffer.push((1, Command::Translate([-0.01, -0.01, 0.0])));
+        }
+        if input.get_key(KeyCode::KeyD) {
+            command_buffer.push((1, Command::Translate([-0.01, 0.01, 0.0])));
+        }
+        if input.get_key(KeyCode::KeyA) {
+            command_buffer.push((1, Command::Translate([0.01, -0.01, 0.0])));
+        }
+
+        //Return command buffer
         command_buffer
     }
 }

@@ -163,6 +163,7 @@ impl ApplicationHandler for HelloTriangleApp {
                     winit::event::ElementState::Pressed => {}
                     _ => {}
                 }
+                self.delegator.add_keyboard_input(event);
             }
             WindowEvent::MouseInput {
                 device_id,

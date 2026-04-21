@@ -4,6 +4,28 @@ use crate::ECS::World;
 use crate::game_data::GameContext;
 use crate::ui_data::UIHandler;
 use crate::vulkan_data::VulkanContext;
+use winit::event;
+
+#[derive(Default)]
+pub struct InputBuffer {
+    keyboard_inputs: Vec<winit::event::KeyEvent>,
+}
+impl InputBuffer {
+    fn clear(&mut self) {
+        self.keyboard_inputs.clear();
+    }
+    pub fn get_key(&self, code: winit::keyboard::KeyCode) -> bool {
+        for key in self.keyboard_inputs.iter() {
+            let winit::keyboard::PhysicalKey::Code(key) = key.physical_key else {
+                return false;
+            };
+            if key == code {
+                return true;
+            }
+        }
+        return false;
+    }
+}
 
 pub struct Delagator {
     //Mutable references to other structs
@@ -11,6 +33,7 @@ pub struct Delagator {
     pub game_context: GameContext,
     pub ui_handler: UIHandler,
     pub ecs_world: World,
+    input_buffer: InputBuffer,
 }
 
 impl Delagator {
@@ -20,7 +43,12 @@ impl Delagator {
             game_context: game,
             ui_handler: ui,
             ecs_world: world,
+            input_buffer: InputBuffer::default(),
         }
+    }
+
+    pub fn add_keyboard_input(&mut self, key_event: winit::event::KeyEvent) {
+        self.input_buffer.keyboard_inputs.push(key_event);
     }
 
     pub fn check_states(&mut self) {
@@ -30,8 +58,9 @@ impl Delagator {
     pub fn run_constants(&mut self, window: &winit::window::Window) {
         //Draw call from vulkan
         //record inputs
-        self.ecs_world.run_update_cycle();
+        self.ecs_world.run_update_cycle(&self.input_buffer);
         self.vulkan_draw_frame(window);
+        self.input_buffer.clear();
     }
 
     pub fn vulkan_draw_frame(&mut self, window: &winit::window::Window) {
