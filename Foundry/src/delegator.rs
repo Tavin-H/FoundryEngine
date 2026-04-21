@@ -4,17 +4,35 @@ use crate::ECS::World;
 use crate::game_data::GameContext;
 use crate::ui_data::UIHandler;
 use crate::vulkan_data::VulkanContext;
+use std::collections::HashSet;
 use winit::event;
+use winit::keyboard::{KeyCode, PhysicalKey};
 
 #[derive(Default)]
 pub struct InputBuffer {
     keyboard_inputs: Vec<winit::event::KeyEvent>,
+    keys_held: HashSet<KeyCode>,
 }
 impl InputBuffer {
     fn clear(&mut self) {
         self.keyboard_inputs.clear();
     }
-    pub fn get_key(&self, code: winit::keyboard::KeyCode) -> bool {
+    pub fn handle_keyboard_event(&mut self, key_event: winit::event::KeyEvent) {
+        let PhysicalKey::Code(code) = key_event.physical_key else {
+            return;
+        };
+        match key_event.state {
+            event::ElementState::Pressed => {
+                self.keys_held.insert(code);
+            }
+            event::ElementState::Released => {
+                self.keys_held.remove(&code);
+            }
+        }
+    }
+    pub fn get_key(&self, code: KeyCode) -> bool {
+        self.keys_held.contains(&code)
+        /*
         for key in self.keyboard_inputs.iter() {
             let winit::keyboard::PhysicalKey::Code(key) = key.physical_key else {
                 return false;
@@ -22,8 +40,8 @@ impl InputBuffer {
             if key == code {
                 return true;
             }
-        }
-        return false;
+        }*/
+        //return false;
     }
 }
 
@@ -33,7 +51,7 @@ pub struct Delagator {
     pub game_context: GameContext,
     pub ui_handler: UIHandler,
     pub ecs_world: World,
-    input_buffer: InputBuffer,
+    pub input_buffer: InputBuffer,
 }
 
 impl Delagator {

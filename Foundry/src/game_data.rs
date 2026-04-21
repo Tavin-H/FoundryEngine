@@ -117,9 +117,7 @@ impl GameContext {
                     first_vertex: 0,
                 })
                 .with::<ScriptComponent>(ScriptComponent {
-                    instance: Box::new(TestScriptInstance {
-                        message: String::from("Hi"),
-                    }),
+                    instance: Box::new(TestScriptInstance {}),
                 })
                 .with::<Transform>(Transform {
                     position: [
