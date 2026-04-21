@@ -1,7 +1,7 @@
 use std::{collections::VecDeque, io::Seek, time};
 
 use crate::ECS::Health;
-use crate::components::{MeshAllocation, Transform};
+use crate::components::{MeshAllocation, ScriptComponent, TestScriptInstance, Transform};
 use crate::{ECS::World, vulkan_data::VulkanContext};
 use nalgebra_glm::{self as glm};
 
@@ -116,9 +116,10 @@ impl GameContext {
                     first_index: before_indices as u32,
                     first_vertex: 0,
                 })
-                .with::<Health>(Health {
-                    current: 10,
-                    max: 10,
+                .with::<ScriptComponent>(ScriptComponent {
+                    instance: Box::new(TestScriptInstance {
+                        message: String::from("Hi"),
+                    }),
                 })
                 .with::<Transform>(Transform {
                     position: [

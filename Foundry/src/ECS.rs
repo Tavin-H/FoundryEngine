@@ -5,7 +5,7 @@ use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
 
 //Built-in Components
-use crate::components::{Component, MeshAllocation, Transform};
+use crate::components::{Command, Component, MeshAllocation, ScriptComponent, Transform};
 
 use ash::vk::PipelineLayout;
 
@@ -138,6 +138,19 @@ impl Archetype {
             .downcast_ref::<Vec<T>>()
             .expect("Failed to downcast column in get_components_as_slice");
         downcast_column.as_slice()
+    }
+
+    fn get_components_as_mut_slice<T: 'static>(&mut self) -> &mut [T] {
+        let id = TypeId::of::<T>();
+
+        let raw_column: &mut Box<dyn Any> = self
+            .columns
+            .get_mut(&id)
+            .expect("Filed to find column in get_components_as_slice");
+        let downcast_column = raw_column
+            .downcast_mut::<Vec<T>>()
+            .expect("Failed to downcast column in get_components_as_slice");
+        downcast_column.as_mut_slice()
     }
 
     fn generate_signature(ids: &Vec<TypeId>) -> Vec<TypeId> {
@@ -297,6 +310,25 @@ impl World {
             .expect("Failed to downcast column in get_component");
         &downcast_vec[record.row_index]
     }
+    pub fn get_component_as_mut<T: 'static>(&mut self, entity: EntityID) -> &mut T {
+        let component_id = TypeId::of::<T>();
+        let Some(record) = self.entity_index.get(&entity) else {
+            panic!("No record for entity!");
+        };
+        let archetype = self
+            .archetype_index
+            .get_mut(&record.archetype_signature)
+            .expect("Failed to get archetpye");
+        let raw_vec = archetype
+            .columns
+            .get_mut(&component_id)
+            .expect("Failed to get column");
+
+        let downcast_vec = raw_vec
+            .downcast_mut::<Vec<T>>()
+            .expect("Failed to downcast column in get_component");
+        &mut downcast_vec[record.row_index]
+    }
 
     pub fn get_archetypes_by_ids(&self, ids: &Vec<TypeId>) -> Vec<&Archetype> {
         //Gets all archetypes with component T
@@ -306,6 +338,17 @@ impl World {
                 // Check if EVERY search_id exists in this archetype's columns
                 // .all() stops early (short-circuits) if it finds a missing ID
                 ids.iter().all(|id| archetype.has_id(id))
+            })
+            .collect()
+    }
+    pub fn get_mut_archetypes_by_ids(&mut self, ids: &mut Vec<TypeId>) -> Vec<&mut Archetype> {
+        //Gets all archetypes with component T
+        self.archetype_index
+            .values_mut() // Iterate over the archetypes
+            .filter(|archetype| {
+                // Check if EVERY search_id exists in this archetype's columns
+                // .all() stops early (short-circuits) if it finds a missing ID
+                ids.iter_mut().all(|id| archetype.has_id(id))
             })
             .collect()
     }
@@ -328,5 +371,35 @@ impl World {
         }
         render_batches
         //Use render_batches in draw_frame()
+    }
+
+    fn handle_command(&mut self, entity: EntityID, command: Command) {
+        match command {
+            Command::Translate(pos) => {
+                let component: &mut Transform = self.get_component_as_mut::<Transform>(entity);
+                component.position[0] += pos[0];
+                component.position[1] += pos[1];
+                component.position[2] += pos[2];
+            }
+            _ => panic!("Unkown Command found in ECB"),
+        }
+    }
+
+    pub fn run_update_cycle(&mut self) {
+        let mut command_queue: Vec<(EntityID, Command)> = Vec::new();
+        let mut archetypes =
+            self.get_mut_archetypes_by_ids(&mut vec![TypeId::of::<ScriptComponent>()]);
+        //println!("Update archetypes");
+        for archetype in archetypes.iter_mut() {
+            let scripts: &mut [ScriptComponent] =
+                archetype.get_components_as_mut_slice::<ScriptComponent>();
+            for script in scripts.iter_mut() {
+                let mut commands = script.instance.update();
+                command_queue.append(&mut commands);
+            }
+        }
+        for (target, command) in command_queue {
+            self.handle_command(target, command);
+        }
     }
 }

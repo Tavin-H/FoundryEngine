@@ -29,6 +29,8 @@ impl Delagator {
 
     pub fn run_constants(&mut self, window: &winit::window::Window) {
         //Draw call from vulkan
+        //record inputs
+        self.ecs_world.run_update_cycle();
         self.vulkan_draw_frame(window);
     }
 
