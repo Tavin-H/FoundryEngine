@@ -2,7 +2,10 @@ use std::{collections::VecDeque, io::Seek, time};
 
 use crate::ECS::Health;
 use crate::components::{MeshAllocation, ScriptComponent, TestScriptInstance, TimeData, Transform};
-use crate::{ECS::World, vulkan_data::VulkanContext};
+use crate::{
+    ECS::{EntityBuilder, IDAllocator, World},
+    vulkan_data::VulkanContext,
+};
 use nalgebra_glm::{self as glm};
 
 /*
@@ -83,6 +86,7 @@ impl GameContext {
         &mut self,
         mut gameobject: GameObject,
         mut vulkan_context: &mut VulkanContext,
+        id_allocator: &mut IDAllocator,
         ecs_world: &mut World,
         running: bool,
         test: bool,
@@ -96,8 +100,8 @@ impl GameContext {
         gameobject._mesh.first_index = before_indices as u32;
         gameobject._mesh.index_count = (after_indices - before_indices) as u32;
         if (test) {
-            ecs_world
-                .spawn()
+            let id = id_allocator.reserve_id();
+            EntityBuilder::spawn(id)
                 .with::<MeshAllocation>(MeshAllocation {
                     index_count: index_count,
                     first_index: before_indices as u32,
@@ -113,8 +117,8 @@ impl GameContext {
                 })
                 .build(ecs_world);
         } else {
-            ecs_world
-                .spawn()
+            let id = id_allocator.reserve_id();
+            EntityBuilder::spawn(id)
                 .with::<MeshAllocation>(MeshAllocation {
                     index_count: index_count,
                     first_index: before_indices as u32,

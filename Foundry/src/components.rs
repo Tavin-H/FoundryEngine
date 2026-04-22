@@ -1,4 +1,7 @@
-use crate::{ECS::World, delegator::InputBuffer};
+use crate::{
+    ECS::{EntityBuilder, IDAllocator, World},
+    delegator::InputBuffer,
+};
 use std::any::Any;
 use winit::keyboard::KeyCode;
 pub trait Component {}
@@ -29,15 +32,16 @@ pub struct GameObject {
 
 //--------Custom scripting-----------
 pub enum Command {
+    Instantiate(EntityBuilder),
+    Delete(EntityID),
     Translate(Vec3),
-    Delete(),
     Print(String),
     SetPos(),
 }
 
 pub trait Script: Any {
     fn start(&mut self);
-    fn update(&mut self, ctx: &ScriptContext) -> Vec<(EntityID, Command)>;
+    fn update(&mut self, ctx: &mut ScriptContext) -> Vec<(EntityID, Command)>;
 }
 
 pub struct ScriptComponent {
@@ -58,6 +62,7 @@ pub struct TimeData {
 pub struct ScriptContext<'a> {
     pub time: &'a TimeData,
     pub input: &'a InputBuffer,
+    pub id: &'a mut IDAllocator,
     //Add world later
 }
 //-------Test----------
@@ -69,9 +74,9 @@ impl Script for TestScriptInstance {
         let mut commands: Vec<Command> = Vec::new();
     }
 
-    fn update(&mut self, ctx: &ScriptContext) -> Vec<(EntityID, Command)> {
+    fn update(&mut self, ctx: &mut ScriptContext) -> Vec<(EntityID, Command)> {
         //start command buffer
-        let ScriptContext { time, input } = ctx;
+        let ScriptContext { time, input, id } = ctx;
         let mut command_buffer: Vec<(EntityID, Command)> = Vec::new();
 
         //Logic
@@ -98,6 +103,17 @@ impl Script for TestScriptInstance {
                 1,
                 Command::Translate(Vec3::new(1.0, -1.0, 0.0) * time.delta_time),
             ));
+        }
+
+        let test_id = id.reserve_id();
+        let test = EntityBuilder::spawn(test_id)
+            .with::<MeshAllocation>(MeshAllocation::default())
+            .with::<Transform>(Transform {
+                position: [0.0, 0.0, 0.0],
+                scale: [1.0, 1.0, 1.0],
+            });
+        if input.get_key(KeyCode::KeyK) {
+            command_buffer.push((1, Command::Instantiate(test)));
         }
 
         //Return command buffer

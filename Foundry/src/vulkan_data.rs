@@ -2583,6 +2583,22 @@ impl VulkanContext {
         }
     }
 
+    pub fn create_mesh_data(&mut self) -> MeshAllocation {
+        let before_indices = self.indices.len();
+        let first_vertex = self.vertices.len() as i32;
+        self.load_model();
+        let after_indices = self.indices.len();
+
+        let index_count = (after_indices - before_indices) as u32;
+        let first_index = before_indices as u32;
+        let index_count = (after_indices - before_indices) as u32;
+        MeshAllocation {
+            index_count: index_count,
+            first_index: first_index,
+            first_vertex: first_vertex,
+        }
+    }
+
     pub fn create_vertex_buffer(&mut self) {
         let Some(logical_device) = &self.logical_device else {
             panic!("No logical device when calling create_vertex_buffer");

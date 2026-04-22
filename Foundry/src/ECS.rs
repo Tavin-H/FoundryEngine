@@ -9,6 +9,7 @@ use crate::components::{
     Command, Component, MeshAllocation, ScriptComponent, ScriptContext, TimeData, Transform,
 };
 use crate::delegator::InputBuffer;
+use crate::vulkan_data::VulkanContext;
 
 use ash::vk::PipelineLayout;
 
@@ -34,6 +35,16 @@ pub struct EntityBuilder {
 }
 
 impl EntityBuilder {
+    pub fn spawn(id: EntityID) -> Self {
+        let new_entity = EntityBuilder {
+            id: id,
+            ensure_functions: Vec::new(),
+            push_component_functions: Vec::new(),
+            signature: Vec::new(),
+        };
+        new_entity
+    }
+
     pub fn with<T: Component + 'static>(mut self, component: T) -> Self {
         let id = TypeId::of::<T>();
 
@@ -57,7 +68,7 @@ impl EntityBuilder {
         self
     }
 
-    pub fn build(self, world: &mut World) -> EntityID {
+    pub fn build(self, world: &mut World) {
         //Find archetype / create if non existing
         //Populate Archetype
         //Make an entity record (last?)
@@ -85,7 +96,6 @@ impl EntityBuilder {
         world.entity_index.insert(self.id, record);
 
         println!("Building");
-        self.id
     }
 }
 
@@ -211,6 +221,20 @@ impl TypeRegister {
     }
 }
 
+#[derive(Default)]
+pub struct IDAllocator {
+    //Change to ID pool
+    next_available_entity_id: u64,
+}
+
+impl IDAllocator {
+    pub fn reserve_id(&mut self) -> EntityID {
+        let id = self.next_available_entity_id;
+        self.next_available_entity_id += 1;
+        id
+    }
+}
+
 //World (Core logic)
 #[derive(Default)]
 pub struct World {
@@ -243,6 +267,7 @@ impl World {
         }
     }
 
+    /*
     pub fn spawn(&mut self) -> EntityBuilder {
         let new_entity = EntityBuilder {
             id: self.next_available_entity_id,
@@ -256,18 +281,7 @@ impl World {
 
         new_entity
     }
-
-    //Example usage of builder pattern:
-    pub fn spawn_player(&mut self) {
-        let player = self
-            .spawn()
-            .with::<Position>(Position {})
-            .with::<Health>(Health {
-                current: 20,
-                max: 20,
-            })
-            .build(self);
-    }
+    */
 
     fn ensure_registered<T: 'static>(&mut self) {
         let id: TypeId = TypeId::of::<T>();
@@ -376,8 +390,31 @@ impl World {
         //Use render_batches in draw_frame()
     }
 
-    fn handle_command(&mut self, entity: EntityID, command: Command) {
+    fn handle_command(
+        &mut self,
+        entity: EntityID,
+        command: Command,
+        vulkan_data: &mut VulkanContext,
+    ) {
         match command {
+            Command::Instantiate(entity_builder) => {
+                //Get mesh_allocation data
+                //Build entity_builder
+                let has_mesh = entity_builder
+                    .signature
+                    .contains(&TypeId::of::<MeshAllocation>());
+                let id = entity_builder.id;
+                entity_builder.build(self);
+                if (has_mesh) {
+                    let new_mesh_data = vulkan_data.create_mesh_data();
+                    let mesh_data: &mut MeshAllocation =
+                        self.get_component_as_mut::<MeshAllocation>(id);
+                    mesh_data.first_vertex = new_mesh_data.first_vertex;
+                    mesh_data.first_index = new_mesh_data.first_index;
+                    mesh_data.index_count = new_mesh_data.index_count;
+                }
+                vulkan_data.upload_mesh_data();
+            }
             Command::Translate(pos) => {
                 let component: &mut Transform = self.get_component_as_mut::<Transform>(entity);
                 component.position[0] += pos[0];
@@ -388,7 +425,11 @@ impl World {
         }
     }
 
-    pub fn run_update_cycle(&mut self, ctx: &ScriptContext<'_>) {
+    pub fn run_update_cycle(
+        &mut self,
+        ctx: &mut ScriptContext<'_>,
+        vulkan_data: &mut VulkanContext,
+    ) {
         let mut command_queue: Vec<(EntityID, Command)> = Vec::new();
         let mut archetypes =
             self.get_mut_archetypes_by_ids(&mut vec![TypeId::of::<ScriptComponent>()]);
@@ -397,12 +438,12 @@ impl World {
             let scripts: &mut [ScriptComponent] =
                 archetype.get_components_as_mut_slice::<ScriptComponent>();
             for script in scripts.iter_mut() {
-                let mut commands = script.instance.update(&ctx);
+                let mut commands = script.instance.update(ctx);
                 command_queue.append(&mut commands);
             }
         }
         for (target, command) in command_queue {
-            self.handle_command(target, command);
+            self.handle_command(target, command, vulkan_data);
         }
     }
 }

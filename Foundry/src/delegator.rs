@@ -1,6 +1,6 @@
 use crate::ui_data::{self, UIState};
 
-use crate::ECS::World;
+use crate::ECS::{IDAllocator, World};
 use crate::components::ScriptContext;
 use crate::game_data::GameContext;
 use crate::ui_data::UIHandler;
@@ -53,6 +53,7 @@ pub struct Delagator {
     pub ui_handler: UIHandler,
     pub ecs_world: World,
     pub input_buffer: InputBuffer,
+    pub id_allocator: IDAllocator,
 }
 
 impl Delagator {
@@ -63,6 +64,7 @@ impl Delagator {
             ui_handler: ui,
             ecs_world: world,
             input_buffer: InputBuffer::default(),
+            id_allocator: IDAllocator::default(),
         }
     }
 
@@ -77,11 +79,13 @@ impl Delagator {
     pub fn run_constants(&mut self, window: &winit::window::Window) {
         //Draw call from vulkan
         //record inputs
-        let ctx = ScriptContext {
+        let mut ctx = ScriptContext {
             time: &self.game_context.time,
             input: &self.input_buffer,
+            id: &mut self.id_allocator,
         };
-        self.ecs_world.run_update_cycle(&ctx);
+        self.ecs_world
+            .run_update_cycle(&mut ctx, &mut self.vulkan_context);
         self.vulkan_draw_frame(window);
         self.input_buffer.clear();
     }
@@ -114,13 +118,12 @@ impl Delagator {
                 self.game_context.instantiate(
                     gameobject.clone(),
                     &mut self.vulkan_context,
+                    &mut self.id_allocator,
                     &mut self.ecs_world,
                     true,
                     false,
                 );
                 self.ui_handler.game_objects.push(gameobject.clone());
-
-                self.ecs_world.spawn_player();
             }
             UIState::None => {}
         }

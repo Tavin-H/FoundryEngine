@@ -27,7 +27,7 @@ use crate::game_data::GameObject;
 mod components;
 
 mod ECS;
-use crate::ECS::{Archetype, EntityRecord, Health, World};
+use crate::ECS::{Archetype, EntityBuilder, EntityRecord, Health, World};
 
 //Vulkan Data
 mod vulkan_data;
@@ -472,6 +472,7 @@ fn main() {
     app.delegator.game_context.instantiate(
         gameobject_example_2,
         &mut app.delegator.vulkan_context,
+        &mut app.delegator.id_allocator,
         &mut app.delegator.ecs_world,
         false,
         false,
@@ -480,22 +481,21 @@ fn main() {
     app.delegator.game_context.instantiate(
         gameobject_example,
         &mut app.delegator.vulkan_context,
+        &mut app.delegator.id_allocator,
         &mut app.delegator.ecs_world,
         false,
         true,
     );
 
     //ECS TESTING
-    let test = app
-        .delegator
-        .ecs_world
-        .spawn()
+
+    let test = app.delegator.id_allocator.reserve_id();
+    EntityBuilder::spawn(test)
         .with::<Health>(Health::new(20, 20))
         .build(&mut app.delegator.ecs_world);
-    let test2 = app
-        .delegator
-        .ecs_world
-        .spawn()
+
+    let test2 = app.delegator.id_allocator.reserve_id();
+    EntityBuilder::spawn(test2)
         .with::<Health>(Health::new(10, 10))
         .build(&mut app.delegator.ecs_world);
 
