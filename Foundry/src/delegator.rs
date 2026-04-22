@@ -1,6 +1,7 @@
 use crate::ui_data::{self, UIState};
 
 use crate::ECS::World;
+use crate::components::ScriptContext;
 use crate::game_data::GameContext;
 use crate::ui_data::UIHandler;
 use crate::vulkan_data::VulkanContext;
@@ -76,7 +77,11 @@ impl Delagator {
     pub fn run_constants(&mut self, window: &winit::window::Window) {
         //Draw call from vulkan
         //record inputs
-        self.ecs_world.run_update_cycle(&self.input_buffer);
+        let ctx = ScriptContext {
+            time: &self.game_context.time,
+            input: &self.input_buffer,
+        };
+        self.ecs_world.run_update_cycle(&ctx);
         self.vulkan_draw_frame(window);
         self.input_buffer.clear();
     }

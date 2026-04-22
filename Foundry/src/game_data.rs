@@ -1,7 +1,7 @@
 use std::{collections::VecDeque, io::Seek, time};
 
 use crate::ECS::Health;
-use crate::components::{MeshAllocation, ScriptComponent, TestScriptInstance, Transform};
+use crate::components::{MeshAllocation, ScriptComponent, TestScriptInstance, TimeData, Transform};
 use crate::{ECS::World, vulkan_data::VulkanContext};
 use nalgebra_glm::{self as glm};
 
@@ -21,6 +21,7 @@ pub struct Transform {
 */
 
 #[derive(Default, Debug, Clone)]
+
 pub struct GameObject {
     pub id: u32,
     pub name: String,
@@ -32,6 +33,7 @@ pub struct GameContext {
     pub delta_time_previous_frame: std::time::Instant,
     pub previous_delta_times: VecDeque<f32>,
     pub delta_time: f32,
+    pub time: TimeData,
     pub game_active: bool,
     pub game_objects: Vec<GameObject>,
 }
@@ -42,6 +44,7 @@ impl Default for GameContext {
             delta_time_previous_frame: time::Instant::now(),
             previous_delta_times: VecDeque::from([0.0, 0.0, 0.0]),
             delta_time: 0.0,
+            time: TimeData { delta_time: 0.0 },
             game_active: false,
             game_objects: Vec::new(),
         }
@@ -72,6 +75,7 @@ impl GameContext {
         self.delta_time_previous_frame = time::Instant::now();
         self.previous_delta_times.push_back(delta_time);
         self.previous_delta_times.pop_front();
+        self.time.delta_time = avg_delta_time;
         avg_delta_time
     }
 

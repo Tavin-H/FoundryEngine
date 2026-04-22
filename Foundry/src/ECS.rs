@@ -5,7 +5,9 @@ use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
 
 //Built-in Components
-use crate::components::{Command, Component, MeshAllocation, ScriptComponent, Transform};
+use crate::components::{
+    Command, Component, MeshAllocation, ScriptComponent, ScriptContext, TimeData, Transform,
+};
 use crate::delegator::InputBuffer;
 
 use ash::vk::PipelineLayout;
@@ -386,7 +388,7 @@ impl World {
         }
     }
 
-    pub fn run_update_cycle(&mut self, input_buffer: &InputBuffer) {
+    pub fn run_update_cycle(&mut self, ctx: &ScriptContext<'_>) {
         let mut command_queue: Vec<(EntityID, Command)> = Vec::new();
         let mut archetypes =
             self.get_mut_archetypes_by_ids(&mut vec![TypeId::of::<ScriptComponent>()]);
@@ -395,7 +397,7 @@ impl World {
             let scripts: &mut [ScriptComponent] =
                 archetype.get_components_as_mut_slice::<ScriptComponent>();
             for script in scripts.iter_mut() {
-                let mut commands = script.instance.update(input_buffer);
+                let mut commands = script.instance.update(&ctx);
                 command_queue.append(&mut commands);
             }
         }
