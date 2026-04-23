@@ -2556,17 +2556,19 @@ impl VulkanContext {
         let mut load_options = tobj::LoadOptions {
             ..Default::default()
         };
-        match tobj::load_obj("models/viking_room.obj", &load_options) {
+        match tobj::load_obj("models/BEE.obj", &load_options) {
             Ok((models, _materials)) => {
                 println!("Loaded viking room --------------------------------");
                 for shape in models {
-                    for index in shape.mesh.indices {
+                    for (i, index) in shape.mesh.indices.iter().enumerate() {
+                        let index = *index as usize;
                         let x = shape.mesh.positions[3 * index as usize + 0];
                         let y = shape.mesh.positions[3 * index as usize + 1];
                         let z = shape.mesh.positions[3 * index as usize + 2];
 
-                        let u = shape.mesh.texcoords[2 * index as usize + 0];
-                        let v = 1.0 - shape.mesh.texcoords[2 * index as usize + 1];
+                        let tex_index = shape.mesh.texcoord_indices[i] as usize;
+                        let u = shape.mesh.texcoords[2 * tex_index + 0];
+                        let v = 1.0 - shape.mesh.texcoords[2 * tex_index + 1];
 
                         let vertex = Vertex {
                             pos: glm::vec3(x, y, z),

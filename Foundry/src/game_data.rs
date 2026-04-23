@@ -115,7 +115,7 @@ impl GameContext {
                         gameobject.transform.position[1],
                         gameobject.transform.position[2],
                     ],
-                    scale: [1.0, 1.0, 1.0],
+                    scale: [30.0, 30.0, 30.0],
                 })
                 .build(ecs_world);
         } else {
