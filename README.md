@@ -1,5 +1,5 @@
 
-<img width="5679" height="1917" alt="Foundry Banner" src="https://github.com/user-attachments/assets/64d3b090-c955-423a-b90a-34f8d6db500d" />
+<img width="1481" height="500" alt="Foundry Banner" src="https://github.com/user-attachments/assets/64d3b090-c955-423a-b90a-34f8d6db500d" />
 
 # FoundryEngine
 <p align="center">
@@ -8,10 +8,14 @@
   <img src="https://img.shields.io/badge/Vulkan-DC143C?style=for-the-badge&logo=Vulkan" />
   &nbsp;&nbsp;&nbsp;&nbsp;
   <img src="https://img.shields.io/badge/Version-pre--alpha-white?style=for-the-badge&logo=Git&logoColor=white&labelColor=2d3146&color=%234cb083" />
-  &nbsp;&nbsp;&nbsp;&nbsp;
-  <img src="https://img.shields.io/badge/Downloads-17-white?style=for-the-badge&labelColor=2d3146&color=blue" />
+</br>
+  <img src="https://img.shields.io/badge/Downloads-152-white?style=for-the-badge&labelColor=2d3146&color=blue" />
    &nbsp;&nbsp;&nbsp;&nbsp;
   <img src="https://img.shields.io/badge/License-MIT-white?style=for-the-badge&labelColor=2d3146&color=yellow" />
+  &nbsp;&nbsp;&nbsp;&nbsp;
+    <a href="https://foundry-engine.gitbook.io/foundry-engine-docs/">
+      <img src="https://img.shields.io/badge/Documentation-WIP-white?style=for-the-badge&logo=Gitbook&labelColor=2d3146&color=9370db" />
+    </a>
 </p>
 
 
@@ -31,6 +35,12 @@ The main goal of this project was to teach myself computer graphics and give mys
 ### ECS (Entity Component System)
 * Data-oriented design to allow for super-fast and efficient system lookups
 * Add components to game objects (represented as 'Game Entities')
+* Get components from game objects with turbofish syntax
+
+### ECB (Entity Command Buffer)
+* Custom scripting using a command buffer
+* 100% deterministic behaviour
+* Check the Documentation to see an example of custom scripting
 
 ### Scene Manager
 * Instantiate game objects
@@ -47,11 +57,11 @@ The main goal of this project was to teach myself computer graphics and give mys
 
 Clone the repo
 ```
-git clone https://github.com/your-username/FoundryEngine.git
+git clone https://github.com/Tavin-H/FoundryEngine.git
 ```
 Make sure to cd into foundry
 ```
-cd clone-location/FoundryEngine/Foundry
+cd your-clone-location/FoundryEngine/Foundry
 ```
 
 Run the demo scene
@@ -72,13 +82,12 @@ I've chosen each of my tools for specific reasons as stated below.
 ---
 ## 🗺️ Roadmap
 ### Features currently in development
-* Custom components
+* Camera controlls with const EntityIDs
 
 ### Features to come
 * Drag and drop mesh files to use for game objects
 * Scene graph in scene manager
 * Adjusting game object positions from scene graph
-* Attaching scripts to game objects
 * Lighting engine
 * UI manager to use in scripts
 * Sound manager to use in scripts
