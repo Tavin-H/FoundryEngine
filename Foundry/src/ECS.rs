@@ -224,7 +224,8 @@ impl TypeRegister {
 #[derive(Default)]
 pub struct IDAllocator {
     //Change to ID pool
-    next_available_entity_id: u64,
+    next_available_entity_id: EntityID,
+    pub this: EntityID,
 }
 
 impl IDAllocator {
@@ -435,11 +436,15 @@ impl World {
             self.get_mut_archetypes_by_ids(&mut vec![TypeId::of::<ScriptComponent>()]);
         //println!("Update archetypes");
         for archetype in archetypes.iter_mut() {
+            let mut counter = 0;
+            let entity_ids = archetype.entity_ids.clone();
             let scripts: &mut [ScriptComponent] =
                 archetype.get_components_as_mut_slice::<ScriptComponent>();
             for script in scripts.iter_mut() {
+                ctx.id.this = entity_ids[counter];
                 let mut commands = script.instance.update(ctx);
                 command_queue.append(&mut commands);
+                counter += 1;
             }
         }
         for (target, command) in command_queue {

@@ -105,16 +105,43 @@ impl Script for TestScriptInstance {
             ));
         }
 
-        let test_id = id.reserve_id();
-        let test = EntityBuilder::spawn(test_id)
-            .with::<MeshAllocation>(MeshAllocation::default())
-            .with::<Transform>(Transform {
-                position: [0.0, 0.0, 0.0],
-                scale: [1.0, 1.0, 1.0],
-            });
         if input.get_key(KeyCode::KeyK) {
-            command_buffer.push((1, Command::Instantiate(test)));
+            let test_id = id.reserve_id();
+            println!("{}", test_id);
+            let test = EntityBuilder::spawn(test_id)
+                .with::<MeshAllocation>(MeshAllocation::default())
+                .with::<Transform>(Transform {
+                    position: [0.0, 0.0, 0.0],
+                    scale: [1.0, 1.0, 1.0],
+                })
+                .with::<ScriptComponent>(ScriptComponent {
+                    instance: Box::new(MoveScriptInstance {}),
+                });
+            command_buffer.push((id.this, Command::Instantiate(test)));
         }
+
+        //Return command buffer
+        command_buffer
+    }
+}
+
+pub struct MoveScriptInstance {}
+
+impl Script for MoveScriptInstance {
+    fn start(&mut self) {
+        let mut commands: Vec<Command> = Vec::new();
+    }
+
+    fn update(&mut self, ctx: &mut ScriptContext) -> Vec<(EntityID, Command)> {
+        //start command buffer
+        let ScriptContext { time, input, id } = ctx;
+        let mut command_buffer: Vec<(EntityID, Command)> = Vec::new();
+
+        //Logic
+        command_buffer.push((
+            id.this,
+            Command::Translate(Vec3::new(1.0, 0.0, 0.0) * time.delta_time),
+        ));
 
         //Return command buffer
         command_buffer
