@@ -1,8 +1,11 @@
 //Game Data
 use crate::game_data::GameContext;
 use crate::game_data::GameObject;
-use crate::game_data::MeshAllocation;
-use crate::game_data::Transform;
+//use crate::game_data::MeshAllocation;
+//use crate::game_data::Transform;
+
+//Components
+use crate::components::{MeshAllocation, Transform};
 
 //Ash
 use ash::ext::{device_memory_report, surface_maintenance1};
@@ -511,8 +514,8 @@ fn update_uniform_buffer(
         &glm::vec3(0.0, 0.0, 1.0),
     );
     let mut proj = glm::perspective_rh_zo(
-        std::f32::consts::PI / 4.0,
         extent.width as f32 / extent.height as f32,
+        std::f32::consts::PI / 4.0,
         0.1,
         10.0,
     );
@@ -531,22 +534,22 @@ fn update_uniform_buffer(
 fn update_transform_buffer(
     current_image: u32,
     transform_buffers_mapped: &Vec<*mut glm::Mat4>,
-    gameobjects: &Vec<GameObject>,
+    // gameobjects: &Vec<GameObject>,
+    render_batch_transforms: &[Transform],
+    index_offset: usize,
 ) {
-    let mut transforms: Vec<glm::Mat4> = Vec::new();
-
-    //println!("gameobject count:{}", gameobjects.len());
-
-    for gameobject in gameobjects {
-        let converted_position: glm::Mat4x4 = convert_vec_to_mat(gameobject.transform.position);
-        let converted_scale: glm::Mat4x4 = convert_scale_to_mat(gameobject.transform.scale);
-        transforms.push(converted_position * converted_scale);
+    let mut mat_transforms: Vec<glm::Mat4> = Vec::new();
+    for transform in render_batch_transforms {
+        let converted_position: glm::Mat4x4 = convert_vec_to_mat(transform.position);
+        let converted_scale: glm::Mat4x4 = convert_scale_to_mat(transform.scale);
+        mat_transforms.push(converted_position * converted_scale);
     }
     unsafe {
         ptr::copy_nonoverlapping(
-            transforms.as_ptr(),
-            transform_buffers_mapped[current_image as usize],
-            transforms.len(),
+            mat_transforms.as_ptr(),
+            //.add() will account for any potential overlapping
+            transform_buffers_mapped[current_image as usize].add(index_offset),
+            render_batch_transforms.len(),
         );
     }
 }
@@ -606,7 +609,6 @@ fn create_buffer(
 
         match logical_device.allocate_memory(&alloc_info, None) {
             Ok(buffer_memory) => {
-                //self.vertex_buffer_memory = buffer_memory;
                 logical_device.bind_buffer_memory(buffer, buffer_memory, 0);
 
                 println!("Allocated Vertex Buffer Memory");
@@ -2581,6 +2583,22 @@ impl VulkanContext {
         }
     }
 
+    pub fn create_mesh_data(&mut self) -> MeshAllocation {
+        let before_indices = self.indices.len();
+        let first_vertex = self.vertices.len() as i32;
+        self.load_model();
+        let after_indices = self.indices.len();
+
+        let index_count = (after_indices - before_indices) as u32;
+        let first_index = before_indices as u32;
+        let index_count = (after_indices - before_indices) as u32;
+        MeshAllocation {
+            index_count: index_count,
+            first_index: first_index,
+            first_vertex: first_vertex,
+        }
+    }
+
     pub fn create_vertex_buffer(&mut self) {
         let Some(logical_device) = &self.logical_device else {
             panic!("No logical device when calling create_vertex_buffer");
@@ -2963,6 +2981,8 @@ impl VulkanContext {
         ui_renderer: &mut Renderer,
         ui_context: &mut imgui::Context,
         ui_render_pass: vk::RenderPass,
+        transform_buffers_mapped: &Vec<*mut glm::Mat4>,
+        render_batches: Vec<(&[Transform], &[MeshAllocation])>,
     ) {
         let begin_info = vk::CommandBufferBeginInfo {
             ..Default::default()
@@ -3058,18 +3078,33 @@ impl VulkanContext {
                 &[],
             );
 
-            for i in 0..gameobjects.len() {
-                let gameobject = &gameobjects[i];
-                logical_device.cmd_draw_indexed(
-                    command_buffer,
-                    gameobject._mesh.index_count,
-                    1,
-                    gameobject._mesh.first_index,
-                    //gameobject._mesh.first_vertex,
-                    0,
-                    i as u32,
+            let mut instance_index: usize = 0;
+            //Render batch count needed because transform buffer can't be overridden before
+            //submitting
+            let mut render_batch_count: usize = 0;
+            let mut test = 0;
+            for (transform_slice, allocation_slice) in render_batches {
+                update_transform_buffer(
+                    current_frame as u32,
+                    transform_buffers_mapped,
+                    transform_slice,
+                    render_batch_count,
                 );
+                for mesh_allocation in allocation_slice {
+                    logical_device.cmd_draw_indexed(
+                        command_buffer,
+                        mesh_allocation.index_count,
+                        1,
+                        mesh_allocation.first_index,
+                        //gameobject._mesh.first_vertex,
+                        0,
+                        instance_index as u32,
+                    );
+                    instance_index += 1;
+                }
+                render_batch_count += 1;
             }
+
             logical_device.cmd_end_render_pass(command_buffer);
 
             //---------------UI specific render_pass-----------------
@@ -3148,6 +3183,7 @@ impl VulkanContext {
     pub fn draw_frame(
         &mut self,
         gameobjects: &Vec<GameObject>,
+        render_batches: Vec<(&[Transform], &[MeshAllocation])>,
         ui_context: &mut imgui::Context,
         window: &Window,
     ) {
@@ -3259,6 +3295,8 @@ impl VulkanContext {
                 ui_renderer,
                 ui_context,
                 ui_render_pass,
+                &self.transform_buffers_mapped,
+                render_batches,
             );
             let wait_semaphores = [current_image_available_semaphore];
             let wait_stages = [vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];
@@ -3269,12 +3307,6 @@ impl VulkanContext {
             };
 
             update_uniform_buffer(current_frame as u32, extent, &self.uniform_buffers_mapped);
-
-            update_transform_buffer(
-                current_frame as u32,
-                &self.transform_buffers_mapped,
-                gameobjects,
-            );
 
             let submit_info = vk::SubmitInfo {
                 wait_semaphore_count: 1,

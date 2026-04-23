@@ -19,13 +19,15 @@ use crate::delegator::Delagator;
 
 //Game Data
 mod game_data;
+use crate::components::{MeshAllocation, Transform};
 use crate::game_data::GameContext;
 use crate::game_data::GameObject;
-use crate::game_data::MeshAllocation;
-use crate::game_data::Transform;
+
+//Components
+mod components;
 
 mod ECS;
-use crate::ECS::{Archetype, EntityRecord, Health, World};
+use crate::ECS::{Archetype, EntityBuilder, EntityRecord, Health, World};
 
 //Vulkan Data
 mod vulkan_data;
@@ -102,7 +104,7 @@ use rand::Rng;
 struct WinitApp {
     window: Option<Window>,
     size: winit::dpi::LogicalSize<f64>,
-    instance: Option<ash::Instance>,
+    //instance: Option<ash::Instance>,
 }
 
 impl ApplicationHandler for HelloTriangleApp {
@@ -161,6 +163,7 @@ impl ApplicationHandler for HelloTriangleApp {
                     winit::event::ElementState::Pressed => {}
                     _ => {}
                 }
+                self.delegator.input_buffer.handle_keyboard_event(event);
             }
             WindowEvent::MouseInput {
                 device_id,
@@ -213,29 +216,31 @@ impl ApplicationHandler for HelloTriangleApp {
             if (!self.delegator.vulkan_context.running) {
                 avg_delta_time = 0.0;
             }
-            if (self.delegator.game_context.game_objects[0]
-                .transform
-                .position[2]
-                > 1.0)
-            {
-                self.rising = false;
-            }
-            if (self.delegator.game_context.game_objects[0]
-                .transform
-                .position[2]
-                < -1.0)
-            {
-                self.rising = true;
-            }
-            if (!self.rising) {
-                self.delegator.game_context.game_objects[0]
-                    .transform
-                    .position[2] -= 1.0 * avg_delta_time;
-            } else {
-                self.delegator.game_context.game_objects[0]
-                    .transform
-                    .position[2] += 1.0 * avg_delta_time;
-            }
+            /*
+                        if (self.delegator.game_context.game_objects[0]
+                            .transform
+                            .position[2]
+                            > 1.0)
+                        {
+                            self.rising = false;
+                        }
+                        if (self.delegator.game_context.game_objects[0]
+                            .transform
+                            .position[2]
+                            < -1.0)
+                        {
+                            self.rising = true;
+                        }
+                        if (!self.rising) {
+                            self.delegator.game_context.game_objects[0]
+                                .transform
+                                .position[2] -= 1.0 * avg_delta_time;
+                        } else {
+                            self.delegator.game_context.game_objects[0]
+                                .transform
+                                .position[2] += 1.0 * avg_delta_time;
+                        }
+            */
             /*
                         //////
                         if (self.game_context.game_objects[1].transform.position[2] > 1.0) {
@@ -257,17 +262,7 @@ impl ApplicationHandler for HelloTriangleApp {
             let Some(window) = &self.window else {
                 panic!("");
             };
-            self.delegator.ui_handler.record_ui_data(window, self.fps);
-            let Some(ui_context) = &mut self.delegator.ui_handler.context else {
-                panic!();
-            };
-
-            self.delegator.vulkan_context.draw_frame(
-                &self.delegator.game_context.game_objects,
-                ui_context,
-                window,
-            );
-
+            self.delegator.run_constants(window);
             if let Some(window) = &self.window {
                 window.request_redraw();
             }
@@ -437,7 +432,7 @@ fn main() {
             first_vertex: 0,
         },
         transform: Transform {
-            position: [0.0, 0.0, -2.0],
+            position: [0.5, 0.0, 0.0],
             scale: [1.0, 1.0, 1.0],
         },
         ..Default::default()
@@ -447,7 +442,7 @@ fn main() {
         name: String::from("Example"),
         id: 1,
         transform: Transform {
-            position: [1.0, 0.0, 0.0],
+            position: [0.0, 0.0, 0.5],
             scale: [1.0, 1.0, 0.5],
         },
         ..Default::default()
@@ -477,31 +472,41 @@ fn main() {
     app.delegator.game_context.instantiate(
         gameobject_example_2,
         &mut app.delegator.vulkan_context,
+        &mut app.delegator.id_allocator,
+        &mut app.delegator.ecs_world,
+        false,
         false,
     );
-    println!("1: {:?}", app.delegator.game_context.game_objects[0]._mesh);
 
     app.delegator.game_context.instantiate(
         gameobject_example,
         &mut app.delegator.vulkan_context,
+        &mut app.delegator.id_allocator,
+        &mut app.delegator.ecs_world,
         false,
+        true,
     );
 
     //ECS TESTING
-    let test = app
-        .delegator
-        .ecs_world
-        .spawn()
+
+    let test = app.delegator.id_allocator.reserve_id();
+    EntityBuilder::spawn(test)
         .with::<Health>(Health::new(20, 20))
         .build(&mut app.delegator.ecs_world);
 
-    let health = app.delegator.ecs_world.get_component::<Health>(test);
+    let test2 = app.delegator.id_allocator.reserve_id();
+    EntityBuilder::spawn(test2)
+        .with::<Health>(Health::new(10, 10))
+        .build(&mut app.delegator.ecs_world);
+
+    let mut health = app.delegator.ecs_world.get_component::<Health>(test);
     println!("HEALTH THING {}", health.max);
+    health = app.delegator.ecs_world.get_component::<Health>(test2);
+    println!("HEALTH THING2 {}", health.max);
 
     //END OF TESTING
 
-    println!("1: {:?}", app.delegator.game_context.game_objects[1]._mesh);
-    app.run(800.0, 800.0);
+    app.run(1800.0, 1000.0);
 }
 
 //TODO to expand

@@ -9,8 +9,12 @@ use imgui_winit_support::{HiDpiMode, WinitPlatform};
 
 use winit::window::{self, Window};
 
+use crate::components::Transform;
 use crate::game_data::GameObject;
-use crate::game_data::Transform;
+
+//-------CONSTANTS--------
+//colors
+const BACKGROUND: [f32; 4] = [0.05, 0.05, 0.05, 0.6];
 
 //'jobs' that can be done
 pub enum UIState {
@@ -57,6 +61,10 @@ impl UIHandler {
     }
     pub fn init(&mut self, window: &Window) {
         let mut context = imgui::Context::create();
+        //Style
+        let style = context.style_mut();
+        style.colors[imgui::StyleColor::WindowBg as usize] = BACKGROUND; // Near black
+        //
         context.set_ini_filename(None); // disable imgui.ini file
 
         let mut platform = WinitPlatform::new(&mut context);
@@ -76,6 +84,7 @@ impl UIHandler {
 
         let ui = context.new_frame();
 
+        // 1. Push the style color for WindowBg
         ui.window("Foundry Engine Debug Window")
             .position([0.0, 0.0], imgui::Condition::Always)
             .size([100.0, 20.0], Condition::Always)
@@ -137,7 +146,11 @@ impl UIHandler {
             .build(|| {
                 ui.text("Scene Graph");
                 for game_object in &self.game_objects {
-                    ui.text(&game_object.name);
+                    //ui.text(&game_object.name);
+                    let _color_token = ui.push_style_color(imgui::StyleColor::Button, BACKGROUND);
+                    if ui.button(&game_object.name) {
+                        println!("Clicked on {}", game_object.name);
+                    };
                 }
             });
 
