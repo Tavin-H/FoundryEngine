@@ -9,7 +9,7 @@
   &nbsp;&nbsp;&nbsp;&nbsp;
   <img src="https://img.shields.io/badge/Version-pre--alpha-white?style=for-the-badge&logo=Git&logoColor=white&labelColor=2d3146&color=%234cb083" />
 </br>
-  <img src="https://img.shields.io/badge/Downloads-89-white?style=for-the-badge&labelColor=2d3146&color=blue" />
+  <img src="https://img.shields.io/badge/Downloads-152-white?style=for-the-badge&labelColor=2d3146&color=blue" />
    &nbsp;&nbsp;&nbsp;&nbsp;
   <img src="https://img.shields.io/badge/License-MIT-white?style=for-the-badge&labelColor=2d3146&color=yellow" />
   &nbsp;&nbsp;&nbsp;&nbsp;
@@ -36,6 +36,11 @@ The main goal of this project was to teach myself computer graphics and give mys
 * Data-oriented design to allow for super-fast and efficient system lookups
 * Add components to game objects (represented as 'Game Entities')
 * Get components from game objects with turbofish syntax
+
+### ECB (Entity Command Buffer)
+* Custom scripting using a command buffer
+* 100% deterministic behaviour
+* Check the Documentation to see an example of custom scripting
 
 ### Scene Manager
 * Instantiate game objects
@@ -77,13 +82,12 @@ I've chosen each of my tools for specific reasons as stated below.
 ---
 ## 🗺️ Roadmap
 ### Features currently in development
-* Custom components
+* Camera controlls with const EntityIDs
 
 ### Features to come
 * Drag and drop mesh files to use for game objects
 * Scene graph in scene manager
 * Adjusting game object positions from scene graph
-* Attaching scripts to game objects
 * Lighting engine
 * UI manager to use in scripts
 * Sound manager to use in scripts
