@@ -21,6 +21,7 @@ type ArchetypeSet = Vec<ArchetypeID>;
 type ArchetypeSignature = Vec<TypeId>;
 
 //Structs
+#[derive(Debug)]
 pub struct EntityRecord {
     row_index: usize,
     archetype_signature: ArchetypeSignature,
@@ -422,6 +423,19 @@ impl World {
                 component.position[1] += pos[1];
                 component.position[2] += pos[2];
             }
+            Command::SetPos(pos) => {
+                let component: &mut Transform = self.get_component_as_mut::<Transform>(entity);
+                component.position[0] = pos[0];
+                component.position[1] = pos[1];
+                component.position[2] = pos[2];
+            }
+            Command::Delete() => {
+                //Todo
+            }
+            Command::Function(func) => {
+                (*func)(self);
+            }
+            Command::SendMessage(message) => {}
             _ => panic!("Unkown Command found in ECB"),
         }
     }

@@ -31,12 +31,18 @@ pub struct GameObject {
 }
 
 //--------Custom scripting-----------
+pub enum Message {
+    GameOver,
+    GameStart,
+}
 pub enum Command {
     Instantiate(EntityBuilder),
-    Delete(EntityID),
+    Delete(),
+    SendMessage(Message),
+    Function(Box<dyn Fn(&mut World, EntityID)>), //Use this to make unity-like scripts
     Translate(Vec3),
     Print(String),
-    SetPos(),
+    SetPos(Vec3),
 }
 
 pub trait Script: Any {
@@ -159,6 +165,16 @@ impl Script for TestScriptInstance {
             command_buffer.push((id.this, Command::Instantiate(test)));
             self.timer = 0.0;
         }
+
+        let id_ = id.this;
+
+        command_buffer.push((
+            id.this,
+            Command::Function(Box::new(|world, this| {
+                //I just realized this can act as if it was any object!
+                println!("{:?}", world.entity_index[&this])
+            })),
+        ));
         //Return command buffer
         command_buffer
     }
