@@ -1,7 +1,9 @@
 use std::{collections::VecDeque, io::Seek, time};
 
 use crate::ECS::Health;
-use crate::components::{MeshAllocation, ScriptComponent, TestScriptInstance, TimeData, Transform};
+use crate::components::{
+    MeshAllocation, Script, ScriptComponent, TestScriptInstance, TimeData, Transform,
+};
 use crate::{
     ECS::{EntityBuilder, IDAllocator, World},
     vulkan_data::VulkanContext,
@@ -125,7 +127,7 @@ impl GameContext {
                     first_vertex: 0,
                 })
                 .with::<ScriptComponent>(ScriptComponent {
-                    instance: Box::new(TestScriptInstance {}),
+                    instance: TestScriptInstance::start(),
                 })
                 .with::<Transform>(Transform {
                     position: [

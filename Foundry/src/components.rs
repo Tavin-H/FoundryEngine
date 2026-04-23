@@ -40,7 +40,9 @@ pub enum Command {
 }
 
 pub trait Script: Any {
-    fn start(&mut self);
+    fn start() -> Box<dyn Script>
+    where
+        Self: Sized;
     fn update(&mut self, ctx: &mut ScriptContext) -> Vec<(EntityID, Command)>;
 }
 
@@ -67,11 +69,23 @@ pub struct ScriptContext<'a> {
 }
 //-------Test----------
 
-pub struct TestScriptInstance {}
+pub struct TestScriptInstance {
+    //Make list of needed variables
+    y_velocity: f32,
+    timer: f32,
+}
 
 impl Script for TestScriptInstance {
-    fn start(&mut self) {
-        let mut commands: Vec<Command> = Vec::new();
+    fn start() -> Box<dyn Script> {
+        //Return instance
+        Box::new(TestScriptInstance {
+            //Initialize variables
+            //1
+            //2
+            //...
+            y_velocity: 0.0,
+            timer: 0.0,
+        })
     }
 
     fn update(&mut self, ctx: &mut ScriptContext) -> Vec<(EntityID, Command)> {
@@ -119,7 +133,32 @@ impl Script for TestScriptInstance {
                 });
             command_buffer.push((id.this, Command::Instantiate(test)));
         }
+        if (input.get_key(KeyCode::Space)) {
+            self.y_velocity = 5.0;
+        }
+        self.y_velocity -= 9.8 * 4.0 * time.delta_time;
+        command_buffer.push((
+            1,
+            Command::Translate(Vec3::new(0.0, 0.0, self.y_velocity) * time.delta_time),
+        ));
 
+        //Spawning
+        self.timer += time.delta_time;
+        if (self.timer > 2.0) {
+            let test_id = id.reserve_id();
+            println!("{}", test_id);
+            let test = EntityBuilder::spawn(test_id)
+                .with::<MeshAllocation>(MeshAllocation::default())
+                .with::<Transform>(Transform {
+                    position: [0.0, 0.0, 0.0],
+                    scale: [1.0, 1.0, 1.0],
+                })
+                .with::<ScriptComponent>(ScriptComponent {
+                    instance: Box::new(MoveScriptInstance {}),
+                });
+            command_buffer.push((id.this, Command::Instantiate(test)));
+            self.timer = 0.0;
+        }
         //Return command buffer
         command_buffer
     }
@@ -128,8 +167,9 @@ impl Script for TestScriptInstance {
 pub struct MoveScriptInstance {}
 
 impl Script for MoveScriptInstance {
-    fn start(&mut self) {
+    fn start() -> Box<dyn Script> {
         let mut commands: Vec<Command> = Vec::new();
+        Box::new(MoveScriptInstance {})
     }
 
     fn update(&mut self, ctx: &mut ScriptContext) -> Vec<(EntityID, Command)> {
