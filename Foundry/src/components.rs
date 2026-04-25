@@ -7,6 +7,8 @@ use winit::keyboard::KeyCode;
 pub trait Component {}
 use glam::Vec3;
 
+use crate::commands::*;
+
 type EntityID = u64;
 #[derive(Default, Debug, Clone)]
 pub struct MeshAllocation {
@@ -31,19 +33,6 @@ pub struct GameObject {
 }
 
 //--------Custom scripting-----------
-pub enum Message {
-    GameOver,
-    GameStart,
-}
-pub enum Command {
-    Instantiate(EntityBuilder),
-    Delete(),
-    SendMessage(Message),
-    Function(Box<dyn Fn(&mut World, EntityID)>), //Use this to make unity-like scripts
-    Translate(Vec3),
-    Print(String),
-    SetPos(Vec3),
-}
 
 pub trait Script: Any {
     fn start() -> Box<dyn Script>
@@ -102,7 +91,7 @@ impl Script for TestScriptInstance {
         //Logic
         if input.get_key(KeyCode::KeyS) {
             command_buffer.push((
-                1,
+                id.this,
                 Command::Translate(Vec3::new(1.0, 1.0, 0.0) * time.delta_time),
             ));
         }
@@ -168,13 +157,16 @@ impl Script for TestScriptInstance {
 
         let id_ = id.this;
 
-        command_buffer.push((
-            id.this,
-            Command::Function(Box::new(|world, this| {
-                //I just realized this can act as if it was any object!
-                println!("{:?}", world.entity_index[&this])
-            })),
-        ));
+        /*
+                command_buffer.push((
+                    id.this,
+                    Command::Function(Box::new(|world, this| {
+                        //I just realized this can act as if it was any object!
+                        println!("{:?}", world.entity_index[&this])
+                    })),
+                ));
+        */
+
         //Return command buffer
         command_buffer
     }

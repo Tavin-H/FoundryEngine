@@ -37,6 +37,9 @@ use crate::vulkan_data::{UniformBufferObject, VulkanContext};
 mod ui_data;
 use crate::ui_data::UIHandler;
 
+//Dependancies
+mod commands;
+
 //------------------Vulkan----------------------
 //Constants
 const MAX_GAME_OBJECTS_IN_SCENE: u64 = 1000;

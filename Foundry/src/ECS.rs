@@ -5,8 +5,9 @@ use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
 
 //Built-in Components
+use crate::commands::*;
 use crate::components::{
-    Command, Component, MeshAllocation, ScriptComponent, ScriptContext, TimeData, Transform,
+    Component, MeshAllocation, ScriptComponent, ScriptContext, TimeData, Transform,
 };
 use crate::delegator::InputBuffer;
 use crate::vulkan_data::VulkanContext;
@@ -28,8 +29,8 @@ pub struct EntityRecord {
 }
 
 pub struct EntityBuilder {
-    id: EntityID,
-    signature: Vec<TypeId>,
+    pub id: EntityID,
+    pub signature: Vec<TypeId>,
     //Box because Size of dyn Fn is not known at compile time
     push_component_functions: Vec<Box<dyn FnOnce(&mut Archetype)>>,
     ensure_functions: Vec<Box<dyn Fn(&mut World)>>,
@@ -433,7 +434,7 @@ impl World {
                 //Todo
             }
             Command::Function(func) => {
-                (*func)(self);
+                (*func)(self, entity);
             }
             Command::SendMessage(message) => {}
             _ => panic!("Unkown Command found in ECB"),
@@ -444,7 +445,7 @@ impl World {
         &mut self,
         ctx: &mut ScriptContext<'_>,
         vulkan_data: &mut VulkanContext,
-    ) {
+    ) -> Vec<(EntityID, Command)> {
         let mut command_queue: Vec<(EntityID, Command)> = Vec::new();
         let mut archetypes =
             self.get_mut_archetypes_by_ids(&mut vec![TypeId::of::<ScriptComponent>()]);
@@ -461,8 +462,6 @@ impl World {
                 counter += 1;
             }
         }
-        for (target, command) in command_queue {
-            self.handle_command(target, command, vulkan_data);
-        }
+        return command_queue;
     }
 }

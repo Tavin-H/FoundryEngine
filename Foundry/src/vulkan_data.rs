@@ -515,7 +515,7 @@ fn update_uniform_buffer(
     );
     let mut proj = glm::perspective_rh_zo(
         extent.width as f32 / extent.height as f32,
-        std::f32::consts::PI / 4.0,
+        std::f32::consts::PI / 4.0, //FOV
         0.1,
         10.0,
     );
