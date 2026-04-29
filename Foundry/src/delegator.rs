@@ -1,4 +1,4 @@
-use crate::commands::Command;
+use crate::commands::{Command, CommandBuffer, EntityCommand, WorldCommand};
 use crate::ui_data::{self, UIState};
 
 use crate::ECS::{IDAllocator, World};
@@ -7,6 +7,7 @@ use crate::game_data::GameContext;
 use crate::ui_data::UIHandler;
 use crate::vulkan_data::VulkanContext;
 use std::collections::HashSet;
+use std::panic;
 use winit::event;
 use winit::keyboard::{KeyCode, PhysicalKey};
 
@@ -95,15 +96,51 @@ impl Delagator {
         self.input_buffer.clear();
     }
 
-    pub fn execute_command_buffer(&mut self, command_buffer: Vec<(EntityID, Command)>) {
-        for (target, command) in command_buffer {
-            self.handle_command(target, command);
+    pub fn execute_command_buffer(&mut self, command_buffer_queue: Vec<CommandBuffer>) {
+        for buffer in command_buffer_queue {
+            for (entity, command) in buffer.entity_commands {
+                self.handle_entity_command(entity, command);
+            }
+            for command in buffer.world_commands {
+                self.ha
+            }
         }
     }
 
-    pub fn handle_command(&mut self, entity: EntityID, command: Command) {
+    /*
+    * OBSELETE BECAUSE OF COMMAND BUFFER ORGANIZATION
+    pub fn handle_command(&mut self, command: Command) {
         match command {
-            Command::Instantiate(entity_builder) => {
+            Command::Entity(target, command) => {
+                self.handle_entity_command(target, command);
+            }
+            _ => panic!("Unkown command"),
+        }
+    }
+    */
+
+    pub fn handle_entity_command(&mut self, entity: EntityID, command: EntityCommand) {
+        match command {
+            EntityCommand::Translate(pos) => {
+                let component: &mut Transform =
+                    self.ecs_world.get_component_as_mut::<Transform>(entity);
+                component.position[0] += pos[0];
+                component.position[1] += pos[1];
+                component.position[2] += pos[2];
+            }
+            EntityCommand::SetPos(pos) => {
+                let component: &mut Transform =
+                    self.ecs_world.get_component_as_mut::<Transform>(entity);
+                component.position[0] = pos[0];
+                component.position[1] = pos[1];
+                component.position[2] = pos[2];
+            }
+            other => panic!("Unkown EntityCommand found in ECB: {:?}", other),
+        }
+    }
+    pub fn handle_world_command(&mut self, command: WorldCommand) {
+        match command {
+            WorldCommand::Instantiate(entity_builder) => {
                 //Get mesh_allocation data
                 //Build entity_builder
                 let has_mesh = entity_builder
@@ -121,32 +158,16 @@ impl Delagator {
                 }
                 self.vulkan_context.upload_mesh_data();
             }
-            Command::Translate(pos) => {
-                let component: &mut Transform =
-                    self.ecs_world.get_component_as_mut::<Transform>(entity);
-                component.position[0] += pos[0];
-                component.position[1] += pos[1];
-                component.position[2] += pos[2];
-            }
-            Command::SetPos(pos) => {
-                let component: &mut Transform =
-                    self.ecs_world.get_component_as_mut::<Transform>(entity);
-                component.position[0] = pos[0];
-                component.position[1] = pos[1];
-                component.position[2] = pos[2];
-            }
-            Command::Delete() => {
+            WorldCommand::SendMessage(message) => {}
+            WorldCommand::Delete() => {
                 //Todo
             }
-            Command::Function(func) => {
-                (*func)(&mut self.ecs_world, entity);
+            WorldCommand::Custom(func) => {
+                (*func)(&mut self.ecs_world);
             }
-            Command::SendMessage(message) => {}
-            _ => panic!("Unkown Command found in ECB"),
+            _ => {}
         }
     }
-
-    //pub fn handle_entity_command() {}
     //pub fn handle_camera_command() {}
 
     pub fn vulkan_draw_frame(&mut self, window: &winit::window::Window) {

@@ -393,6 +393,7 @@ impl World {
         //Use render_batches in draw_frame()
     }
 
+    /*
     fn handle_command(
         &mut self,
         entity: EntityID,
@@ -440,13 +441,14 @@ impl World {
             _ => panic!("Unkown Command found in ECB"),
         }
     }
+    */
 
     pub fn run_update_cycle(
         &mut self,
         ctx: &mut ScriptContext<'_>,
         vulkan_data: &mut VulkanContext,
-    ) -> Vec<(EntityID, Command)> {
-        let mut command_queue: Vec<(EntityID, Command)> = Vec::new();
+    ) -> Vec<CommandBuffer> {
+        let mut command_buffer_queue: Vec<CommandBuffer> = Vec::new();
         let mut archetypes =
             self.get_mut_archetypes_by_ids(&mut vec![TypeId::of::<ScriptComponent>()]);
         //println!("Update archetypes");
@@ -458,10 +460,10 @@ impl World {
             for script in scripts.iter_mut() {
                 ctx.id.this = entity_ids[counter];
                 let mut commands = script.instance.update(ctx);
-                command_queue.append(&mut commands);
+                command_buffer_queue.push(commands);
                 counter += 1;
             }
         }
-        return command_queue;
+        return command_buffer_queue;
     }
 }

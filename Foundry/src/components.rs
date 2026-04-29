@@ -38,7 +38,7 @@ pub trait Script: Any {
     fn start() -> Box<dyn Script>
     where
         Self: Sized;
-    fn update(&mut self, ctx: &mut ScriptContext) -> Vec<(EntityID, Command)>;
+    fn update(&mut self, ctx: &mut ScriptContext) -> CommandBuffer;
 }
 
 pub struct ScriptComponent {
@@ -70,6 +70,7 @@ pub struct TestScriptInstance {
     timer: f32,
 }
 
+use crate::commands::*;
 impl Script for TestScriptInstance {
     fn start() -> Box<dyn Script> {
         //Return instance
@@ -83,34 +84,34 @@ impl Script for TestScriptInstance {
         })
     }
 
-    fn update(&mut self, ctx: &mut ScriptContext) -> Vec<(EntityID, Command)> {
+    fn update(&mut self, ctx: &mut ScriptContext) -> CommandBuffer {
         //start command buffer
         let ScriptContext { time, input, id } = ctx;
-        let mut command_buffer: Vec<(EntityID, Command)> = Vec::new();
+        let mut command_buffer = CommandBuffer::new();
 
         //Logic
         if input.get_key(KeyCode::KeyS) {
-            command_buffer.push((
-                id.this,
-                Command::Translate(Vec3::new(1.0, 1.0, 0.0) * time.delta_time),
+            command_buffer.push(Command::Entity(
+                1,
+                EntityCommand::Translate(Vec3::new(1.0, 1.0, 0.0) * time.delta_time),
             ));
         }
         if input.get_key(KeyCode::KeyW) {
-            command_buffer.push((
+            command_buffer.push(Command::Entity(
                 1,
-                Command::Translate(Vec3::new(-1.0, -1.0, 0.0) * time.delta_time),
+                EntityCommand::Translate(Vec3::new(-1.0, -1.0, 0.0) * time.delta_time),
             ));
         }
         if input.get_key(KeyCode::KeyD) {
-            command_buffer.push((
+            command_buffer.push(Command::Entity(
                 1,
-                Command::Translate(Vec3::new(-1.0, 1.0, 0.0) * time.delta_time),
+                EntityCommand::Translate(Vec3::new(-1.0, 1.0, 0.0) * time.delta_time),
             ));
         }
         if input.get_key(KeyCode::KeyA) {
-            command_buffer.push((
+            command_buffer.push(Command::Entity(
                 1,
-                Command::Translate(Vec3::new(1.0, -1.0, 0.0) * time.delta_time),
+                EntityCommand::Translate(Vec3::new(1.0, -1.0, 0.0) * time.delta_time),
             ));
         }
 
@@ -126,15 +127,15 @@ impl Script for TestScriptInstance {
                 .with::<ScriptComponent>(ScriptComponent {
                     instance: Box::new(MoveScriptInstance {}),
                 });
-            command_buffer.push((id.this, Command::Instantiate(test)));
+            command_buffer.push(Command::World(WorldCommand::Instantiate(test)));
         }
         if (input.get_key(KeyCode::Space)) {
             self.y_velocity = 5.0;
         }
         self.y_velocity -= 9.8 * 4.0 * time.delta_time;
-        command_buffer.push((
+        command_buffer.push(Command::Entity(
             1,
-            Command::Translate(Vec3::new(0.0, 0.0, self.y_velocity) * time.delta_time),
+            EntityCommand::Translate(Vec3::new(0.0, 0.0, self.y_velocity) * time.delta_time),
         ));
 
         //Spawning
@@ -151,11 +152,9 @@ impl Script for TestScriptInstance {
                 .with::<ScriptComponent>(ScriptComponent {
                     instance: Box::new(MoveScriptInstance {}),
                 });
-            command_buffer.push((id.this, Command::Instantiate(test)));
+            command_buffer.push(Command::World(WorldCommand::Instantiate(test)));
             self.timer = 0.0;
         }
-
-        let id_ = id.this;
 
         /*
                 command_buffer.push((
@@ -180,15 +179,15 @@ impl Script for MoveScriptInstance {
         Box::new(MoveScriptInstance {})
     }
 
-    fn update(&mut self, ctx: &mut ScriptContext) -> Vec<(EntityID, Command)> {
+    fn update(&mut self, ctx: &mut ScriptContext) -> CommandBuffer {
         //start command buffer
         let ScriptContext { time, input, id } = ctx;
-        let mut command_buffer: Vec<(EntityID, Command)> = Vec::new();
+        let mut command_buffer = CommandBuffer::new();
 
         //Logic
-        command_buffer.push((
+        command_buffer.push(Command::Entity(
             id.this,
-            Command::Translate(Vec3::new(1.0, 0.0, 0.0) * time.delta_time),
+            EntityCommand::Translate(Vec3::new(1.0, 0.0, 0.0) * time.delta_time),
         ));
 
         //Return command buffer
