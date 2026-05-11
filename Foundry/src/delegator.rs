@@ -1,4 +1,4 @@
-use crate::commands::{Command, CommandBuffer, EntityCommand, WorldCommand};
+use crate::commands::{Command, CommandBuffer, EntityCommand, MessageCommand, WorldCommand};
 use crate::ui_data::{self, UIState};
 
 use crate::ECS::{IDAllocator, World};
@@ -58,6 +58,7 @@ pub struct Delagator {
     pub ecs_world: World,
     pub input_buffer: InputBuffer,
     pub id_allocator: IDAllocator,
+    pub broadcaster: BroadCaster,
 }
 
 impl Delagator {
@@ -69,6 +70,7 @@ impl Delagator {
             ecs_world: world,
             input_buffer: InputBuffer::default(),
             id_allocator: IDAllocator::default(),
+            broadcaster: BroadCaster::new(),
         }
     }
 
@@ -87,6 +89,7 @@ impl Delagator {
             time: &self.game_context.time,
             input: &self.input_buffer,
             id: &mut self.id_allocator,
+            broadcaster: &mut self.broadcaster,
         };
         let command_buffer = self
             .ecs_world
@@ -94,6 +97,7 @@ impl Delagator {
         self.execute_command_buffer(command_buffer);
         self.vulkan_draw_frame(window);
         self.input_buffer.clear();
+        self.broadcaster.clear();
     }
 
     pub fn execute_command_buffer(&mut self, command_buffer_queue: Vec<CommandBuffer>) {
@@ -102,7 +106,10 @@ impl Delagator {
                 self.handle_entity_command(entity, command);
             }
             for command in buffer.world_commands {
-                self.ha
+                self.handle_world_command(command);
+            }
+            for command in buffer.broadcast_commands {
+                self.handle_message_command(command);
             }
         }
     }
@@ -169,6 +176,14 @@ impl Delagator {
         }
     }
     //pub fn handle_camera_command() {}
+    pub fn handle_message_command(&mut self, command: MessageCommand) {
+        match command {
+            MessageCommand::BroadcastMessage(message) => {
+                self.broadcaster.messages.insert(message);
+            }
+            _ => {}
+        }
+    }
 
     pub fn vulkan_draw_frame(&mut self, window: &winit::window::Window) {
         //Get the UI data

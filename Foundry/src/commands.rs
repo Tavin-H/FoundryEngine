@@ -20,7 +20,8 @@ pub enum Command {
 pub enum Command {
     Entity(EntityID, EntityCommand),
     World(WorldCommand),
-    Cammera(CameraCommand),
+    Camera(CameraCommand),
+    Message(MessageCommand),
 }
 
 pub enum WorldCommand {
@@ -41,10 +42,21 @@ pub enum CameraCommand {
     Custom(),
 }
 
+pub enum UICommand {
+    ShowUI(),
+    HideUI(),
+}
+
+pub enum MessageCommand {
+    BroadcastMessage(&'static str),
+    //BroadcastMessages(Vec<String>),
+}
+
 pub struct CommandBuffer {
     //Allow for more features if needed
     pub entity_commands: Vec<(EntityID, EntityCommand)>,
     pub world_commands: Vec<WorldCommand>,
+    pub broadcast_commands: Vec<MessageCommand>,
 }
 
 impl CommandBuffer {
@@ -52,12 +64,14 @@ impl CommandBuffer {
         CommandBuffer {
             entity_commands: Vec::new(),
             world_commands: Vec::new(),
+            broadcast_commands: Vec::new(),
         }
     }
     pub fn push(&mut self, command: Command) {
         match command {
             Command::Entity(target, command) => self.entity_commands.push((target, command)),
             Command::World(command) => self.world_commands.push(command),
+            Command::Message(command) => self.broadcast_commands.push(command),
             _ => panic!(""),
         }
     }

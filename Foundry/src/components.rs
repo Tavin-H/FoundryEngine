@@ -6,6 +6,7 @@ use std::any::Any;
 use winit::keyboard::KeyCode;
 pub trait Component {}
 use glam::Vec3;
+use std::collections::HashSet;
 
 use crate::commands::*;
 
@@ -56,10 +57,30 @@ pub struct TimeData {
     pub delta_time: f32,
 }
 
+pub struct BroadCaster {
+    pub messages: HashSet<&'static str>,
+}
+
+impl BroadCaster {
+    pub fn new() -> BroadCaster {
+        BroadCaster {
+            messages: HashSet::new(),
+        }
+    }
+    pub fn clear(&mut self) {
+        self.messages.clear();
+    }
+    pub fn recieved_message(&self, message: &'static str) -> bool {
+        //println!("{:?}", self.messages);
+        return self.messages.contains(message);
+    }
+}
+
 pub struct ScriptContext<'a> {
     pub time: &'a TimeData,
     pub input: &'a InputBuffer,
     pub id: &'a mut IDAllocator,
+    pub broadcaster: &'a mut BroadCaster,
     //Add world later
 }
 //-------Test----------
@@ -86,7 +107,12 @@ impl Script for TestScriptInstance {
 
     fn update(&mut self, ctx: &mut ScriptContext) -> CommandBuffer {
         //start command buffer
-        let ScriptContext { time, input, id } = ctx;
+        let ScriptContext {
+            time,
+            input,
+            id,
+            broadcaster,
+        } = ctx;
         let mut command_buffer = CommandBuffer::new();
 
         //Logic
@@ -113,6 +139,9 @@ impl Script for TestScriptInstance {
                 1,
                 EntityCommand::Translate(Vec3::new(1.0, -1.0, 0.0) * time.delta_time),
             ));
+        }
+        if input.get_key(KeyCode::KeyC) {
+            command_buffer.push(Command::Message(MessageCommand::BroadcastMessage("Delete")));
         }
 
         if input.get_key(KeyCode::KeyK) {
@@ -181,7 +210,12 @@ impl Script for MoveScriptInstance {
 
     fn update(&mut self, ctx: &mut ScriptContext) -> CommandBuffer {
         //start command buffer
-        let ScriptContext { time, input, id } = ctx;
+        let ScriptContext {
+            time,
+            input,
+            id,
+            broadcaster,
+        } = ctx;
         let mut command_buffer = CommandBuffer::new();
 
         //Logic
@@ -189,6 +223,14 @@ impl Script for MoveScriptInstance {
             id.this,
             EntityCommand::Translate(Vec3::new(1.0, 0.0, 0.0) * time.delta_time),
         ));
+
+        if broadcaster.recieved_message("Delete") {
+            println!("Got message");
+            command_buffer.push(Command::Entity(
+                id.this,
+                EntityCommand::Translate(Vec3::new(0.0, 0.0, 2.0)),
+            ));
+        }
 
         //Return command buffer
         command_buffer
