@@ -2,7 +2,7 @@ use crate::{
     ECS::{EntityBuilder, IDAllocator, World},
     delegator::InputBuffer,
 };
-use std::any::Any;
+use std::{any::Any, collections::HashMap};
 use winit::keyboard::KeyCode;
 pub trait Component {}
 use glam::Vec3;
@@ -40,6 +40,9 @@ pub trait Script: Any {
     where
         Self: Sized;
     fn update(&mut self, ctx: &mut ScriptContext) -> CommandBuffer;
+    fn get_broadcast_listeners(&mut self) -> BroadCasterListenerHash {
+        HashMap::new()
+    }
 }
 
 pub struct ScriptComponent {
@@ -57,22 +60,20 @@ pub struct TimeData {
     pub delta_time: f32,
 }
 
+//Types used for broadcaster
+pub type BroadCasterListenerHash = HashMap<&'static str, Box<dyn Fn() -> CommandBuffer>>;
+pub type BroadCasterListenerHashCollection =
+    HashMap<&'static str, Vec<Box<dyn Fn() -> CommandBuffer>>>;
+
 pub struct BroadCaster {
-    pub messages: HashSet<&'static str>,
+    pub broadcast_listener_collection: BroadCasterListenerHashCollection,
 }
 
 impl BroadCaster {
     pub fn new() -> BroadCaster {
         BroadCaster {
-            messages: HashSet::new(),
+            broadcast_listener_collection: HashMap::new(),
         }
-    }
-    pub fn clear(&mut self) {
-        self.messages.clear();
-    }
-    pub fn recieved_message(&self, message: &'static str) -> bool {
-        //println!("{:?}", self.messages);
-        return self.messages.contains(message);
     }
 }
 
@@ -141,7 +142,7 @@ impl Script for TestScriptInstance {
             ));
         }
         if input.get_key(KeyCode::KeyC) {
-            command_buffer.push(Command::Message(MessageCommand::BroadcastMessage("Delete")));
+            command_buffer.push(Command::Message(MessageCommand::BroadcastMessage("Test")));
         }
 
         if input.get_key(KeyCode::KeyK) {
@@ -198,6 +199,17 @@ impl Script for TestScriptInstance {
         //Return command buffer
         command_buffer
     }
+    fn get_broadcast_listeners(&mut self) -> BroadCasterListenerHash {
+        let mut listeners: BroadCasterListenerHash = HashMap::new();
+        listeners.insert(
+            "Test",
+            Box::new(|| {
+                println!("Testing the broadcaster");
+                CommandBuffer::new()
+            }),
+        );
+        listeners
+    }
 }
 
 pub struct MoveScriptInstance {}
@@ -224,13 +236,7 @@ impl Script for MoveScriptInstance {
             EntityCommand::Translate(Vec3::new(1.0, 0.0, 0.0) * time.delta_time),
         ));
 
-        if broadcaster.recieved_message("Delete") {
-            println!("Got message");
-            command_buffer.push(Command::Entity(
-                id.this,
-                EntityCommand::Translate(Vec3::new(0.0, 0.0, 2.0)),
-            ));
-        }
+        //Refactor to be a listener pattern, maybe a Hashmap of strings to a list of Functions
 
         //Return command buffer
         command_buffer

@@ -6,6 +6,8 @@ use std::hash::Hash;
 
 //Built-in Components
 use crate::commands::*;
+use crate::components::BroadCasterListenerHash;
+use crate::components::BroadCasterListenerHashCollection;
 use crate::components::{
     Component, MeshAllocation, ScriptComponent, ScriptContext, TimeData, Transform,
 };
@@ -465,5 +467,32 @@ impl World {
             }
         }
         return command_buffer_queue;
+    }
+    pub fn compile_broadcast_listener_hash_collection(
+        &mut self,
+    ) -> BroadCasterListenerHashCollection {
+        let mut listener_hash: BroadCasterListenerHashCollection = HashMap::new();
+        let mut archetypes =
+            self.get_mut_archetypes_by_ids(&mut vec![TypeId::of::<ScriptComponent>()]);
+        for archetype in archetypes.iter_mut() {
+            let scripts: &mut [ScriptComponent] =
+                archetype.get_components_as_mut_slice::<ScriptComponent>();
+            for script in scripts.iter_mut() {
+                let listeners = script.instance.get_broadcast_listeners();
+                for (key, value) in listeners {
+                    if (listener_hash.contains_key(key)) {
+                        listener_hash
+                            .get_mut(key)
+                            .expect("Failed to get key")
+                            .push(value);
+                        println!("--------Adding something");
+                    } else {
+                        listener_hash.insert(key, vec![value]);
+                        println!("--------Pushing something");
+                    }
+                }
+            }
+        }
+        return listener_hash;
     }
 }

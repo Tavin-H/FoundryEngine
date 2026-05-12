@@ -112,6 +112,7 @@ struct WinitApp {
 
 impl ApplicationHandler for HelloTriangleApp {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        //First Frame
         let Some(window) = &self.window else {
             panic!("");
         };
@@ -121,6 +122,7 @@ impl ApplicationHandler for HelloTriangleApp {
             panic!();
         };
         self.delegator.vulkan_context.init_vulkan(window, context);
+        self.delegator.set_broadcaster();
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, id: WindowId, event: WindowEvent) {

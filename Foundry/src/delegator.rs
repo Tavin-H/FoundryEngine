@@ -74,6 +74,11 @@ impl Delagator {
         }
     }
 
+    pub fn set_broadcaster(&mut self) {
+        let listener_collection = self.ecs_world.compile_broadcast_listener_hash_collection();
+        self.broadcaster.broadcast_listener_collection = listener_collection;
+    }
+
     pub fn add_keyboard_input(&mut self, key_event: winit::event::KeyEvent) {
         self.input_buffer.keyboard_inputs.push(key_event);
     }
@@ -97,7 +102,6 @@ impl Delagator {
         self.execute_command_buffer(command_buffer);
         self.vulkan_draw_frame(window);
         self.input_buffer.clear();
-        self.broadcaster.clear();
     }
 
     pub fn execute_command_buffer(&mut self, command_buffer_queue: Vec<CommandBuffer>) {
@@ -179,7 +183,22 @@ impl Delagator {
     pub fn handle_message_command(&mut self, command: MessageCommand) {
         match command {
             MessageCommand::BroadcastMessage(message) => {
-                self.broadcaster.messages.insert(message);
+                if self
+                    .broadcaster
+                    .broadcast_listener_collection
+                    .contains_key(message)
+                {
+                    println!(
+                        "Calling message {} affecting {} listeners",
+                        message,
+                        &self.broadcaster.broadcast_listener_collection[message].len()
+                    );
+                    for function in &self.broadcaster.broadcast_listener_collection[message] {
+                        function();
+                    }
+                } else {
+                    println!("Calling message {} affecting 0 listeners", message,);
+                }
             }
             _ => {}
         }
