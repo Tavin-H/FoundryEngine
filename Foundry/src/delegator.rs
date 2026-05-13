@@ -15,12 +15,14 @@ type EntityID = u64;
 use std::any::TypeId;
 #[derive(Default)]
 pub struct InputBuffer {
-    keyboard_inputs: Vec<winit::event::KeyEvent>,
+    key_down_list: HashSet<KeyCode>,
+    key_up_list: HashSet<KeyCode>,
     keys_held: HashSet<KeyCode>,
 }
 impl InputBuffer {
-    fn clear(&mut self) {
-        self.keyboard_inputs.clear();
+    fn clear_discrete_inputs(&mut self) {
+        self.key_down_list.clear();
+        self.key_up_list.clear();
     }
     pub fn handle_keyboard_event(&mut self, key_event: winit::event::KeyEvent) {
         let PhysicalKey::Code(code) = key_event.physical_key else {
@@ -28,25 +30,23 @@ impl InputBuffer {
         };
         match key_event.state {
             event::ElementState::Pressed => {
+                self.key_down_list.insert(code);
                 self.keys_held.insert(code);
             }
             event::ElementState::Released => {
+                self.key_up_list.insert(code);
                 self.keys_held.remove(&code);
             }
         }
     }
     pub fn get_key(&self, code: KeyCode) -> bool {
         self.keys_held.contains(&code)
-        /*
-        for key in self.keyboard_inputs.iter() {
-            let winit::keyboard::PhysicalKey::Code(key) = key.physical_key else {
-                return false;
-            };
-            if key == code {
-                return true;
-            }
-        }*/
-        //return false;
+    }
+    pub fn get_key_down(&self, code: KeyCode) -> bool {
+        self.key_down_list.contains(&code)
+    }
+    pub fn get_key_up(&self, code: KeyCode) -> bool {
+        self.key_up_list.contains(&code)
     }
 }
 
@@ -79,10 +79,6 @@ impl Delagator {
         self.broadcaster.broadcast_listener_collection = listener_collection;
     }
 
-    pub fn add_keyboard_input(&mut self, key_event: winit::event::KeyEvent) {
-        self.input_buffer.keyboard_inputs.push(key_event);
-    }
-
     pub fn check_states(&mut self) {
         self.check_ui_state();
     }
@@ -101,7 +97,7 @@ impl Delagator {
             .run_update_cycle(&mut ctx, &mut self.vulkan_context);
         self.execute_command_buffer(command_buffer);
         self.vulkan_draw_frame(window);
-        self.input_buffer.clear();
+        self.input_buffer.clear_discrete_inputs();
     }
 
     pub fn execute_command_buffer(&mut self, command_buffer_queue: Vec<CommandBuffer>) {

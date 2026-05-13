@@ -141,7 +141,7 @@ impl Script for TestScriptInstance {
                 EntityCommand::Translate(Vec3::new(1.0, -1.0, 0.0) * time.delta_time),
             ));
         }
-        if input.get_key(KeyCode::KeyC) {
+        if input.get_key_up(KeyCode::KeyC) {
             command_buffer.push(Command::Message(MessageCommand::BroadcastMessage("Test")));
         }
 
