@@ -6,17 +6,7 @@ pub enum Message {
     GameOver,
     GameStart,
 }
-/*
-pub enum Command {
-    Instantiate(EntityBuilder),
-    Delete(),
-    SendMessage(Message),
-    Function(Box<dyn Fn(&mut World, EntityID)>), //Use this to make unity-like scripts
-    Translate(Vec3),
-    Print(String),
-    SetPos(Vec3),
-}
-*/
+
 pub enum Command {
     Entity(EntityID, EntityCommand),
     World(WorldCommand),
@@ -49,7 +39,7 @@ pub enum UICommand {
 
 pub enum MessageCommand {
     BroadcastMessage(&'static str),
-    //BroadcastMessages(Vec<String>),
+    BroadcastMessages(Vec<&'static str>),
 }
 
 pub struct CommandBuffer {

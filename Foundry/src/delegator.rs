@@ -86,7 +86,7 @@ impl Delagator {
     pub fn run_constants(&mut self, window: &winit::window::Window) {
         //Draw call from vulkan
         //record inputs
-        let mut ctx = ScriptContext {
+        let mut ctx = RuntimeContext {
             time: &self.game_context.time,
             input: &self.input_buffer,
             id: &mut self.id_allocator,

@@ -9,7 +9,7 @@ use crate::commands::*;
 use crate::components::BroadCasterListenerHash;
 use crate::components::BroadCasterListenerHashCollection;
 use crate::components::{
-    Component, MeshAllocation, ScriptComponent, ScriptContext, TimeData, Transform,
+    Component, MeshAllocation, RuntimeContext, ScriptComponent, TimeData, Transform,
 };
 use crate::delegator::InputBuffer;
 use crate::vulkan_data::VulkanContext;
@@ -447,7 +447,7 @@ impl World {
 
     pub fn run_update_cycle(
         &mut self,
-        ctx: &mut ScriptContext<'_>,
+        ctx: &mut RuntimeContext<'_>,
         vulkan_data: &mut VulkanContext,
     ) -> Vec<CommandBuffer> {
         let mut command_buffer_queue: Vec<CommandBuffer> = Vec::new();

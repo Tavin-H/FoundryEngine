@@ -39,7 +39,7 @@ pub trait Script: Any {
     fn start() -> Box<dyn Script>
     where
         Self: Sized;
-    fn update(&mut self, ctx: &mut ScriptContext) -> CommandBuffer;
+    fn update(&mut self, ctx: &mut RuntimeContext) -> CommandBuffer;
     fn get_broadcast_listeners(&mut self) -> BroadCasterListenerHash {
         HashMap::new()
     }
@@ -77,7 +77,7 @@ impl BroadCaster {
     }
 }
 
-pub struct ScriptContext<'a> {
+pub struct RuntimeContext<'a> {
     pub time: &'a TimeData,
     pub input: &'a InputBuffer,
     pub id: &'a mut IDAllocator,
@@ -106,9 +106,9 @@ impl Script for TestScriptInstance {
         })
     }
 
-    fn update(&mut self, ctx: &mut ScriptContext) -> CommandBuffer {
+    fn update(&mut self, ctx: &mut RuntimeContext) -> CommandBuffer {
         //start command buffer
-        let ScriptContext {
+        let RuntimeContext {
             time,
             input,
             id,
@@ -220,9 +220,9 @@ impl Script for MoveScriptInstance {
         Box::new(MoveScriptInstance {})
     }
 
-    fn update(&mut self, ctx: &mut ScriptContext) -> CommandBuffer {
+    fn update(&mut self, ctx: &mut RuntimeContext) -> CommandBuffer {
         //start command buffer
-        let ScriptContext {
+        let RuntimeContext {
             time,
             input,
             id,
