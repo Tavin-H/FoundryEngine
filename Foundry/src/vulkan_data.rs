@@ -509,9 +509,9 @@ fn update_uniform_buffer(
             &glm::vec3(0.0, 0.0, 1.0),
         );
     let view = glm::look_at(
-        &glm::vec3(2.0, 2.0, 2.0),
-        &glm::vec3(0.0, 0.0, 0.0),
-        &glm::vec3(0.0, 0.0, 1.0),
+        &glm::vec3(2.0, 2.0, 2.0), // eye - Where the camera is
+        &glm::vec3(0.0, 0.0, 0.0), // center - Where the camera is looking
+        &glm::vec3(0.0, 0.0, 1.0), // up
     );
     let mut proj = glm::perspective_rh_zo(
         extent.width as f32 / extent.height as f32,

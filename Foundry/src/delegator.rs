@@ -18,12 +18,51 @@ pub struct InputBuffer {
     key_down_list: HashSet<KeyCode>,
     key_up_list: HashSet<KeyCode>,
     keys_held: HashSet<KeyCode>,
+    mouse_delta: (f64, f64),
+    mouse_moved: bool,
+    mouse_pos: (f64, f64), //Not implemented yet
+}
+pub enum MouseAxis {
+    X,
+    Y,
 }
 impl InputBuffer {
     fn clear_discrete_inputs(&mut self) {
         self.key_down_list.clear();
         self.key_up_list.clear();
     }
+
+    // API
+    pub fn get_key(&self, code: KeyCode) -> bool {
+        self.keys_held.contains(&code)
+    }
+    pub fn get_key_down(&self, code: KeyCode) -> bool {
+        self.key_down_list.contains(&code)
+    }
+    pub fn get_key_up(&self, code: KeyCode) -> bool {
+        self.key_up_list.contains(&code)
+    }
+    pub fn get_mouse_axis(&self, axis: MouseAxis) -> f64 {
+        match axis {
+            // Rust has no ternary operator :(
+            MouseAxis::X => {
+                if (self.mouse_moved) {
+                    return self.mouse_delta.0;
+                } else {
+                    return 0.0;
+                }
+            }
+            MouseAxis::Y => {
+                if (self.mouse_moved) {
+                    return self.mouse_delta.1;
+                } else {
+                    return 0.0;
+                }
+            }
+        }
+    }
+
+    // Backend
     pub fn handle_keyboard_event(&mut self, key_event: winit::event::KeyEvent) {
         let PhysicalKey::Code(code) = key_event.physical_key else {
             return;
@@ -39,14 +78,12 @@ impl InputBuffer {
             }
         }
     }
-    pub fn get_key(&self, code: KeyCode) -> bool {
-        self.keys_held.contains(&code)
+    pub fn set_mouse_moved(&mut self, moved: bool) {
+        self.mouse_moved = moved;
     }
-    pub fn get_key_down(&self, code: KeyCode) -> bool {
-        self.key_down_list.contains(&code)
-    }
-    pub fn get_key_up(&self, code: KeyCode) -> bool {
-        self.key_up_list.contains(&code)
+    pub fn handle_mouse_movement(&mut self, delta: (f64, f64)) {
+        self.mouse_moved = true;
+        self.mouse_delta = delta;
     }
 }
 

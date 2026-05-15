@@ -125,6 +125,22 @@ impl ApplicationHandler for HelloTriangleApp {
         self.delegator.set_broadcaster();
     }
 
+    // TODO : Change handle_keyboard_event to reside in this function
+    fn device_event(
+        &mut self,
+        event_loop: &ActiveEventLoop,
+        device_id: winit::event::DeviceId,
+        event: winit::event::DeviceEvent,
+    ) {
+        match event {
+            winit::event::DeviceEvent::MouseMotion { delta } => {
+                self.delegator.input_buffer.set_mouse_moved(true);
+                self.delegator.input_buffer.handle_mouse_movement(delta);
+            }
+            _ => (),
+        }
+    }
+
     fn window_event(&mut self, event_loop: &ActiveEventLoop, id: WindowId, event: WindowEvent) {
         let Some(window) = &self.window else {
             panic!("");
@@ -176,6 +192,7 @@ impl ApplicationHandler for HelloTriangleApp {
                 button,
             } => {
                 if state == ElementState::Pressed {
+                    //self.delegator.input_buffer.handle_mouse_event(button, state);
                     /*
                                         let rng = rand::rng();
                                         let x = rand::random_range(-2.0..2.0);
@@ -203,6 +220,11 @@ impl ApplicationHandler for HelloTriangleApp {
                     */
                 }
             }
+            WindowEvent::MouseWheel {
+                device_id,
+                delta,
+                phase,
+            } => {}
             _ => (),
         }
     }
@@ -271,6 +293,7 @@ impl ApplicationHandler for HelloTriangleApp {
             if let Some(window) = &self.window {
                 window.request_redraw();
             }
+            self.delegator.input_buffer.set_mouse_moved(false);
         }
     }
 }
