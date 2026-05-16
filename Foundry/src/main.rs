@@ -26,8 +26,8 @@ use crate::game_data::GameObject;
 //Components
 mod components;
 
-mod ECS;
-use crate::ECS::{Archetype, EntityBuilder, EntityRecord, Health, World};
+mod ecs;
+use crate::ecs::{Archetype, EntityBuilder, EntityRecord, Health, World};
 
 //Vulkan Data
 mod vulkan_data;
@@ -243,47 +243,6 @@ impl ApplicationHandler for HelloTriangleApp {
             if (!self.delegator.vulkan_context.running) {
                 avg_delta_time = 0.0;
             }
-            /*
-                        if (self.delegator.game_context.game_objects[0]
-                            .transform
-                            .position[2]
-                            > 1.0)
-                        {
-                            self.rising = false;
-                        }
-                        if (self.delegator.game_context.game_objects[0]
-                            .transform
-                            .position[2]
-                            < -1.0)
-                        {
-                            self.rising = true;
-                        }
-                        if (!self.rising) {
-                            self.delegator.game_context.game_objects[0]
-                                .transform
-                                .position[2] -= 1.0 * avg_delta_time;
-                        } else {
-                            self.delegator.game_context.game_objects[0]
-                                .transform
-                                .position[2] += 1.0 * avg_delta_time;
-                        }
-            */
-            /*
-                        //////
-                        if (self.game_context.game_objects[1].transform.position[2] > 1.0) {
-                            self.rising2 = false;
-                        }
-                        if (self.game_context.game_objects[1].transform.position[2] < -1.0) {
-                            self.rising2 = true;
-                        }
-                        if (!self.rising2) {
-                            self.game_context.game_objects[1].transform.position[2] -= 3.0 * avg_delta_time;
-                        } else {
-                            self.game_context.game_objects[1].transform.position[2] += 3.0 * avg_delta_time;
-                        }
-            */
-
-            //println!("{} {}", delta_time, self.running);
 
             //LAST THINGS
             let Some(window) = &self.window else {
@@ -310,8 +269,6 @@ fn load_icon(file_path: &String) -> winit::window::Icon {
 
     winit::window::Icon::from_rgba(icon_rgba, icon_width, icon_height).expect("Failed to open icon")
 }
-
-//Change to entry::linked() if having problems
 
 fn read_file(file_path: &String) -> Vec<u8> {
     //let contents = fs::read(ffile_path).expect("Failed to read file");
@@ -417,7 +374,7 @@ impl HelloTriangleApp {
             .with_inner_size(self.size);
         window_attributes.window_icon = Some(icon);
         let event_loop = EventLoop::new().unwrap();
-        //self.window = Some(event_loop.create_window(window_attributes).unwrap());
+
         match event_loop.create_window(window_attributes) {
             Ok(window) => {
                 self.delegator.ui_handler.init(&window);
@@ -432,19 +389,6 @@ impl HelloTriangleApp {
         self.size = winit::dpi::LogicalSize::new(window_width, window_height);
         event_loop.run_app(self);
     }
-
-    /*
-    fn instantiate(&mut self, mut gameobject: GameObject) {
-        let before_indices = self.vulkan_context.indices.len();
-        gameobject._mesh.first_vertex = self.vulkan_context.vertices.len() as i32;
-        self.vulkan_context.load_model();
-        let after_indices = self.vulkan_context.indices.len();
-
-        gameobject._mesh.first_index = before_indices as u32;
-        gameobject._mesh.index_count = (after_indices - before_indices) as u32;
-        self.game_context.game_objects.push(gameobject);
-    }
-    */
 }
 fn main() {
     let start_time = std::time::Instant::now();
@@ -496,7 +440,7 @@ fn main() {
         running: false,
         ..Default::default()
     };
-    //let delegator = Delagator::new(vulkan, game, ui);
+
     app.delegator.game_context.instantiate(
         gameobject_example_2,
         &mut app.delegator.vulkan_context,

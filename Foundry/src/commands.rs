@@ -1,4 +1,4 @@
-use crate::ECS::{EntityBuilder, World};
+use crate::ecs::{EntityBuilder, World};
 type EntityID = u64;
 use glam::Vec3;
 

@@ -1,6 +1,6 @@
 use crate::{
-    ECS::{EntityBuilder, IDAllocator, World},
     delegator::InputBuffer,
+    ecs::{EntityBuilder, IDAllocator, World},
 };
 use std::{any::Any, collections::HashMap};
 use winit::keyboard::KeyCode;
@@ -196,16 +196,6 @@ impl Script for TestScriptInstance {
             self.timer = 0.0;
         }
 
-        /*
-                command_buffer.push((
-                    id.this,
-                    Command::Function(Box::new(|world, this| {
-                        //I just realized this can act as if it was any object!
-                        println!("{:?}", world.entity_index[&this])
-                    })),
-                ));
-        */
-
         //Return command buffer
         command_buffer
     }
@@ -245,8 +235,6 @@ impl Script for MoveScriptInstance {
             id.this,
             EntityCommand::Translate(Vec3::new(1.0, 0.0, 0.0) * time.delta_time),
         ));
-
-        //Refactor to be a listener pattern, maybe a Hashmap of strings to a list of Functions
 
         //Return command buffer
         command_buffer

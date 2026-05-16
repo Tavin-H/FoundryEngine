@@ -1,8 +1,8 @@
 use crate::commands::{Command, CommandBuffer, EntityCommand, MessageCommand, WorldCommand};
 use crate::ui_data::{self, UIState};
 
-use crate::ECS::{IDAllocator, World};
 use crate::components::*;
+use crate::ecs::{IDAllocator, World};
 use crate::game_data::GameContext;
 use crate::ui_data::UIHandler;
 use crate::vulkan_data::VulkanContext;
@@ -150,18 +150,6 @@ impl Delagator {
             }
         }
     }
-
-    /*
-    * OBSELETE BECAUSE OF COMMAND BUFFER ORGANIZATION
-    pub fn handle_command(&mut self, command: Command) {
-        match command {
-            Command::Entity(target, command) => {
-                self.handle_entity_command(target, command);
-            }
-            _ => panic!("Unkown command"),
-        }
-    }
-    */
 
     pub fn handle_entity_command(&mut self, entity: EntityID, command: EntityCommand) {
         match command {

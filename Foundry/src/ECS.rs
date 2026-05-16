@@ -11,6 +11,7 @@ use crate::components::BroadCasterListenerHashCollection;
 use crate::components::{
     Component, MeshAllocation, RuntimeContext, ScriptComponent, TimeData, Transform,
 };
+
 use crate::delegator::InputBuffer;
 use crate::vulkan_data::VulkanContext;
 
@@ -73,10 +74,6 @@ impl EntityBuilder {
     }
 
     pub fn build(self, world: &mut World) {
-        //Find archetype / create if non existing
-        //Populate Archetype
-        //Make an entity record (last?)
-
         //Ensure Initialized
         for ensure in &self.ensure_functions {
             ensure(world);
@@ -116,6 +113,7 @@ pub struct Health {
     pub current: u32,
     pub max: u32,
 }
+
 impl Health {
     pub fn new(current: u32, max: u32) -> Self {
         Health { current, max }
@@ -175,9 +173,7 @@ impl Archetype {
         ret.sort();
         ret
     }
-    //Originally had signature instead of 'components'
-    //Removed because it creates a mental dependancy for the Archetype API
-    //Might bite me in the butt but who knows
+
     fn new(id: ArchetypeID, components: Vec<TypeId>, registry: &TypeRegister) -> Self {
         //Use the reference before moving each TypeID into columns
         let signature = Archetype::generate_signature(&components);
@@ -272,22 +268,6 @@ impl World {
         }
     }
 
-    /*
-    pub fn spawn(&mut self) -> EntityBuilder {
-        let new_entity = EntityBuilder {
-            id: self.next_available_entity_id,
-            //pending_components: HashMap::new(),
-            ensure_functions: Vec::new(),
-            push_component_functions: Vec::new(),
-            signature: Vec::new(),
-        };
-        //FIXME Eventually change this to an ID pool?
-        self.next_available_entity_id += 1;
-
-        new_entity
-    }
-    */
-
     fn ensure_registered<T: 'static>(&mut self) {
         let id: TypeId = TypeId::of::<T>();
         if (!self.registry.column_creators.contains_key(&id)) {
@@ -332,6 +312,7 @@ impl World {
             .expect("Failed to downcast column in get_component");
         &downcast_vec[record.row_index]
     }
+
     pub fn get_component_as_mut<T: 'static>(&mut self, entity: EntityID) -> &mut T {
         let component_id = TypeId::of::<T>();
         let Some(record) = self.entity_index.get(&entity) else {
@@ -356,24 +337,18 @@ impl World {
         //Gets all archetypes with component T
         self.archetype_index
             .values() // Iterate over the archetypes
-            .filter(|archetype| {
-                // Check if EVERY search_id exists in this archetype's columns
-                // .all() stops early (short-circuits) if it finds a missing ID
-                ids.iter().all(|id| archetype.has_id(id))
-            })
+            .filter(|archetype| ids.iter().all(|id| archetype.has_id(id)))
             .collect()
     }
+
     pub fn get_mut_archetypes_by_ids(&mut self, ids: &mut Vec<TypeId>) -> Vec<&mut Archetype> {
         //Gets all archetypes with component T
         self.archetype_index
             .values_mut() // Iterate over the archetypes
-            .filter(|archetype| {
-                // Check if EVERY search_id exists in this archetype's columns
-                // .all() stops early (short-circuits) if it finds a missing ID
-                ids.iter_mut().all(|id| archetype.has_id(id))
-            })
+            .filter(|archetype| ids.iter_mut().all(|id| archetype.has_id(id)))
             .collect()
     }
+
     pub fn get_render_batches(&mut self) -> Vec<(&[Transform], &[MeshAllocation])> {
         //Get all the components of type MeshAllocation and Transform
         //Uses get_archetypes and sees overlap
@@ -392,58 +367,7 @@ impl World {
             render_batches.push((transforms, mesh_allocation));
         }
         render_batches
-        //Use render_batches in draw_frame()
     }
-
-    /*
-    fn handle_command(
-        &mut self,
-        entity: EntityID,
-        command: Command,
-        vulkan_data: &mut VulkanContext,
-    ) {
-        match command {
-            Command::Instantiate(entity_builder) => {
-                //Get mesh_allocation data
-                //Build entity_builder
-                let has_mesh = entity_builder
-                    .signature
-                    .contains(&TypeId::of::<MeshAllocation>());
-                let id = entity_builder.id;
-                entity_builder.build(self);
-                if (has_mesh) {
-                    let new_mesh_data = vulkan_data.create_mesh_data();
-                    let mesh_data: &mut MeshAllocation =
-                        self.get_component_as_mut::<MeshAllocation>(id);
-                    mesh_data.first_vertex = new_mesh_data.first_vertex;
-                    mesh_data.first_index = new_mesh_data.first_index;
-                    mesh_data.index_count = new_mesh_data.index_count;
-                }
-                vulkan_data.upload_mesh_data();
-            }
-            Command::Translate(pos) => {
-                let component: &mut Transform = self.get_component_as_mut::<Transform>(entity);
-                component.position[0] += pos[0];
-                component.position[1] += pos[1];
-                component.position[2] += pos[2];
-            }
-            Command::SetPos(pos) => {
-                let component: &mut Transform = self.get_component_as_mut::<Transform>(entity);
-                component.position[0] = pos[0];
-                component.position[1] = pos[1];
-                component.position[2] = pos[2];
-            }
-            Command::Delete() => {
-                //Todo
-            }
-            Command::Function(func) => {
-                (*func)(self, entity);
-            }
-            Command::SendMessage(message) => {}
-            _ => panic!("Unkown Command found in ECB"),
-        }
-    }
-    */
 
     pub fn run_update_cycle(
         &mut self,

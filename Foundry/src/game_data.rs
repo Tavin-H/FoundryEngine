@@ -1,29 +1,14 @@
 use std::{collections::VecDeque, io::Seek, time};
 
-use crate::ECS::Health;
 use crate::components::{
     MeshAllocation, Script, ScriptComponent, TestScriptInstance, TimeData, Transform,
 };
+use crate::ecs::Health;
 use crate::{
-    ECS::{EntityBuilder, IDAllocator, World},
+    ecs::{EntityBuilder, IDAllocator, World},
     vulkan_data::VulkanContext,
 };
 use nalgebra_glm::{self as glm};
-
-/*
-#[derive(Default, Debug, Clone)]
-pub struct MeshAllocation {
-    pub index_count: u32,
-    pub first_index: u32,
-    pub first_vertex: i32,
-}
-
-#[derive(Default, Clone, Copy, Debug)]
-pub struct Transform {
-    pub position: [f32; 3],
-    pub scale: [f32; 3],
-}
-*/
 
 #[derive(Default, Debug, Clone)]
 
