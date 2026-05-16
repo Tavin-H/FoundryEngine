@@ -1,4 +1,6 @@
-use crate::commands::{Command, CommandBuffer, EntityCommand, MessageCommand, WorldCommand};
+use crate::commands::{
+    CameraCommand, Command, CommandBuffer, EntityCommand, MessageCommand, WorldCommand,
+};
 use crate::ui_data::{self, UIState};
 
 use crate::components::*;
@@ -148,6 +150,9 @@ impl Delagator {
             for command in buffer.broadcast_commands {
                 self.handle_message_command(command);
             }
+            for command in buffer.camera_commands {
+                self.handle_camera_command(command);
+            }
         }
     }
 
@@ -200,7 +205,14 @@ impl Delagator {
             _ => {}
         }
     }
-    //pub fn handle_camera_command() {}
+    pub fn handle_camera_command(&mut self, command: CameraCommand) {
+        match command {
+            CameraCommand::Pan(vector) => {
+                self.vulkan_context.cam_transform.translate(vector);
+            }
+            _ => panic!("Unsupported camera command used"),
+        }
+    }
     pub fn handle_message_command(&mut self, command: MessageCommand) {
         match command {
             MessageCommand::BroadcastMessage(message) => {

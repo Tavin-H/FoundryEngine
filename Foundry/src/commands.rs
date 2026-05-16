@@ -28,6 +28,9 @@ pub enum EntityCommand {
 }
 
 pub enum CameraCommand {
+    Pan(Vec3),
+    PanAround(),
+    Rotate(),
     LookAt(),
     Custom(),
 }
@@ -47,6 +50,7 @@ pub struct CommandBuffer {
     pub entity_commands: Vec<(EntityID, EntityCommand)>,
     pub world_commands: Vec<WorldCommand>,
     pub broadcast_commands: Vec<MessageCommand>,
+    pub camera_commands: Vec<CameraCommand>,
 }
 
 impl CommandBuffer {
@@ -55,6 +59,7 @@ impl CommandBuffer {
             entity_commands: Vec::new(),
             world_commands: Vec::new(),
             broadcast_commands: Vec::new(),
+            camera_commands: Vec::new(),
         }
     }
     pub fn push(&mut self, command: Command) {
@@ -62,6 +67,7 @@ impl CommandBuffer {
             Command::Entity(target, command) => self.entity_commands.push((target, command)),
             Command::World(command) => self.world_commands.push(command),
             Command::Message(command) => self.broadcast_commands.push(command),
+            Command::Camera(command) => self.camera_commands.push(command),
             _ => panic!(""),
         }
     }

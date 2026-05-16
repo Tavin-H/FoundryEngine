@@ -18,6 +18,7 @@ use ash::vk::{
 use ash::{self, Entry, Instance, vk};
 
 //Math
+use glam; // For talking to move commands from delegator
 use nalgebra_glm::{self as glm, any, log, pi};
 
 //Winit
@@ -138,6 +139,8 @@ pub struct VulkanContext {
     current_frame: i32,
 
     ui_renderer: Option<Renderer>,
+
+    pub cam_transform: CameraTransform,
 }
 use std::sync::Mutex;
 //Holds all vulkan objects in a single struct to controll lifetimes more precisely
@@ -145,6 +148,24 @@ struct SwapChainSupportDetails {
     capabilities: vk::SurfaceCapabilitiesKHR,
     formats: Vec<vk::SurfaceFormatKHR>,
     present_modes: Vec<vk::PresentModeKHR>,
+}
+
+pub struct CameraTransform {
+    position: glm::Vec3,
+}
+impl Default for CameraTransform {
+    fn default() -> CameraTransform {
+        CameraTransform {
+            position: glm::vec3(2.0, 2.0, 2.0),
+        }
+    }
+}
+impl CameraTransform {
+    pub fn translate(&mut self, vector: glam::Vec3) {
+        let array: [f32; 3] = vector.into();
+        let glm_vec = glm::Vec3::from(array);
+        self.position += glm_vec;
+    }
 }
 
 #[derive(Default)]
@@ -495,6 +516,7 @@ fn update_uniform_buffer(
     current_image: u32,
     extent: vk::Extent2D,
     uniform_buffers_mapped: &Vec<*mut UniformBufferObject>,
+    cam_transform: &CameraTransform,
 ) {
     let mut transform = glm::Mat4::identity();
     transform[(0, 3)] = 1.0;
@@ -506,7 +528,8 @@ fn update_uniform_buffer(
             &glm::vec3(0.0, 0.0, 1.0),
         );
     let view = glm::look_at(
-        &glm::vec3(2.0, 2.0, 2.0), // eye - Where the camera is
+        &cam_transform.position,
+        //&glm::vec3(2.0, 2.0, 2.0), // eye - Where the camera is
         &glm::vec3(0.0, 0.0, 0.0), // center - Where the camera is looking
         &glm::vec3(0.0, 0.0, 1.0), // up
     );
@@ -3249,7 +3272,13 @@ impl VulkanContext {
                 panic!("Really I should rework this");
             };
 
-            update_uniform_buffer(current_frame as u32, extent, &self.uniform_buffers_mapped);
+            let transform = &self.cam_transform;
+            update_uniform_buffer(
+                current_frame as u32,
+                extent,
+                &self.uniform_buffers_mapped,
+                &transform,
+            );
 
             let submit_info = vk::SubmitInfo {
                 wait_semaphore_count: 1,

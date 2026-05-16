@@ -144,16 +144,14 @@ impl Script for TestScriptInstance {
         if input.get_key_up(KeyCode::KeyC) {
             command_buffer.push(Command::Message(MessageCommand::BroadcastMessage("Test")));
         }
-        command_buffer.push(Command::Entity(
-            id.this,
-            EntityCommand::Translate(
-                Vec3::new(
-                    input.get_mouse_axis(crate::delegator::MouseAxis::X) as f32,
-                    input.get_mouse_axis(crate::delegator::MouseAxis::Y) as f32,
-                    0.0,
-                ) * time.delta_time,
-            ),
-        ));
+        command_buffer.push(Command::Camera(CameraCommand::Pan(
+            Vec3::new(
+                input.get_mouse_axis(crate::delegator::MouseAxis::X) as f32,
+                input.get_mouse_axis(crate::delegator::MouseAxis::Y) as f32,
+                0.0,
+            ) * time.delta_time
+                * 10.0,
+        )));
 
         if input.get_key(KeyCode::KeyK) {
             let test_id = id.reserve_id();
