@@ -13,6 +13,7 @@ use crate::components::{
 };
 
 use crate::delegator::InputBuffer;
+use crate::id_consts::CAMERA;
 use crate::vulkan_data::VulkanContext;
 
 use ash::vk::PipelineLayout;
@@ -221,11 +222,21 @@ impl TypeRegister {
     }
 }
 
-#[derive(Default)]
 pub struct IDAllocator {
     //Change to ID pool
     next_available_entity_id: EntityID,
     pub this: EntityID,
+    pub camera: EntityID,
+}
+
+impl Default for IDAllocator {
+    fn default() -> Self {
+        IDAllocator {
+            next_available_entity_id: 1,
+            this: 0,
+            camera: CAMERA,
+        }
+    }
 }
 
 impl IDAllocator {

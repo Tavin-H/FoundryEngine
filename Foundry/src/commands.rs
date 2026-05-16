@@ -16,7 +16,7 @@ pub enum Command {
 
 pub enum WorldCommand {
     Instantiate(EntityBuilder),
-    Delete(),
+    Delete(), //Unsupported
     SendMessage(Message),
     Custom(Box<dyn Fn(&mut World)>),
 }
@@ -25,19 +25,19 @@ pub enum WorldCommand {
 pub enum EntityCommand {
     Translate(Vec3),
     SetPos(Vec3),
+    LookAt(),       //Unsupported
+    RotateAround(), //Unsupported
+    SetRotation(),  //Unsupported
 }
 
 pub enum CameraCommand {
-    Pan(Vec3),
-    PanAround(),
-    Rotate(),
-    LookAt(),
+    SetFov(u32), //Unsupported
     Custom(),
 }
 
 pub enum UICommand {
-    ShowUI(),
-    HideUI(),
+    ShowUI(), //Unsupported
+    HideUI(), //Unsupported
 }
 
 pub enum MessageCommand {

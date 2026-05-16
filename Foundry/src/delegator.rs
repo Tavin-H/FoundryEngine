@@ -1,6 +1,7 @@
 use crate::commands::{
     CameraCommand, Command, CommandBuffer, EntityCommand, MessageCommand, WorldCommand,
 };
+use crate::id_consts::CAMERA;
 use crate::ui_data::{self, UIState};
 
 use crate::components::*;
@@ -159,6 +160,10 @@ impl Delagator {
     pub fn handle_entity_command(&mut self, entity: EntityID, command: EntityCommand) {
         match command {
             EntityCommand::Translate(pos) => {
+                if (entity == CAMERA) {
+                    self.vulkan_context.cam_transform.translate(pos);
+                    return;
+                }
                 let component: &mut Transform =
                     self.ecs_world.get_component_as_mut::<Transform>(entity);
                 component.position[0] += pos[0];
@@ -207,9 +212,7 @@ impl Delagator {
     }
     pub fn handle_camera_command(&mut self, command: CameraCommand) {
         match command {
-            CameraCommand::Pan(vector) => {
-                self.vulkan_context.cam_transform.translate(vector);
-            }
+            CameraCommand::SetFov(fov) => (),
             _ => panic!("Unsupported camera command used"),
         }
     }

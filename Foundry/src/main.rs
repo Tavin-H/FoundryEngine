@@ -26,6 +26,8 @@ use crate::game_data::GameObject;
 //Components
 mod components;
 
+mod id_consts;
+
 mod ecs;
 use crate::ecs::{Archetype, EntityBuilder, EntityRecord, Health, World};
 
