@@ -86,6 +86,7 @@ pub struct VulkanContext {
     surface: Option<vk::SurfaceKHR>,
     swap_chain_details: Option<SwapChainSupportDetails>,
     swap_chain: Option<ash::vk::SwapchainKHR>,
+    swap_chain_device: Option<ash::khr::swapchain::Device>,
     swap_chain_images: Vec<ash::vk::Image>,
     swap_chain_format: Option<vk::SurfaceFormatKHR>,
     swap_chain_extent_used: Option<vk::Extent2D>,
@@ -161,7 +162,7 @@ impl Default for CameraTransform {
     fn default() -> CameraTransform {
         CameraTransform {
             position: glm::vec3(2.0, 2.0, 2.0),
-            rotation: glm::vec3(0.0, 0.0, 0.0),
+            rotation: glm::vec3(0.86252, 0. - 2.4285, 0.0),
             target: glm::vec3(0.0, 0.0, 0.0),
         }
     }
@@ -174,7 +175,7 @@ impl CameraTransform {
     }
     pub fn rotate(&mut self, vector: glam::Vec3) {
         self.rotation += convert_glam_to_glm3(vector);
-        println!("Rotation {}", self.rotation);
+        //println!("Rotation {}", self.rotation);
         self.target = calculate_rotation_target(self.position, self.rotation)
     }
 }
@@ -1711,6 +1712,7 @@ impl VulkanContext {
                 }
             }
         }
+        self.swap_chain_device = Some(swapchain_device);
     }
 
     fn cleanup_swapchain(&mut self) {
@@ -3141,17 +3143,17 @@ impl VulkanContext {
                     }
                     Err(e) => panic!("{}", e),
                 }
-                match logical_device.create_semaphore(&semaphore_info, None) {
-                    Ok(semaphore) => {
-                        self.render_finished_semaphores.push(semaphore);
-                    }
-                    Err(e) => panic!("{}", e),
-                }
                 match logical_device.create_fence(&fence_info, None) {
                     Ok(fence) => {
                         self.in_flight_fences.push(fence);
                     }
 
+                    Err(e) => panic!("{}", e),
+                }
+            }
+            for _ in 0..self.swap_chain_images.len() {
+                match logical_device.create_semaphore(&semaphore_info, None) {
+                    Ok(semaphore) => self.render_finished_semaphores.push(semaphore),
                     Err(e) => panic!("{}", e),
                 }
             }
@@ -3186,13 +3188,14 @@ impl VulkanContext {
         let Some(graphics_queue) = self.graphics_queue else {
             panic!();
         };
-        let swapchain_device = ash::khr::swapchain::Device::new(instance, &logical_device);
+        let Some(swapchain_device) = &self.swap_chain_device else {
+            panic!();
+        };
 
         //Get all command buffers and sync objects for current frame
         let current_frame = self.current_frame as usize;
         let fences = &[self.in_flight_fences[current_frame]];
         let current_image_available_semaphore = self.image_available_semaphores[current_frame];
-        let current_render_finished_semaphore = self.render_finished_semaphores[current_frame];
         let current_fence = self.in_flight_fences[current_frame];
         let current_command_buffer = self.command_buffers[current_frame];
         unsafe {
@@ -3234,6 +3237,7 @@ impl VulkanContext {
                     panic!("{}", e);
                 }
             }
+            let current_render_finished_semaphore = self.render_finished_semaphores[image_index];
             logical_device.reset_fences(fences);
 
             logical_device
@@ -3313,6 +3317,8 @@ impl VulkanContext {
             let image_index_32 = image_index as u32;
             let present_info = vk::PresentInfoKHR {
                 swapchain_count: 1,
+                p_wait_semaphores: signal_semaphores.as_ptr(), // render_finished_semaphore
+                wait_semaphore_count: 1,
                 p_swapchains: &swapchain,
                 p_image_indices: &image_index_32,
                 ..Default::default()

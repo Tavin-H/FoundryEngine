@@ -236,16 +236,6 @@ impl ApplicationHandler for HelloTriangleApp {
         // update logic here
         if (!self.closing) {
             self.delegator.check_states();
-            let mut avg_delta_time = self.delegator.game_context.calculate_delta_time();
-            self.frame_count += 1;
-            if self.frame_count > 1000 {
-                self.frame_count = 0;
-                self.fps = 1.0 / avg_delta_time;
-            }
-
-            if (!self.delegator.vulkan_context.running) {
-                avg_delta_time = 0.0;
-            }
 
             //LAST THINGS
             let Some(window) = &self.window else {
@@ -318,6 +308,8 @@ struct HelloTriangleApp {
     window_resized: bool,
     frame_count: u64,
     fps: f32,
+
+    timer: f32,
 }
 impl Default for HelloTriangleApp {
     fn default() -> Self {
@@ -340,6 +332,7 @@ impl Default for HelloTriangleApp {
             window_resized: false,
             frame_count: 0,
             fps: 0.0,
+            timer: 0.0,
         }
     }
 }

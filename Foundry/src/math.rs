@@ -13,9 +13,9 @@ pub fn calculate_rotation_target(position: glm::Vec3, rotation: glm::Vec3) -> gl
     let yaw: f32 = rotation.x;
     let pitch: f32 = rotation.y;
 
-    let x = yaw.sin() * pitch.cos();
-    let y = yaw.sin() * pitch.sin();
-    let z = yaw.cos();
+    let x = yaw.cos() * pitch.cos();
+    let y = yaw.sin() * pitch.cos();
+    let z = pitch.sin();
 
     let target_position = glm::vec3(x, y, z) + position;
     target_position

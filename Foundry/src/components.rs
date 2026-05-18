@@ -149,11 +149,11 @@ impl Script for TestScriptInstance {
             EntityCommand::Rotate(
                 //Vec3::new(0.0, 0.0, 0.0),
                 Vec3::new(
-                    input.get_mouse_axis(crate::delegator::MouseAxis::Y) as f32,
                     input.get_mouse_axis(crate::delegator::MouseAxis::X) as f32,
+                    input.get_mouse_axis(crate::delegator::MouseAxis::Y) as f32,
                     0.0,
                 ) * time.delta_time
-                    * 10.0,
+                    * 2.0,
             ),
         ));
 
@@ -181,22 +181,24 @@ impl Script for TestScriptInstance {
         ));
 
         //Spawning
-        self.timer += time.delta_time;
-        if (self.timer > 2.0) {
-            let test_id = id.reserve_id();
-            println!("{}", test_id);
-            let test = EntityBuilder::spawn(test_id)
-                .with::<MeshAllocation>(MeshAllocation::default())
-                .with::<Transform>(Transform {
-                    position: [0.0, 0.0, 0.0],
-                    scale: [1.0, 1.0, 1.0],
-                })
-                .with::<ScriptComponent>(ScriptComponent {
-                    instance: Box::new(MoveScriptInstance {}),
-                });
-            command_buffer.push(Command::World(WorldCommand::Instantiate(test)));
-            self.timer = 0.0;
-        }
+        /*
+                self.timer += time.delta_time;
+                if (self.timer > 2.0) {
+                    let test_id = id.reserve_id();
+                    println!("{}", test_id);
+                    let test = EntityBuilder::spawn(test_id)
+                        .with::<MeshAllocation>(MeshAllocation::default())
+                        .with::<Transform>(Transform {
+                            position: [0.0, 0.0, 0.0],
+                            scale: [1.0, 1.0, 1.0],
+                        })
+                        .with::<ScriptComponent>(ScriptComponent {
+                            instance: Box::new(MoveScriptInstance {}),
+                        });
+                    command_buffer.push(Command::World(WorldCommand::Instantiate(test)));
+                    self.timer = 0.0;
+                }
+        */
 
         //Return command buffer
         command_buffer
