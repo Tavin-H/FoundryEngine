@@ -177,6 +177,13 @@ impl Delagator {
                 component.position[1] = pos[1];
                 component.position[2] = pos[2];
             }
+            EntityCommand::Rotate(rot) => {
+                if (entity == CAMERA) {
+                    self.vulkan_context.cam_transform.rotate(rot);
+                    return;
+                }
+                panic!("");
+            }
             other => panic!("Unkown EntityCommand found in ECB: {:?}", other),
         }
     }

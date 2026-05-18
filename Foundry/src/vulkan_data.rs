@@ -7,6 +7,8 @@ use crate::game_data::GameObject;
 //Components
 use crate::components::{MeshAllocation, Transform};
 
+use crate::math::*;
+
 //Ash
 use ash::ext::{device_memory_report, surface_maintenance1};
 use ash::khr::get_physical_device_properties2;
@@ -151,12 +153,16 @@ struct SwapChainSupportDetails {
 }
 
 pub struct CameraTransform {
-    position: glm::Vec3,
+    pub position: glm::Vec3,
+    pub rotation: glm::Vec3,
+    pub target: glm::Vec3,
 }
 impl Default for CameraTransform {
     fn default() -> CameraTransform {
         CameraTransform {
             position: glm::vec3(2.0, 2.0, 2.0),
+            rotation: glm::vec3(0.0, 0.0, 0.0),
+            target: glm::vec3(0.0, 0.0, 0.0),
         }
     }
 }
@@ -165,6 +171,11 @@ impl CameraTransform {
         let array: [f32; 3] = vector.into();
         let glm_vec = glm::Vec3::from(array);
         self.position += glm_vec;
+    }
+    pub fn rotate(&mut self, vector: glam::Vec3) {
+        self.rotation += convert_glam_to_glm3(vector);
+        println!("Rotation {}", self.rotation);
+        self.target = calculate_rotation_target(self.position, self.rotation)
     }
 }
 
@@ -530,7 +541,8 @@ fn update_uniform_buffer(
     let view = glm::look_at(
         &cam_transform.position,
         //&glm::vec3(2.0, 2.0, 2.0), // eye - Where the camera is
-        &glm::vec3(0.0, 0.0, 0.0), // center - Where the camera is looking
+        &cam_transform.target,
+        //&glm::vec3(0.0, 0.0, 0.0), // center - Where the camera is looking
         &glm::vec3(0.0, 0.0, 1.0), // up
     );
     let mut proj = glm::perspective_rh_zo(

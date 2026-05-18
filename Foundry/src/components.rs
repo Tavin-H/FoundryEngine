@@ -119,25 +119,25 @@ impl Script for TestScriptInstance {
         //Logic
         if input.get_key(KeyCode::KeyS) {
             command_buffer.push(Command::Entity(
-                1,
+                id.camera,
                 EntityCommand::Translate(Vec3::new(1.0, 1.0, 0.0) * time.delta_time),
             ));
         }
         if input.get_key(KeyCode::KeyW) {
             command_buffer.push(Command::Entity(
-                1,
+                id.camera,
                 EntityCommand::Translate(Vec3::new(-1.0, -1.0, 0.0) * time.delta_time),
             ));
         }
         if input.get_key(KeyCode::KeyD) {
             command_buffer.push(Command::Entity(
-                1,
+                id.camera,
                 EntityCommand::Translate(Vec3::new(-1.0, 1.0, 0.0) * time.delta_time),
             ));
         }
         if input.get_key(KeyCode::KeyA) {
             command_buffer.push(Command::Entity(
-                1,
+                id.camera,
                 EntityCommand::Translate(Vec3::new(1.0, -1.0, 0.0) * time.delta_time),
             ));
         }
@@ -146,10 +146,11 @@ impl Script for TestScriptInstance {
         }
         command_buffer.push(Command::Entity(
             id.camera,
-            EntityCommand::Translate(
+            EntityCommand::Rotate(
+                //Vec3::new(0.0, 0.0, 0.0),
                 Vec3::new(
-                    input.get_mouse_axis(crate::delegator::MouseAxis::X) as f32,
                     input.get_mouse_axis(crate::delegator::MouseAxis::Y) as f32,
+                    input.get_mouse_axis(crate::delegator::MouseAxis::X) as f32,
                     0.0,
                 ) * time.delta_time
                     * 10.0,

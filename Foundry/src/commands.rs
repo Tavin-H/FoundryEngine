@@ -25,6 +25,7 @@ pub enum WorldCommand {
 pub enum EntityCommand {
     Translate(Vec3),
     SetPos(Vec3),
+    Rotate(Vec3),
     LookAt(),       //Unsupported
     RotateAround(), //Unsupported
     SetRotation(),  //Unsupported
