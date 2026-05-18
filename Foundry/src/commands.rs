@@ -12,6 +12,7 @@ pub enum Command {
     World(WorldCommand),
     Camera(CameraCommand),
     Message(MessageCommand),
+    Audio(AudioCommand),
 }
 
 pub enum WorldCommand {
@@ -46,12 +47,17 @@ pub enum MessageCommand {
     BroadcastMessages(Vec<&'static str>),
 }
 
+pub enum AudioCommand {
+    Play(&'static str),
+}
+
 pub struct CommandBuffer {
     //Allow for more features if needed
     pub entity_commands: Vec<(EntityID, EntityCommand)>,
     pub world_commands: Vec<WorldCommand>,
     pub broadcast_commands: Vec<MessageCommand>,
     pub camera_commands: Vec<CameraCommand>,
+    pub audio_commands: Vec<AudioCommand>,
 }
 
 impl CommandBuffer {
@@ -61,6 +67,7 @@ impl CommandBuffer {
             world_commands: Vec::new(),
             broadcast_commands: Vec::new(),
             camera_commands: Vec::new(),
+            audio_commands: Vec::new(),
         }
     }
     pub fn push(&mut self, command: Command) {
@@ -69,6 +76,7 @@ impl CommandBuffer {
             Command::World(command) => self.world_commands.push(command),
             Command::Message(command) => self.broadcast_commands.push(command),
             Command::Camera(command) => self.camera_commands.push(command),
+            Command::Audio(command) => self.audio_commands.push(command),
             _ => panic!(""),
         }
     }

@@ -1,4 +1,5 @@
 use crate::{
+    audio_manager::AudioManager,
     delegator::InputBuffer,
     ecs::{EntityBuilder, IDAllocator, World},
 };
@@ -153,23 +154,26 @@ impl Script for TestScriptInstance {
                     input.get_mouse_axis(crate::delegator::MouseAxis::Y) as f32,
                     0.0,
                 ) * time.delta_time
-                    * 2.0,
+                    / 2.0,
             ),
         ));
 
         if input.get_key(KeyCode::KeyK) {
-            let test_id = id.reserve_id();
-            println!("{}", test_id);
-            let test = EntityBuilder::spawn(test_id)
-                .with::<MeshAllocation>(MeshAllocation::default())
-                .with::<Transform>(Transform {
-                    position: [0.0, 0.0, 0.0],
-                    scale: [1.0, 1.0, 1.0],
-                })
-                .with::<ScriptComponent>(ScriptComponent {
-                    instance: Box::new(MoveScriptInstance {}),
-                });
-            command_buffer.push(Command::World(WorldCommand::Instantiate(test)));
+            /*
+                        let test_id = id.reserve_id();
+                        println!("{}", test_id);
+                        let test = EntityBuilder::spawn(test_id)
+                            .with::<MeshAllocation>(MeshAllocation::default())
+                            .with::<Transform>(Transform {
+                                position: [0.0, 0.0, 0.0],
+                                scale: [1.0, 1.0, 1.0],
+                            })
+                            .with::<ScriptComponent>(ScriptComponent {
+                                instance: Box::new(MoveScriptInstance {}),
+                            });
+                        command_buffer.push(Command::World(WorldCommand::Instantiate(test)));
+            */
+            command_buffer.push(Command::Audio(AudioCommand::Play("Sounds/fah.mp3")));
         }
         if (input.get_key(KeyCode::Space)) {
             self.y_velocity = 5.0;

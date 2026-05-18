@@ -1,5 +1,7 @@
+use crate::audio_manager::AudioManager;
 use crate::commands::{
-    CameraCommand, Command, CommandBuffer, EntityCommand, MessageCommand, WorldCommand,
+    AudioCommand, CameraCommand, Command, CommandBuffer, EntityCommand, MessageCommand,
+    WorldCommand,
 };
 use crate::id_consts::CAMERA;
 use crate::ui_data::{self, UIState};
@@ -83,10 +85,14 @@ impl InputBuffer {
     }
     pub fn set_mouse_moved(&mut self, moved: bool) {
         self.mouse_moved = moved;
+        if (!moved) {
+            self.mouse_delta = (0.0, 0.0);
+        }
     }
     pub fn handle_mouse_movement(&mut self, delta: (f64, f64)) {
         self.mouse_moved = true;
-        self.mouse_delta = delta;
+        self.mouse_delta.0 += delta.0;
+        self.mouse_delta.1 += delta.1;
     }
 }
 
@@ -99,6 +105,7 @@ pub struct Delagator {
     pub input_buffer: InputBuffer,
     pub id_allocator: IDAllocator,
     pub broadcaster: BroadCaster,
+    pub audio_manager: AudioManager,
 }
 
 impl Delagator {
@@ -111,6 +118,7 @@ impl Delagator {
             input_buffer: InputBuffer::default(),
             id_allocator: IDAllocator::default(),
             broadcaster: BroadCaster::new(),
+            audio_manager: AudioManager::new(),
         }
     }
 
@@ -153,6 +161,9 @@ impl Delagator {
             }
             for command in buffer.camera_commands {
                 self.handle_camera_command(command);
+            }
+            for command in buffer.audio_commands {
+                self.handle_audio_command(command);
             }
         }
     }
@@ -244,6 +255,15 @@ impl Delagator {
                 }
             }
             _ => {}
+        }
+    }
+
+    pub fn handle_audio_command(&mut self, command: AudioCommand) {
+        match command {
+            AudioCommand::Play(path) => {
+                self.audio_manager.play(path);
+            }
+            _ => panic!(),
         }
     }
 

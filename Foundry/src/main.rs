@@ -23,6 +23,9 @@ use crate::components::{MeshAllocation, Transform};
 use crate::game_data::GameContext;
 use crate::game_data::GameObject;
 
+//Audio Manager
+mod audio_manager;
+
 //Components
 mod components;
 
