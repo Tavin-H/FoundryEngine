@@ -5,10 +5,15 @@ use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
 
 //Built-in Components
+use crate::commands::*;
+use crate::components::BroadCasterListenerHash;
+use crate::components::BroadCasterListenerHashCollection;
 use crate::components::{
-    Command, Component, MeshAllocation, ScriptComponent, ScriptContext, TimeData, Transform,
+    Component, MeshAllocation, RuntimeContext, ScriptComponent, TimeData, Transform,
 };
+
 use crate::delegator::InputBuffer;
+use crate::id_consts::CAMERA;
 use crate::vulkan_data::VulkanContext;
 
 use ash::vk::PipelineLayout;
@@ -21,14 +26,15 @@ type ArchetypeSet = Vec<ArchetypeID>;
 type ArchetypeSignature = Vec<TypeId>;
 
 //Structs
+#[derive(Debug)]
 pub struct EntityRecord {
     row_index: usize,
     archetype_signature: ArchetypeSignature,
 }
 
 pub struct EntityBuilder {
-    id: EntityID,
-    signature: Vec<TypeId>,
+    pub id: EntityID,
+    pub signature: Vec<TypeId>,
     //Box because Size of dyn Fn is not known at compile time
     push_component_functions: Vec<Box<dyn FnOnce(&mut Archetype)>>,
     ensure_functions: Vec<Box<dyn Fn(&mut World)>>,
@@ -69,10 +75,6 @@ impl EntityBuilder {
     }
 
     pub fn build(self, world: &mut World) {
-        //Find archetype / create if non existing
-        //Populate Archetype
-        //Make an entity record (last?)
-
         //Ensure Initialized
         for ensure in &self.ensure_functions {
             ensure(world);
@@ -112,6 +114,7 @@ pub struct Health {
     pub current: u32,
     pub max: u32,
 }
+
 impl Health {
     pub fn new(current: u32, max: u32) -> Self {
         Health { current, max }
@@ -171,9 +174,7 @@ impl Archetype {
         ret.sort();
         ret
     }
-    //Originally had signature instead of 'components'
-    //Removed because it creates a mental dependancy for the Archetype API
-    //Might bite me in the butt but who knows
+
     fn new(id: ArchetypeID, components: Vec<TypeId>, registry: &TypeRegister) -> Self {
         //Use the reference before moving each TypeID into columns
         let signature = Archetype::generate_signature(&components);
@@ -221,11 +222,21 @@ impl TypeRegister {
     }
 }
 
-#[derive(Default)]
 pub struct IDAllocator {
     //Change to ID pool
     next_available_entity_id: EntityID,
     pub this: EntityID,
+    pub camera: EntityID,
+}
+
+impl Default for IDAllocator {
+    fn default() -> Self {
+        IDAllocator {
+            next_available_entity_id: 1,
+            this: 0,
+            camera: CAMERA,
+        }
+    }
 }
 
 impl IDAllocator {
@@ -267,22 +278,6 @@ impl World {
             println!();
         }
     }
-
-    /*
-    pub fn spawn(&mut self) -> EntityBuilder {
-        let new_entity = EntityBuilder {
-            id: self.next_available_entity_id,
-            //pending_components: HashMap::new(),
-            ensure_functions: Vec::new(),
-            push_component_functions: Vec::new(),
-            signature: Vec::new(),
-        };
-        //FIXME Eventually change this to an ID pool?
-        self.next_available_entity_id += 1;
-
-        new_entity
-    }
-    */
 
     fn ensure_registered<T: 'static>(&mut self) {
         let id: TypeId = TypeId::of::<T>();
@@ -328,6 +323,7 @@ impl World {
             .expect("Failed to downcast column in get_component");
         &downcast_vec[record.row_index]
     }
+
     pub fn get_component_as_mut<T: 'static>(&mut self, entity: EntityID) -> &mut T {
         let component_id = TypeId::of::<T>();
         let Some(record) = self.entity_index.get(&entity) else {
@@ -352,24 +348,18 @@ impl World {
         //Gets all archetypes with component T
         self.archetype_index
             .values() // Iterate over the archetypes
-            .filter(|archetype| {
-                // Check if EVERY search_id exists in this archetype's columns
-                // .all() stops early (short-circuits) if it finds a missing ID
-                ids.iter().all(|id| archetype.has_id(id))
-            })
+            .filter(|archetype| ids.iter().all(|id| archetype.has_id(id)))
             .collect()
     }
+
     pub fn get_mut_archetypes_by_ids(&mut self, ids: &mut Vec<TypeId>) -> Vec<&mut Archetype> {
         //Gets all archetypes with component T
         self.archetype_index
             .values_mut() // Iterate over the archetypes
-            .filter(|archetype| {
-                // Check if EVERY search_id exists in this archetype's columns
-                // .all() stops early (short-circuits) if it finds a missing ID
-                ids.iter_mut().all(|id| archetype.has_id(id))
-            })
+            .filter(|archetype| ids.iter_mut().all(|id| archetype.has_id(id)))
             .collect()
     }
+
     pub fn get_render_batches(&mut self) -> Vec<(&[Transform], &[MeshAllocation])> {
         //Get all the components of type MeshAllocation and Transform
         //Uses get_archetypes and sees overlap
@@ -388,50 +378,14 @@ impl World {
             render_batches.push((transforms, mesh_allocation));
         }
         render_batches
-        //Use render_batches in draw_frame()
-    }
-
-    fn handle_command(
-        &mut self,
-        entity: EntityID,
-        command: Command,
-        vulkan_data: &mut VulkanContext,
-    ) {
-        match command {
-            Command::Instantiate(entity_builder) => {
-                //Get mesh_allocation data
-                //Build entity_builder
-                let has_mesh = entity_builder
-                    .signature
-                    .contains(&TypeId::of::<MeshAllocation>());
-                let id = entity_builder.id;
-                entity_builder.build(self);
-                if (has_mesh) {
-                    let new_mesh_data = vulkan_data.create_mesh_data();
-                    let mesh_data: &mut MeshAllocation =
-                        self.get_component_as_mut::<MeshAllocation>(id);
-                    mesh_data.first_vertex = new_mesh_data.first_vertex;
-                    mesh_data.first_index = new_mesh_data.first_index;
-                    mesh_data.index_count = new_mesh_data.index_count;
-                }
-                vulkan_data.upload_mesh_data();
-            }
-            Command::Translate(pos) => {
-                let component: &mut Transform = self.get_component_as_mut::<Transform>(entity);
-                component.position[0] += pos[0];
-                component.position[1] += pos[1];
-                component.position[2] += pos[2];
-            }
-            _ => panic!("Unkown Command found in ECB"),
-        }
     }
 
     pub fn run_update_cycle(
         &mut self,
-        ctx: &mut ScriptContext<'_>,
+        ctx: &mut RuntimeContext<'_>,
         vulkan_data: &mut VulkanContext,
-    ) {
-        let mut command_queue: Vec<(EntityID, Command)> = Vec::new();
+    ) -> Vec<CommandBuffer> {
+        let mut command_buffer_queue: Vec<CommandBuffer> = Vec::new();
         let mut archetypes =
             self.get_mut_archetypes_by_ids(&mut vec![TypeId::of::<ScriptComponent>()]);
         //println!("Update archetypes");
@@ -443,12 +397,37 @@ impl World {
             for script in scripts.iter_mut() {
                 ctx.id.this = entity_ids[counter];
                 let mut commands = script.instance.update(ctx);
-                command_queue.append(&mut commands);
+                command_buffer_queue.push(commands);
                 counter += 1;
             }
         }
-        for (target, command) in command_queue {
-            self.handle_command(target, command, vulkan_data);
+        return command_buffer_queue;
+    }
+    pub fn compile_broadcast_listener_hash_collection(
+        &mut self,
+    ) -> BroadCasterListenerHashCollection {
+        let mut listener_hash: BroadCasterListenerHashCollection = HashMap::new();
+        let mut archetypes =
+            self.get_mut_archetypes_by_ids(&mut vec![TypeId::of::<ScriptComponent>()]);
+        for archetype in archetypes.iter_mut() {
+            let scripts: &mut [ScriptComponent] =
+                archetype.get_components_as_mut_slice::<ScriptComponent>();
+            for script in scripts.iter_mut() {
+                let listeners = script.instance.get_broadcast_listeners();
+                for (key, value) in listeners {
+                    if (listener_hash.contains_key(key)) {
+                        listener_hash
+                            .get_mut(key)
+                            .expect("Failed to get key")
+                            .push(value);
+                        println!("--------Adding something");
+                    } else {
+                        listener_hash.insert(key, vec![value]);
+                        println!("--------Pushing something");
+                    }
+                }
+            }
         }
+        return listener_hash;
     }
 }

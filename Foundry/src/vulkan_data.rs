@@ -7,6 +7,8 @@ use crate::game_data::GameObject;
 //Components
 use crate::components::{MeshAllocation, Transform};
 
+use crate::math::*;
+
 //Ash
 use ash::ext::{device_memory_report, surface_maintenance1};
 use ash::khr::get_physical_device_properties2;
@@ -18,6 +20,7 @@ use ash::vk::{
 use ash::{self, Entry, Instance, vk};
 
 //Math
+use glam; // For talking to move commands from delegator
 use nalgebra_glm::{self as glm, any, log, pi};
 
 //Winit
@@ -83,6 +86,7 @@ pub struct VulkanContext {
     surface: Option<vk::SurfaceKHR>,
     swap_chain_details: Option<SwapChainSupportDetails>,
     swap_chain: Option<ash::vk::SwapchainKHR>,
+    swap_chain_device: Option<ash::khr::swapchain::Device>,
     swap_chain_images: Vec<ash::vk::Image>,
     swap_chain_format: Option<vk::SurfaceFormatKHR>,
     swap_chain_extent_used: Option<vk::Extent2D>,
@@ -138,6 +142,8 @@ pub struct VulkanContext {
     current_frame: i32,
 
     ui_renderer: Option<Renderer>,
+
+    pub cam_transform: CameraTransform,
 }
 use std::sync::Mutex;
 //Holds all vulkan objects in a single struct to controll lifetimes more precisely
@@ -145,6 +151,33 @@ struct SwapChainSupportDetails {
     capabilities: vk::SurfaceCapabilitiesKHR,
     formats: Vec<vk::SurfaceFormatKHR>,
     present_modes: Vec<vk::PresentModeKHR>,
+}
+
+pub struct CameraTransform {
+    pub position: glm::Vec3,
+    pub rotation: glm::Vec3,
+    pub target: glm::Vec3,
+}
+impl Default for CameraTransform {
+    fn default() -> CameraTransform {
+        CameraTransform {
+            position: glm::vec3(2.0, 2.0, 2.0),
+            rotation: glm::vec3(0.86252, 0. - 2.4285, 0.0),
+            target: glm::vec3(0.0, 0.0, 0.0),
+        }
+    }
+}
+impl CameraTransform {
+    pub fn translate(&mut self, vector: glam::Vec3) {
+        let array: [f32; 3] = vector.into();
+        let glm_vec = glm::Vec3::from(array);
+        self.position += glm_vec;
+    }
+    pub fn rotate(&mut self, vector: glam::Vec3) {
+        self.rotation += convert_glam_to_glm3(vector);
+        //println!("Rotation {}", self.rotation);
+        self.target = calculate_rotation_target(self.position, self.rotation)
+    }
 }
 
 #[derive(Default)]
@@ -165,12 +198,9 @@ pub struct UniformBufferObject {
 #[derive(Default)]
 #[repr(C)]
 #[repr(align(16))]
-//All pads will be 0.0 by using ..Default::default()
 pub struct Vertex {
     pub pos: glm::Vec3,
-    //_pad1: f32,
     pub colour: glm::Vec3,
-    //_pad2: f32,
     pub tex_coord: glm::Vec2,
 }
 impl Vertex {
@@ -498,6 +528,7 @@ fn update_uniform_buffer(
     current_image: u32,
     extent: vk::Extent2D,
     uniform_buffers_mapped: &Vec<*mut UniformBufferObject>,
+    cam_transform: &CameraTransform,
 ) {
     let mut transform = glm::Mat4::identity();
     transform[(0, 3)] = 1.0;
@@ -509,13 +540,15 @@ fn update_uniform_buffer(
             &glm::vec3(0.0, 0.0, 1.0),
         );
     let view = glm::look_at(
-        &glm::vec3(2.0, 2.0, 2.0),
-        &glm::vec3(0.0, 0.0, 0.0),
-        &glm::vec3(0.0, 0.0, 1.0),
+        &cam_transform.position,
+        //&glm::vec3(2.0, 2.0, 2.0), // eye - Where the camera is
+        &cam_transform.target,
+        //&glm::vec3(0.0, 0.0, 0.0), // center - Where the camera is looking
+        &glm::vec3(0.0, 0.0, 1.0), // up
     );
     let mut proj = glm::perspective_rh_zo(
         extent.width as f32 / extent.height as f32,
-        std::f32::consts::PI / 4.0,
+        std::f32::consts::PI / 4.0, //FOV
         0.1,
         10.0,
     );
@@ -1065,7 +1098,6 @@ impl VulkanContext {
         self.create_texture_image();
         self.create_texture_image_view();
         self.create_texture_sampler();
-        //self.load_model();
         self.create_vertex_buffer();
         self.create_index_buffer();
         self.create_transform_storage_buffers();
@@ -1074,8 +1106,6 @@ impl VulkanContext {
         self.create_descriptor_sets();
         self.create_command_buffers();
         self.create_sync_object();
-
-        //self.running = true;
     }
     fn main_loop(&self) {}
     pub fn wait_idle(&mut self) {
@@ -1475,7 +1505,6 @@ impl VulkanContext {
     fn create_logical_device(&mut self) {
         let indices = &self.family_indicies;
         //Remember to add indices to this list
-        //BUG
         let indices_vec = vec![indices.graphics_family, indices.present_family];
         let mut queue_create_infos: Vec<vk::DeviceQueueCreateInfo> = Vec::new();
 
@@ -1633,14 +1662,11 @@ impl VulkanContext {
         }
         let indices = &self.family_indicies;
 
-        //Assume values are same
-        //TUTORAL MENTIONS HOW TO USE POST PROCESSING KINDA
         let mut create_info = vk::SwapchainCreateInfoKHR {
             surface: *surface,
             min_image_count: image_count,
             image_color_space: surface_format.color_space,
             image_extent: extent,
-            //WARNING THIS IS ANNOYING
             image_array_layers: 1,
             image_usage: vk::ImageUsageFlags::COLOR_ATTACHMENT,
             pre_transform: swapchain_support.capabilities.current_transform,
@@ -1686,6 +1712,7 @@ impl VulkanContext {
                 }
             }
         }
+        self.swap_chain_device = Some(swapchain_device);
     }
 
     fn cleanup_swapchain(&mut self) {
@@ -1910,20 +1937,11 @@ impl VulkanContext {
             max_depth: 1.0,
             ..Default::default()
         };
-        //let viewport_array: Vec<vk::Viewport> = vec![viewport];
 
         let scissor = vk::Rect2D {
             offset: vk::Offset2D { x: 0, y: 0 },
             extent: swapchain_extent,
         };
-        //let scissor_array: Vec<vk::Rect2D> = vec![scissor];
-        /*
-                let dynamic_state_info = vk::PipelineDynamicStateCreateInfo {
-                    dynamic_state_count: dynamic_states.len() as u32,
-                    p_dynamic_states: dynamic_states.as_ptr(),
-                    ..Default::default()
-                };
-        */
 
         let viewport_state = vk::PipelineViewportStateCreateInfo {
             viewport_count: 1,
@@ -1960,8 +1978,7 @@ impl VulkanContext {
             ..Default::default()
         };
 
-        //Multisampling
-        //(Anti-aliasing)
+        //Multisamplin (Anti-aliasing)
         let sample_mask_list: Vec<vk::SampleMask> = Vec::new();
         let multisampling_info = vk::PipelineMultisampleStateCreateInfo {
             sample_shading_enable: vk::FALSE,
@@ -2000,7 +2017,6 @@ impl VulkanContext {
         };
 
         //Pipeline Layout
-        //let set_layouts: Vec<vk::DescriptorSetLayout> = Vec::new();
         let set_layouts: [vk::DescriptorSetLayout; 1] = [self.descriptor_set_layout];
 
         let push_constants: Vec<vk::PushConstantRange> = Vec::new();
@@ -2090,7 +2106,6 @@ impl VulkanContext {
 
             ..Default::default()
         };
-        //let colour_attatchment_list: Vec<vk::AttachmentDescription> = vec![color_attatchment];
 
         let colour_attatchment_ref = vk::AttachmentReference {
             attachment: 0,
@@ -2172,31 +2187,17 @@ impl VulkanContext {
             panic!("");
         };
         let depth_format = find_depth_format(instance, physical_device);
-        let attachments = [
-            vk::AttachmentDescription {
-                format: swapchain_format.format,
-                samples: vk::SampleCountFlags::TYPE_1,
-                load_op: vk::AttachmentLoadOp::LOAD,
-                store_op: vk::AttachmentStoreOp::STORE,
-                stencil_load_op: vk::AttachmentLoadOp::DONT_CARE,
-                stencil_store_op: vk::AttachmentStoreOp::DONT_CARE,
-                initial_layout: vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
-                final_layout: vk::ImageLayout::PRESENT_SRC_KHR,
-                ..Default::default()
-            },
-            /*
-                        vk::AttachmentDescription {
-                            format: depth_format,
-                            samples: vk::SampleCountFlags::TYPE_1,
-                            load_op: vk::AttachmentLoadOp::DONT_CARE,
-                            store_op: vk::AttachmentStoreOp::DONT_CARE,
-                            initial_layout: vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-                            final_layout: vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-                            ..Default::default()
-                        },
-            */
-        ];
-        //let colour_attatchment_list: Vec<vk::AttachmentDescription> = vec![color_attatchment];
+        let attachments = [vk::AttachmentDescription {
+            format: swapchain_format.format,
+            samples: vk::SampleCountFlags::TYPE_1,
+            load_op: vk::AttachmentLoadOp::LOAD,
+            store_op: vk::AttachmentStoreOp::STORE,
+            stencil_load_op: vk::AttachmentLoadOp::DONT_CARE,
+            stencil_store_op: vk::AttachmentStoreOp::DONT_CARE,
+            initial_layout: vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
+            final_layout: vk::ImageLayout::PRESENT_SRC_KHR,
+            ..Default::default()
+        }];
 
         let colour_attatchment_ref = vk::AttachmentReference {
             attachment: 0,
@@ -2556,17 +2557,19 @@ impl VulkanContext {
         let mut load_options = tobj::LoadOptions {
             ..Default::default()
         };
-        match tobj::load_obj("models/viking_room.obj", &load_options) {
+        match tobj::load_obj("models/BEE.obj", &load_options) {
             Ok((models, _materials)) => {
                 println!("Loaded viking room --------------------------------");
                 for shape in models {
-                    for index in shape.mesh.indices {
+                    for (i, index) in shape.mesh.indices.iter().enumerate() {
+                        let index = *index as usize;
                         let x = shape.mesh.positions[3 * index as usize + 0];
                         let y = shape.mesh.positions[3 * index as usize + 1];
                         let z = shape.mesh.positions[3 * index as usize + 2];
 
-                        let u = shape.mesh.texcoords[2 * index as usize + 0];
-                        let v = 1.0 - shape.mesh.texcoords[2 * index as usize + 1];
+                        let tex_index = shape.mesh.texcoord_indices[i] as usize;
+                        let u = shape.mesh.texcoords[2 * tex_index + 0];
+                        let v = 1.0 - shape.mesh.texcoords[2 * tex_index + 1];
 
                         let vertex = Vertex {
                             pos: glm::vec3(x, y, z),
@@ -2819,12 +2822,6 @@ impl VulkanContext {
         let Some(logical_device) = &self.logical_device else {
             panic!("No logical_device when calling create_descriptor_pool");
         };
-        /*
-                let pool_size = vk::DescriptorPoolSize {
-                    descriptor_count: MAX_FRAMES_IN_FLIGHT,
-                    ty: vk::DescriptorType::UNIFORM_BUFFER,
-                };
-        */
 
         let mut pool_sizes = [
             //[0]
@@ -2908,19 +2905,6 @@ impl VulkanContext {
                 range: size_of::<glm::Mat4>() as u64 * MAX_GAME_OBJECTS_IN_SCENE,
                 ..Default::default()
             };
-
-            /*
-                        let descriptor_write = vk::WriteDescriptorSet {
-                            s_type: vk::StructureType::WRITE_DESCRIPTOR_SET,
-                            dst_set: self.descriptor_sets[i as usize],
-                            dst_binding: 0,
-                            dst_array_element: 0,
-                            descriptor_type: vk::DescriptorType::UNIFORM_BUFFER,
-                            descriptor_count: 1,
-                            p_buffer_info: &buffer_info,
-                            ..Default::default()
-                        };
-            */
 
             let descriptor_writes = [
                 vk::WriteDescriptorSet {
@@ -3074,7 +3058,7 @@ impl VulkanContext {
                 vk::PipelineBindPoint::GRAPHICS,
                 pipeline_layout,
                 0,
-                &[descriptor_sets[current_frame]], //FIXME shoudl b current_frame but maybe this works?
+                &[descriptor_sets[current_frame]],
                 &[],
             );
 
@@ -3096,7 +3080,6 @@ impl VulkanContext {
                         mesh_allocation.index_count,
                         1,
                         mesh_allocation.first_index,
-                        //gameobject._mesh.first_vertex,
                         0,
                         instance_index as u32,
                     );
@@ -3156,24 +3139,21 @@ impl VulkanContext {
             for i in 0..MAX_FRAMES_IN_FLIGHT {
                 match logical_device.create_semaphore(&semaphore_info, None) {
                     Ok(semaphore) => {
-                        //self.image_available_semaphores[i as usize] = semaphore
                         self.image_available_semaphores.push(semaphore);
-                    }
-                    Err(e) => panic!("{}", e),
-                }
-                match logical_device.create_semaphore(&semaphore_info, None) {
-                    Ok(semaphore) => {
-                        //self.render_finished_semaphores[i] = Some(semaphore)
-                        self.render_finished_semaphores.push(semaphore);
                     }
                     Err(e) => panic!("{}", e),
                 }
                 match logical_device.create_fence(&fence_info, None) {
                     Ok(fence) => {
-                        //self.in_flight_fences[i] = Some(fence)
                         self.in_flight_fences.push(fence);
                     }
 
+                    Err(e) => panic!("{}", e),
+                }
+            }
+            for _ in 0..self.swap_chain_images.len() {
+                match logical_device.create_semaphore(&semaphore_info, None) {
+                    Ok(semaphore) => self.render_finished_semaphores.push(semaphore),
                     Err(e) => panic!("{}", e),
                 }
             }
@@ -3208,13 +3188,14 @@ impl VulkanContext {
         let Some(graphics_queue) = self.graphics_queue else {
             panic!();
         };
-        let swapchain_device = ash::khr::swapchain::Device::new(instance, &logical_device);
+        let Some(swapchain_device) = &self.swap_chain_device else {
+            panic!();
+        };
 
         //Get all command buffers and sync objects for current frame
         let current_frame = self.current_frame as usize;
         let fences = &[self.in_flight_fences[current_frame]];
         let current_image_available_semaphore = self.image_available_semaphores[current_frame];
-        let current_render_finished_semaphore = self.render_finished_semaphores[current_frame];
         let current_fence = self.in_flight_fences[current_frame];
         let current_command_buffer = self.command_buffers[current_frame];
         unsafe {
@@ -3256,6 +3237,7 @@ impl VulkanContext {
                     panic!("{}", e);
                 }
             }
+            let current_render_finished_semaphore = self.render_finished_semaphores[image_index];
             logical_device.reset_fences(fences);
 
             logical_device
@@ -3306,7 +3288,13 @@ impl VulkanContext {
                 panic!("Really I should rework this");
             };
 
-            update_uniform_buffer(current_frame as u32, extent, &self.uniform_buffers_mapped);
+            let transform = &self.cam_transform;
+            update_uniform_buffer(
+                current_frame as u32,
+                extent,
+                &self.uniform_buffers_mapped,
+                &transform,
+            );
 
             let submit_info = vk::SubmitInfo {
                 wait_semaphore_count: 1,
@@ -3329,6 +3317,8 @@ impl VulkanContext {
             let image_index_32 = image_index as u32;
             let present_info = vk::PresentInfoKHR {
                 swapchain_count: 1,
+                p_wait_semaphores: signal_semaphores.as_ptr(), // render_finished_semaphore
+                wait_semaphore_count: 1,
                 p_swapchains: &swapchain,
                 p_image_indices: &image_index_32,
                 ..Default::default()

@@ -23,11 +23,17 @@ use crate::components::{MeshAllocation, Transform};
 use crate::game_data::GameContext;
 use crate::game_data::GameObject;
 
+//Audio Manager
+mod audio_manager;
+
 //Components
 mod components;
 
-mod ECS;
-use crate::ECS::{Archetype, EntityBuilder, EntityRecord, Health, World};
+mod id_consts;
+mod math;
+
+mod ecs;
+use crate::ecs::{Archetype, EntityBuilder, EntityRecord, Health, World};
 
 //Vulkan Data
 mod vulkan_data;
@@ -36,6 +42,9 @@ use crate::vulkan_data::{UniformBufferObject, VulkanContext};
 //UI Handler
 mod ui_data;
 use crate::ui_data::UIHandler;
+
+//Dependancies
+mod commands;
 
 //------------------Vulkan----------------------
 //Constants
@@ -109,6 +118,7 @@ struct WinitApp {
 
 impl ApplicationHandler for HelloTriangleApp {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        //First Frame
         let Some(window) = &self.window else {
             panic!("");
         };
@@ -118,6 +128,23 @@ impl ApplicationHandler for HelloTriangleApp {
             panic!();
         };
         self.delegator.vulkan_context.init_vulkan(window, context);
+        self.delegator.set_broadcaster();
+    }
+
+    // TODO : Change handle_keyboard_event to reside in this function
+    fn device_event(
+        &mut self,
+        event_loop: &ActiveEventLoop,
+        device_id: winit::event::DeviceId,
+        event: winit::event::DeviceEvent,
+    ) {
+        match event {
+            winit::event::DeviceEvent::MouseMotion { delta } => {
+                self.delegator.input_buffer.set_mouse_moved(true);
+                self.delegator.input_buffer.handle_mouse_movement(delta);
+            }
+            _ => (),
+        }
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, id: WindowId, event: WindowEvent) {
@@ -171,6 +198,7 @@ impl ApplicationHandler for HelloTriangleApp {
                 button,
             } => {
                 if state == ElementState::Pressed {
+                    //self.delegator.input_buffer.handle_mouse_event(button, state);
                     /*
                                         let rng = rand::rng();
                                         let x = rand::random_range(-2.0..2.0);
@@ -198,6 +226,11 @@ impl ApplicationHandler for HelloTriangleApp {
                     */
                 }
             }
+            WindowEvent::MouseWheel {
+                device_id,
+                delta,
+                phase,
+            } => {}
             _ => (),
         }
     }
@@ -206,57 +239,6 @@ impl ApplicationHandler for HelloTriangleApp {
         // update logic here
         if (!self.closing) {
             self.delegator.check_states();
-            let mut avg_delta_time = self.delegator.game_context.calculate_delta_time();
-            self.frame_count += 1;
-            if self.frame_count > 1000 {
-                self.frame_count = 0;
-                self.fps = 1.0 / avg_delta_time;
-            }
-
-            if (!self.delegator.vulkan_context.running) {
-                avg_delta_time = 0.0;
-            }
-            /*
-                        if (self.delegator.game_context.game_objects[0]
-                            .transform
-                            .position[2]
-                            > 1.0)
-                        {
-                            self.rising = false;
-                        }
-                        if (self.delegator.game_context.game_objects[0]
-                            .transform
-                            .position[2]
-                            < -1.0)
-                        {
-                            self.rising = true;
-                        }
-                        if (!self.rising) {
-                            self.delegator.game_context.game_objects[0]
-                                .transform
-                                .position[2] -= 1.0 * avg_delta_time;
-                        } else {
-                            self.delegator.game_context.game_objects[0]
-                                .transform
-                                .position[2] += 1.0 * avg_delta_time;
-                        }
-            */
-            /*
-                        //////
-                        if (self.game_context.game_objects[1].transform.position[2] > 1.0) {
-                            self.rising2 = false;
-                        }
-                        if (self.game_context.game_objects[1].transform.position[2] < -1.0) {
-                            self.rising2 = true;
-                        }
-                        if (!self.rising2) {
-                            self.game_context.game_objects[1].transform.position[2] -= 3.0 * avg_delta_time;
-                        } else {
-                            self.game_context.game_objects[1].transform.position[2] += 3.0 * avg_delta_time;
-                        }
-            */
-
-            //println!("{} {}", delta_time, self.running);
 
             //LAST THINGS
             let Some(window) = &self.window else {
@@ -266,6 +248,7 @@ impl ApplicationHandler for HelloTriangleApp {
             if let Some(window) = &self.window {
                 window.request_redraw();
             }
+            self.delegator.input_buffer.set_mouse_moved(false);
         }
     }
 }
@@ -282,8 +265,6 @@ fn load_icon(file_path: &String) -> winit::window::Icon {
 
     winit::window::Icon::from_rgba(icon_rgba, icon_width, icon_height).expect("Failed to open icon")
 }
-
-//Change to entry::linked() if having problems
 
 fn read_file(file_path: &String) -> Vec<u8> {
     //let contents = fs::read(ffile_path).expect("Failed to read file");
@@ -330,6 +311,8 @@ struct HelloTriangleApp {
     window_resized: bool,
     frame_count: u64,
     fps: f32,
+
+    timer: f32,
 }
 impl Default for HelloTriangleApp {
     fn default() -> Self {
@@ -352,6 +335,7 @@ impl Default for HelloTriangleApp {
             window_resized: false,
             frame_count: 0,
             fps: 0.0,
+            timer: 0.0,
         }
     }
 }
@@ -389,7 +373,7 @@ impl HelloTriangleApp {
             .with_inner_size(self.size);
         window_attributes.window_icon = Some(icon);
         let event_loop = EventLoop::new().unwrap();
-        //self.window = Some(event_loop.create_window(window_attributes).unwrap());
+
         match event_loop.create_window(window_attributes) {
             Ok(window) => {
                 self.delegator.ui_handler.init(&window);
@@ -404,19 +388,6 @@ impl HelloTriangleApp {
         self.size = winit::dpi::LogicalSize::new(window_width, window_height);
         event_loop.run_app(self);
     }
-
-    /*
-    fn instantiate(&mut self, mut gameobject: GameObject) {
-        let before_indices = self.vulkan_context.indices.len();
-        gameobject._mesh.first_vertex = self.vulkan_context.vertices.len() as i32;
-        self.vulkan_context.load_model();
-        let after_indices = self.vulkan_context.indices.len();
-
-        gameobject._mesh.first_index = before_indices as u32;
-        gameobject._mesh.index_count = (after_indices - before_indices) as u32;
-        self.game_context.game_objects.push(gameobject);
-    }
-    */
 }
 fn main() {
     let start_time = std::time::Instant::now();
@@ -468,7 +439,7 @@ fn main() {
         running: false,
         ..Default::default()
     };
-    //let delegator = Delagator::new(vulkan, game, ui);
+
     app.delegator.game_context.instantiate(
         gameobject_example_2,
         &mut app.delegator.vulkan_context,

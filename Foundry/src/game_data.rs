@@ -1,29 +1,14 @@
 use std::{collections::VecDeque, io::Seek, time};
 
-use crate::ECS::Health;
 use crate::components::{
     MeshAllocation, Script, ScriptComponent, TestScriptInstance, TimeData, Transform,
 };
+use crate::ecs::Health;
 use crate::{
-    ECS::{EntityBuilder, IDAllocator, World},
+    ecs::{EntityBuilder, IDAllocator, World},
     vulkan_data::VulkanContext,
 };
 use nalgebra_glm::{self as glm};
-
-/*
-#[derive(Default, Debug, Clone)]
-pub struct MeshAllocation {
-    pub index_count: u32,
-    pub first_index: u32,
-    pub first_vertex: i32,
-}
-
-#[derive(Default, Clone, Copy, Debug)]
-pub struct Transform {
-    pub position: [f32; 3],
-    pub scale: [f32; 3],
-}
-*/
 
 #[derive(Default, Debug, Clone)]
 
@@ -63,10 +48,14 @@ impl GameContext {
         }
     }
     pub fn calculate_delta_time(&mut self) -> f32 {
-        let mut delta_time = (time::Instant::now() - self.delta_time_previous_frame).as_nanos()
-            as f32
-            / 1000000000 as f32;
-        //self.game_context.delta_time
+        let now = time::Instant::now();
+        let mut delta_time =
+            (now - self.delta_time_previous_frame).as_nanos() as f32 / 1_000_000_000 as f32;
+
+        self.previous_delta_times.push_back(delta_time);
+        if (self.previous_delta_times.len() >= 5) {
+            self.previous_delta_times.pop_front();
+        }
         let mut avg_delta_time: f32 = 0.0;
         for i in 0..5 {
             match self.previous_delta_times.get(i) {
@@ -76,10 +65,8 @@ impl GameContext {
                 None => (),
             }
         }
-        avg_delta_time /= 5.0;
-        self.delta_time_previous_frame = time::Instant::now();
-        self.previous_delta_times.push_back(delta_time);
-        self.previous_delta_times.pop_front();
+        avg_delta_time /= self.previous_delta_times.len() as f32;
+        self.delta_time_previous_frame = now;
         self.time.delta_time = avg_delta_time;
         avg_delta_time
     }
@@ -115,7 +102,7 @@ impl GameContext {
                         gameobject.transform.position[1],
                         gameobject.transform.position[2],
                     ],
-                    scale: [1.0, 1.0, 1.0],
+                    scale: [30.0, 30.0, 30.0],
                 })
                 .build(ecs_world);
         } else {
