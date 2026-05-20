@@ -1,3 +1,5 @@
+use std::any::TypeId;
+
 use crate::ecs::{EntityBuilder, World};
 type EntityID = u64;
 use glam::Vec3;
@@ -80,4 +82,15 @@ impl CommandBuffer {
             _ => panic!(""),
         }
     }
+    /*
+    pub fn push<T: 'static>(&mut self, command: T) {
+        let audio = TypeId::of::<AudioCommand>();
+        match TypeId::of::<T>() {
+            audio => {
+                self.audio_commands.push(command as AudioCommand);
+            }
+            _ => panic!(),
+        }
+    }
+    */
 }
