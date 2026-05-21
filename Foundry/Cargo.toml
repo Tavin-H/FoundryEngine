@@ -22,6 +22,7 @@ imgui-rs-vulkan-renderer = "1.16.0"
 rand = "0.10.0"
 cpal = "0.17.3"
 symphonia = { version = "0.6.0", features = ["mp3"] }
+ringbuf = "0.5.0"
 
 [dependencies.vulkan-headers]
 version = "0.1.1+1.4.336"
