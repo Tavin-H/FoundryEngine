@@ -110,6 +110,8 @@ pub struct Delagator {
 
 impl Delagator {
     pub fn new(vulkan: VulkanContext, game: GameContext, ui: UIHandler, world: World) -> Self {
+        let mut audio_manager = AudioManager::new();
+        audio_manager.play("");
         Self {
             vulkan_context: vulkan,
             game_context: game,
@@ -118,7 +120,7 @@ impl Delagator {
             input_buffer: InputBuffer::default(),
             id_allocator: IDAllocator::default(),
             broadcaster: BroadCaster::new(),
-            audio_manager: AudioManager::new(),
+            audio_manager: audio_manager,
         }
     }
 

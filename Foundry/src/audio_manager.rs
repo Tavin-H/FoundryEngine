@@ -1,16 +1,21 @@
 // Audio playback
 use cpal::StreamConfig;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+use ringbuf::storage::Heap;
+use ringbuf::wrap::caching::Caching;
 use symphonia::core::audio::GenericAudioBufferRef;
 
+use ::std::sync::Arc;
+
 // Files and decoding
-use ringbuf::HeapRb;
 use ringbuf::traits::*;
+use ringbuf::{HeapRb, SharedRb};
 use std::fs::File;
+use std::thread;
 use symphonia::core::codecs::audio::AudioDecoderOptions;
 use symphonia::core::errors::Error;
 use symphonia::core::formats::probe::Hint;
-use symphonia::core::formats::{FormatOptions, TrackType};
+use symphonia::core::formats::{FormatOptions, FormatReader, Track, TrackType};
 use symphonia::core::io::MediaSourceStream;
 use symphonia::core::meta::MetadataOptions;
 
@@ -27,30 +32,24 @@ pub struct AudioManager {
 impl AudioManager {
     pub fn new() -> Self {
         // ---SYMPHONIA SETUP---
-        let path = "Sounds/fah.mp3";
-        let Ok(file) = File::open(path) else {
-            panic!("Failed to find file");
+        let host = cpal::default_host();
+        let Some(output_device) = host.default_output_device() else {
+            panic!("Could not find an output device");
         };
+        AudioManager {
+            host: host,
+            output_device: output_device,
+        }
+    }
 
-        //Move to the AudioManager?
-        let (mut producer_r, mut receiver_r) = HeapRb::<f32>::new(48000 * 2).split();
-        let (mut producer_l, mut receiver_l) = HeapRb::<f32>::new(48000 * 2).split();
-
-        let mut audio_decoded_left: Vec<i32> = Vec::new();
-        let mut audio_decoded_right: Vec<i32> = Vec::new();
-
-        let mss = MediaSourceStream::new(Box::new(file), Default::default());
-        let mut hint = Hint::new();
-        hint.with_extension("mp3");
-
-        //Use defaults (idk what these are)
-        let meta_opts: MetadataOptions = Default::default();
-        let fmt_opts: FormatOptions = Default::default();
-
-        let mut format = symphonia::default::get_probe()
-            .probe(&hint, mss, fmt_opts, meta_opts)
-            .expect("unsupported format");
-
+    pub fn decode(
+        mut format: Box<dyn FormatReader + Send>,
+        mut producer_r: impl Producer<Item = f32>,
+        mut producer_l: impl Producer<Item = f32>,
+    ) {
+        // Main resource used for setup:
+        // https://github.com/pdeljanov/Symphonia/blob/main/symphonia/examples/getting-started.rs
+        // https://users.rust-lang.org/t/decode-a-audio-file-that-cpal-can-consume-properly/110792/2
         let Some(track) = format.default_track(TrackType::Audio) else {
             panic!("No audio track");
         };
@@ -83,13 +82,14 @@ impl AudioManager {
 
         let track_id = track.id;
 
+        thread::spawn(|| {});
         loop {
             // Get the next packet from the media format.
             let packet = match format.next_packet() {
                 Ok(Some(packet)) => packet,
                 Ok(None) => {
                     // Reached the end of the stream.
-                    break;
+                    panic!("")
                 }
                 Err(Error::ResetRequired) => {
                     //This is a complicated experimental thing so I'll just ignore it with a panic
@@ -144,24 +144,55 @@ impl AudioManager {
                 }
             }
         }
+    }
 
-        // ---CPAL SETUP---
-        let host = cpal::default_host();
-        let Some(output_device) = host.default_output_device() else {
-            panic!("Could not find an output device");
+    /*
+    pub fn handle_decoded_sample(
+        sample_buffer: GenericAudioBufferRef,
+        producer_r: &mut i32,
+        producer_l: &mut i32,
+    ) -> (f64, f64) {
+    }
+    */
+
+    pub fn play(&mut self, path: &str) {
+        //Holds the ring buffer
+        //decoder_fn pushing to ring_buffer
+        //listener_fn playing audio in another thread
+        let (mut producer_r, mut receiver_r) = HeapRb::<f32>::new(48000 * 2).split();
+        let (mut producer_l, mut receiver_l) = HeapRb::<f32>::new(48000 * 2).split();
+        let path = "Sounds/fah.mp3";
+        let Ok(file) = File::open(path) else {
+            panic!("Failed to find file");
         };
+        let mss = MediaSourceStream::new(Box::new(file), Default::default());
+        let mut hint = Hint::new();
+        hint.with_extension("mp3");
+
+        //Use defaults (idk what these are)
+        let meta_opts: MetadataOptions = Default::default();
+        let fmt_opts: FormatOptions = Default::default();
+
+        let mut format = symphonia::default::get_probe()
+            .probe(&hint, mss, fmt_opts, meta_opts)
+            .expect("unsupported format");
+
+        thread::spawn(|| {
+            AudioManager::decode(format, producer_l, producer_r);
+        });
+        // ---CPAL SETUP---
         println!(
             "Using audio device: {}",
-            output_device.description().unwrap()
+            self.output_device.description().unwrap()
         );
-        let supported_configs = output_device.supported_output_configs();
-        let Ok(default_config) = output_device.default_output_config() else {
+        let supported_configs = self.output_device.supported_output_configs();
+        let Ok(default_config) = self.output_device.default_output_config() else {
             panic!("")
         };
         let mut config: StreamConfig = default_config.into();
-        config.sample_rate = 44100 / 4;
+        config.sample_rate = 44100;
 
-        let stream = output_device.build_output_stream(
+        let stream = self.output_device.build_output_stream(
             &config,
             move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
                 // Split for 2 channels
@@ -184,35 +215,17 @@ impl AudioManager {
             None, // None=blocking, Some(Duration)=timeout
         );
 
-        let Ok(output_stream) = stream else {
-            panic!("");
-        };
-        output_stream.play().unwrap();
+        thread::spawn(|| {
+            let Ok(output_stream) = stream else {
+                panic!("");
+            };
+            output_stream.play().unwrap();
 
-        std::thread::sleep(Duration::from_secs(3));
-        output_stream.pause().unwrap();
-        drop(output_stream);
-        AudioManager {
-            host: host,
-            output_device: output_device,
-        }
+            std::thread::sleep(Duration::from_secs(3));
+            output_stream.pause().unwrap();
+            drop(output_stream);
+        });
     }
-
-    /*
-    pub fn decode(&mut self, path: &str) -> Result<(Vec<f32>, Vec<f32>), &str> {
-        // Main resource used for setup:
-        // https://github.com/pdeljanov/Symphonia/blob/main/symphonia/examples/getting-started.rs
-        // https://users.rust-lang.org/t/decode-a-audio-file-that-cpal-can-consume-properly/110792/2
-    }
-
-    pub fn handle_decoded_sample(
-        sample_buffer: GenericAudioBufferRef,
-        producer_r: &mut i32,
-        producer_l: &mut i32,
-    ) -> (f64, f64) {
-    }
-    */
-    pub fn play(&mut self, path: &str) {}
     //Settings functions
     pub fn get_available_output_devices() {}
 }
