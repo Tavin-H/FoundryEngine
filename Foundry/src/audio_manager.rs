@@ -159,18 +159,23 @@ impl AudioManager {
             panic!("")
         };
         let mut config: StreamConfig = default_config.into();
-        config.sample_rate = 44100 / 2;
+        config.sample_rate = 44100 / 4;
 
         let stream = output_device.build_output_stream(
             &config,
             move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
-                // react to stream events and read or write stream data here.
-                for sample in data {
-                    let mini_packet = match receiver_r.try_pop() {
+                // Split for 2 channels
+                for sample in data.chunks_mut(2) {
+                    let mini_packet_r = match receiver_r.try_pop() {
                         Some(single) => single,
                         None => 0.0,
                     };
-                    *sample = mini_packet;
+                    let mini_packet_l = match receiver_l.try_pop() {
+                        Some(single) => single,
+                        None => 0.0,
+                    };
+                    sample[0] = mini_packet_l;
+                    sample[1] = mini_packet_r;
                 }
             },
             move |err| {
