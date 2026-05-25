@@ -31,7 +31,7 @@ pub struct AudioManager {
 
 impl AudioManager {
     pub fn new() -> Self {
-        // ---SYMPHONIA SETUP---
+        // ---CPAL SETUP---
         let host = cpal::default_host();
         let Some(output_device) = host.default_output_device() else {
             panic!("Could not find an output device");
@@ -146,22 +146,12 @@ impl AudioManager {
         }
     }
 
-    /*
-    pub fn handle_decoded_sample(
-        sample_buffer: GenericAudioBufferRef,
-        producer_r: &mut i32,
-        producer_l: &mut i32,
-    ) -> (f64, f64) {
-    }
-    */
-
     pub fn play(&mut self, path: &str) {
-        //Holds the ring buffer
-        //decoder_fn pushing to ring_buffer
-        //listener_fn playing audio in another thread
+        // ---RINGBUFFER SETUP---
         let (mut producer_r, mut receiver_r) = HeapRb::<f32>::new(48000 * 2).split();
         let (mut producer_l, mut receiver_l) = HeapRb::<f32>::new(48000 * 2).split();
-        let path = "Sounds/fah.mp3";
+
+        // ---SYMPHONIA SETUP---
         let Ok(file) = File::open(path) else {
             panic!("Failed to find file");
         };
@@ -177,10 +167,10 @@ impl AudioManager {
             .probe(&hint, mss, fmt_opts, meta_opts)
             .expect("unsupported format");
 
+        //Use seperate thread for decoding
         thread::spawn(|| {
             AudioManager::decode(format, producer_l, producer_r);
         });
-        // ---CPAL SETUP---
         println!(
             "Using audio device: {}",
             self.output_device.description().unwrap()
@@ -209,12 +199,11 @@ impl AudioManager {
                     sample[1] = mini_packet_r;
                 }
             },
-            move |err| {
-                // react to errors here.
-            },
+            move |err| {},
             None, // None=blocking, Some(Duration)=timeout
         );
 
+        //Use seperate thread for playing
         thread::spawn(|| {
             let Ok(output_stream) = stream else {
                 panic!("");

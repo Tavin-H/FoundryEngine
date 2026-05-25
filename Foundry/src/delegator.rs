@@ -111,7 +111,7 @@ pub struct Delagator {
 impl Delagator {
     pub fn new(vulkan: VulkanContext, game: GameContext, ui: UIHandler, world: World) -> Self {
         let mut audio_manager = AudioManager::new();
-        audio_manager.play("");
+        //audio_manager.play("");
         Self {
             vulkan_context: vulkan,
             game_context: game,
@@ -174,7 +174,7 @@ impl Delagator {
         match command {
             EntityCommand::Translate(pos) => {
                 if (entity == CAMERA) {
-                    self.vulkan_context.cam_transform.translate(pos);
+                    self.vulkan_context.cam_transform.translate_local(pos);
                     return;
                 }
                 let component: &mut Transform =

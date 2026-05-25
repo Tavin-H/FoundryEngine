@@ -161,9 +161,15 @@ pub struct CameraTransform {
 impl Default for CameraTransform {
     fn default() -> CameraTransform {
         CameraTransform {
-            position: glm::vec3(2.0, 2.0, 2.0),
-            rotation: glm::vec3(0.86252, 0. - 2.4285, 0.0),
+            position: glm::vec3(2.5, 2.0, 2.5),
+            rotation: glm::vec3(0.0, 0. - 2.4285, 0.0),
+            //rotation: glm::vec3(0.0, 0.0, 0.0),
             target: glm::vec3(0.0, 0.0, 0.0),
+            /*
+            position: glm::vec3(2.0, 0.0, 0.0),
+            rotation: glm::vec3(0.0, 0.0, 0.0),
+            target: glm::vec3(0.0, 0.0, 0.0),
+            */
         }
     }
 }
@@ -172,6 +178,16 @@ impl CameraTransform {
         let array: [f32; 3] = vector.into();
         let glm_vec = glm::Vec3::from(array);
         self.position += glm_vec;
+        // IF NOT ROTATING YOU NEED TO CALCULATE TARGET TOO
+    }
+    pub fn translate_local(&mut self, vector: glam::Vec3) {
+        let array: [f32; 3] = vector.into();
+        let glm_vec = glm::Vec3::from(array);
+        let converted =
+            convert_vector_to_local(glm_vec, self.target, self.rotation.x, self.rotation.y); // ISSUE
+        self.position += converted;
+        println!("{}", self.position - self.target);
+        // IF NOT ROTATING YOU NEED TO CALCULATE TARGET TOO
     }
     pub fn rotate(&mut self, vector: glam::Vec3) {
         self.rotation += convert_glam_to_glm3(vector);
@@ -531,12 +547,13 @@ fn update_uniform_buffer(
     cam_transform: &CameraTransform,
 ) {
     let mut transform = glm::Mat4::identity();
-    transform[(0, 3)] = 1.0;
+    //transform[(0, 3)] = 1.0;
 
     let model = transform
         * glm::rotate(
             &glm::Mat4::identity(),
-            90.0 * 0.3 * std::f32::consts::PI / 2.0,
+            //90.0 * 0.3 * std::f32::consts::PI / 2.0,
+            0.0,
             &glm::vec3(0.0, 0.0, 1.0),
         );
     let view = glm::look_at(
