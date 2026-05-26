@@ -162,7 +162,7 @@ impl Default for CameraTransform {
     fn default() -> CameraTransform {
         CameraTransform {
             position: glm::vec3(2.5, 2.0, 2.5),
-            rotation: glm::vec3(0.0, 0. - 2.4285, 0.0),
+            rotation: glm::vec3(0.0, 0.0, 0.0),
             //rotation: glm::vec3(0.0, 0.0, 0.0),
             target: glm::vec3(0.0, 0.0, 0.0),
             /*
@@ -184,7 +184,7 @@ impl CameraTransform {
         let array: [f32; 3] = vector.into();
         let glm_vec = glm::Vec3::from(array);
         let converted =
-            convert_vector_to_local(glm_vec, self.target, self.rotation.x, self.rotation.y); // ISSUE
+            convert_vector_to_local(glm_vec, self.target, self.rotation.x, self.rotation.y);
         self.position += converted;
         println!("{}", self.position - self.target);
         // IF NOT ROTATING YOU NEED TO CALCULATE TARGET TOO

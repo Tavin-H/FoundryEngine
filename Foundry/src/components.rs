@@ -121,25 +121,25 @@ impl Script for TestScriptInstance {
         if input.get_key(KeyCode::KeyS) {
             command_buffer.push(Command::Entity(
                 id.camera,
-                EntityCommand::Translate(Vec3::new(1.0, 1.0, 0.0) * time.delta_time),
+                EntityCommand::Translate(Vec3::new(-1.0, 0.0, 0.0) * time.delta_time),
             ));
         }
         if input.get_key(KeyCode::KeyW) {
             command_buffer.push(Command::Entity(
                 id.camera,
-                EntityCommand::Translate(Vec3::new(-1.0, -1.0, 0.0) * time.delta_time),
+                EntityCommand::Translate(Vec3::new(1.0, 0.0, 0.0) * time.delta_time),
             ));
         }
         if input.get_key(KeyCode::KeyD) {
             command_buffer.push(Command::Entity(
                 id.camera,
-                EntityCommand::Translate(Vec3::new(-1.0, 1.0, 0.0) * time.delta_time),
+                EntityCommand::Translate(Vec3::new(0.0, 1.0, 0.0) * time.delta_time),
             ));
         }
         if input.get_key(KeyCode::KeyA) {
             command_buffer.push(Command::Entity(
                 id.camera,
-                EntityCommand::Translate(Vec3::new(1.0, -1.0, 0.0) * time.delta_time),
+                EntityCommand::Translate(Vec3::new(0.0, -1.0, 0.0) * time.delta_time),
             ));
         }
         if input.get_key_up(KeyCode::KeyC) {

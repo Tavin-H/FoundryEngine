@@ -45,14 +45,16 @@ pub fn convert_vector_to_local(
     //let yaw = rotation.x;
     let identity = glm::identity::<f32, 4>();
 
-    //let yaw_matrix: glm::Mat4 = glm::rotate_z(&identity, yaw);
-    //let direction_expanded: glm::Vec4 = glm::Vec4::new(direction.x, direction.y, direction.z, 0.0);
+    let yaw_matrix: glm::Mat4 = glm::rotate_z(&identity, yaw);
+    let pitch_matrix: glm::Mat4 = glm::rotate_y(&identity, pitch);
+    let direction_expanded: glm::Vec4 = glm::Vec4::new(direction.x, direction.y, direction.z, 0.0);
 
-    //let result = yaw_matrix * direction_expanded;
+    let result = yaw_matrix * direction_expanded;
     //let one = rotate_y_vec3(&direction, pitch);
-    let result = rotate_z_vec3(&direction, yaw - (std::f32::consts::PI / 4.0));
+    //let result = rotate_z_vec3(&direction, yaw - (std::f32::consts::PI / 4.0));
 
-    //let ret = glm::Vec3::new(result.x, result.y, result.z);
+    let ret = glm::Vec3::new(result.x, result.y, result.z);
     //println!("after = {}", ret);
-    result
+    //result
+    ret
 }
