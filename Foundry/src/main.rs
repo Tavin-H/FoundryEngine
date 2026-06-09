@@ -17,6 +17,9 @@
 mod delegator;
 use crate::delegator::Delagator;
 
+//LUA
+mod lua_engine;
+
 //Game Data
 mod game_data;
 use crate::components::{MeshAllocation, Transform};

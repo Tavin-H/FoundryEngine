@@ -16,6 +16,8 @@ use std::panic;
 use winit::event;
 use winit::keyboard::{KeyCode, PhysicalKey};
 
+use crate::lua_engine::LuaEngine;
+
 type EntityID = u64;
 use std::any::TypeId;
 #[derive(Default)]
@@ -106,11 +108,14 @@ pub struct Delagator {
     pub id_allocator: IDAllocator,
     pub broadcaster: BroadCaster,
     pub audio_manager: AudioManager,
+    pub lua_engine: LuaEngine,
 }
 
 impl Delagator {
     pub fn new(vulkan: VulkanContext, game: GameContext, ui: UIHandler, world: World) -> Self {
         let mut audio_manager = AudioManager::new();
+        let lua = LuaEngine::init().unwrap();
+        lua.excecute_lua(std::path::Path::new("src/test.lua"));
         //audio_manager.play("");
         Self {
             vulkan_context: vulkan,
@@ -121,6 +126,7 @@ impl Delagator {
             id_allocator: IDAllocator::default(),
             broadcaster: BroadCaster::new(),
             audio_manager: audio_manager,
+            lua_engine: LuaEngine::init().unwrap(),
         }
     }
 
