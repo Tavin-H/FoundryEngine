@@ -13,6 +13,7 @@ use crate::ui_data::UIHandler;
 use crate::vulkan_data::VulkanContext;
 use std::collections::HashSet;
 use std::panic;
+use std::sync::Arc;
 use winit::event;
 use winit::keyboard::{KeyCode, PhysicalKey};
 
@@ -114,8 +115,12 @@ pub struct Delagator {
 impl Delagator {
     pub fn new(vulkan: VulkanContext, game: GameContext, ui: UIHandler, world: World) -> Self {
         let mut audio_manager = AudioManager::new();
-        let lua = LuaEngine::init().unwrap();
-        lua.excecute_lua(std::path::Path::new("src/test.lua"));
+        let mut lua = LuaEngine::init().unwrap();
+        let result = lua.excecute_lua_behaviour(1, std::path::Path::new("src/test.lua"));
+        match result {
+            Err(error) => panic!("{}", error),
+            Ok(_) => {}
+        }
         //audio_manager.play("");
         Self {
             vulkan_context: vulkan,
@@ -156,27 +161,33 @@ impl Delagator {
         self.input_buffer.clear_discrete_inputs();
     }
 
-    pub fn execute_command_buffer(&mut self, command_buffer_queue: Vec<CommandBuffer>) {
-        for buffer in command_buffer_queue {
-            for (entity, command) in buffer.entity_commands {
-                self.handle_entity_command(entity, command);
-            }
-            for command in buffer.world_commands {
-                self.handle_world_command(command);
-            }
-            for command in buffer.broadcast_commands {
-                self.handle_message_command(command);
-            }
-            for command in buffer.camera_commands {
-                self.handle_camera_command(command);
-            }
-            for command in buffer.audio_commands {
-                self.handle_audio_command(command);
-            }
+    pub fn execute_command_buffer_index(&mut self) {
+        let command_buffer_index = Arc::clone(&self.lua_engine.command_buffer_index);
+        let map = command_buffer_index.lock().unwrap();
+        for command_buffer in map.values_mut() {
+            self.execute_command_buffer(command_buffer);
         }
     }
 
-    pub fn handle_entity_command(&mut self, entity: EntityID, command: EntityCommand) {
+    pub fn execute_command_buffer(&mut self, buffer: &mut CommandBuffer) {
+        for (entity, command) in &buffer.entity_commands {
+            self.handle_entity_command(*entity, command);
+        }
+        for command in buffer.world_commands {
+            self.handle_world_command(command);
+        }
+        for command in buffer.broadcast_commands {
+            self.handle_message_command(command);
+        }
+        for command in buffer.camera_commands {
+            self.handle_camera_command(command);
+        }
+        for command in buffer.audio_commands {
+            self.handle_audio_command(command);
+        }
+    }
+
+    pub fn handle_entity_command(&mut self, entity: EntityID, command: &EntityCommand) {
         match command {
             EntityCommand::Translate(pos) => {
                 if (entity == CAMERA) {
