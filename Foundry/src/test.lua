@@ -1,7 +1,7 @@
 local fruits = { "Apple", "Orange", "Banana" }
 
-engine.test("Hi")
+transform.translate(0)
 
-for index, value in ipairs(fruits) do
-	print(index, value)
-end
+--for index, value in ipairs(fruits) do
+--print(index, value)
+--end

@@ -12,10 +12,13 @@ pub struct LuaEngine {
 
 impl LuaEngine {
     pub fn init() -> Result<Self, LuaError> {
-        let lua = Lua::new();
+        let mut lua = Lua::new();
+        let command_buffer_index = Arc::new(Mutex::new(HashMap::new()));
+        LuaEngine::init_lua_globals(&mut lua, &command_buffer_index);
+
         Ok(LuaEngine {
             lua_instance: lua,
-            command_buffer_index: Arc::new(Mutex::new(HashMap::new())),
+            command_buffer_index,
         })
     }
 
@@ -29,32 +32,33 @@ impl LuaEngine {
         Ok("")
     }
 
-    pub fn init_lua_globals(&mut self) -> Result<&'static str, mlua::Error> {
-        let lua = &self.lua_instance;
-        let mut command_buffer_index = Arc::clone(&self.command_buffer_index);
+    pub fn init_lua_globals(
+        lua_instance: &mut Lua,
+        command_buffer_index: &Arc<Mutex<HashMap<u64, CommandBuffer>>>,
+    ) -> Result<&'static str, mlua::Error> {
+        let mut command_buffer_index = Arc::clone(command_buffer_index);
 
-        let transform = lua.create_table()?;
+        let transform = lua_instance.create_table()?;
         transform.set(
             "translate",
-            lua.create_function_mut(move |_, id: u64| {
-                let mut map = command_buffer_index.lock().unwrap();
-                let Some(command_buffer) = map.get_mut(&id) else {
-                    panic!("")
-                };
-                command_buffer.push(Command::Entity(
-                    id,
-                    EntityCommand::Translate(Vec3::new(-1.0, 0.0, 0.0)),
-                ));
+            lua_instance
+                .create_function_mut(move |_, id: u64| {
+                    let mut map = command_buffer_index.lock().unwrap();
+                    let command_buffer = map.entry(id).or_insert(CommandBuffer::new());
+                    command_buffer.push(Command::Entity(
+                        id,
+                        EntityCommand::Translate(Vec3::new(-0.1, 0.0, 0.0)),
+                    ));
 
-                Ok(())
-            })
-            .unwrap(),
+                    Ok(())
+                })
+                .unwrap(),
         );
-        lua.globals().set("transform", transform)?;
+        lua_instance.globals().set("transform", transform)?;
         Ok("")
     }
 
-    pub fn excecute_lua_behaviour(&self, id: u64, path: &Path) -> Result<&'static str, LuaError> {
+    pub fn execute_lua_behaviour(&self, id: u64, path: &Path) -> Result<&'static str, LuaError> {
         let lua = &self.lua_instance;
 
         let engine = lua.create_table()?;

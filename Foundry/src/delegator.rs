@@ -11,9 +11,9 @@ use crate::ecs::{IDAllocator, World};
 use crate::game_data::GameContext;
 use crate::ui_data::UIHandler;
 use crate::vulkan_data::VulkanContext;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::panic;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use winit::event;
 use winit::keyboard::{KeyCode, PhysicalKey};
 
@@ -116,11 +116,6 @@ impl Delagator {
     pub fn new(vulkan: VulkanContext, game: GameContext, ui: UIHandler, world: World) -> Self {
         let mut audio_manager = AudioManager::new();
         let mut lua = LuaEngine::init().unwrap();
-        let result = lua.excecute_lua_behaviour(1, std::path::Path::new("src/test.lua"));
-        match result {
-            Err(error) => panic!("{}", error),
-            Ok(_) => {}
-        }
         //audio_manager.play("");
         Self {
             vulkan_context: vulkan,
@@ -156,22 +151,32 @@ impl Delagator {
         let command_buffer = self
             .ecs_world
             .run_update_cycle(&mut ctx, &mut self.vulkan_context);
-        self.execute_command_buffer(command_buffer);
+
+        //Temp for run_update_cycle
+        let result = self
+            .lua_engine
+            .execute_lua_behaviour(0, std::path::Path::new("src/test.lua"));
+        match result {
+            Err(error) => panic!("{}", error),
+            Ok(_) => {}
+        }
+        self.execute_command_buffer_index();
+        //self.execute_command_buffer(command_buffer);
         self.vulkan_draw_frame(window);
         self.input_buffer.clear_discrete_inputs();
     }
 
     pub fn execute_command_buffer_index(&mut self) {
         let command_buffer_index = Arc::clone(&self.lua_engine.command_buffer_index);
-        let map = command_buffer_index.lock().unwrap();
-        for command_buffer in map.values_mut() {
-            self.execute_command_buffer(command_buffer);
+        let mut map = command_buffer_index.lock().unwrap();
+        for (index, buffer) in map.drain() {
+            self.execute_command_buffer(buffer);
         }
     }
 
-    pub fn execute_command_buffer(&mut self, buffer: &mut CommandBuffer) {
-        for (entity, command) in &buffer.entity_commands {
-            self.handle_entity_command(*entity, command);
+    pub fn execute_command_buffer(&mut self, buffer: CommandBuffer) {
+        for (entity, command) in buffer.entity_commands {
+            self.handle_entity_command(entity, command);
         }
         for command in buffer.world_commands {
             self.handle_world_command(command);
@@ -187,7 +192,7 @@ impl Delagator {
         }
     }
 
-    pub fn handle_entity_command(&mut self, entity: EntityID, command: &EntityCommand) {
+    pub fn handle_entity_command(&mut self, entity: EntityID, command: EntityCommand) {
         match command {
             EntityCommand::Translate(pos) => {
                 if (entity == CAMERA) {
