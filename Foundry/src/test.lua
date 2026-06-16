@@ -1,7 +1,1 @@
-local fruits = { "Apple", "Orange", "Banana" }
-
-transform.translate(0)
-
---for index, value in ipairs(fruits) do
---print(index, value)
---end
+transform.Translate(0, Vec3(-0.1, 0.0, 0.0))

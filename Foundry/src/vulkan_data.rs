@@ -179,6 +179,7 @@ impl CameraTransform {
         let glm_vec = glm::Vec3::from(array);
         self.position += glm_vec;
         // IF NOT ROTATING YOU NEED TO CALCULATE TARGET TOO
+        self.target = calculate_rotation_target(self.position, self.rotation)
     }
     pub fn translate_local(&mut self, vector: glam::Vec3) {
         let array: [f32; 3] = vector.into();
@@ -188,6 +189,7 @@ impl CameraTransform {
         self.position += converted;
         println!("{}", self.position - self.target);
         // IF NOT ROTATING YOU NEED TO CALCULATE TARGET TOO
+        self.target = calculate_rotation_target(self.position, self.rotation)
     }
     pub fn rotate(&mut self, vector: glam::Vec3) {
         self.rotation += convert_glam_to_glm3(vector);

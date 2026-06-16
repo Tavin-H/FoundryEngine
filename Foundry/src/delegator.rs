@@ -11,16 +11,21 @@ use crate::ecs::{IDAllocator, World};
 use crate::game_data::GameContext;
 use crate::ui_data::UIHandler;
 use crate::vulkan_data::VulkanContext;
+use mlua::{FromLua, Lua, UserData, Value};
 use std::collections::{HashMap, HashSet};
 use std::panic;
 use std::sync::{Arc, Mutex};
 use winit::event;
 use winit::keyboard::{KeyCode, PhysicalKey};
 
+use mlua::{LuaSerdeExt, Result};
+//use serde::Deserialize;
+
 use crate::lua_engine::LuaEngine;
 
 type EntityID = u64;
 use std::any::TypeId;
+
 #[derive(Default)]
 pub struct InputBuffer {
     key_down_list: HashSet<KeyCode>,
@@ -98,6 +103,27 @@ impl InputBuffer {
         self.mouse_delta.1 += delta.1;
     }
 }
+//https://docs.rs/winit/latest/winit/keyboard/enum.Key.html
+//Key::Character?
+/*
+impl FromLua for KeyCode {
+    fn from_lua(value: Value, _: &Lua) -> Result<Self, &'static str> {
+        match value {
+            Value::String(s) => Ok(KeyCode::KeyA),
+            _ => panic!("Unkown value to make keycode"),
+        }
+    }
+}
+*/
+
+impl UserData for &InputBuffer {
+    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+        methods.add_method("get_key", |lua, this, key_code_val| {
+            let key_code = lua.from_value(key_code_val).expect("Uh Oh spag");
+            Ok(this.get_key(key_code))
+        });
+    }
+}
 
 pub struct Delagator {
     //Mutable references to other structs
@@ -153,15 +179,21 @@ impl Delagator {
             .run_update_cycle(&mut ctx, &mut self.vulkan_context);
 
         //Temp for run_update_cycle
-        let result = self
-            .lua_engine
-            .execute_lua_behaviour(0, std::path::Path::new("src/test.lua"));
+        let result = self.lua_engine.execute_lua_behaviour(
+            0,
+            std::path::Path::new("src/test.lua"),
+            ctx.input,
+        );
         match result {
             Err(error) => panic!("{}", error),
             Ok(_) => {}
         }
         self.execute_command_buffer_index();
-        //self.execute_command_buffer(command_buffer);
+        /*
+                for buffer in command_buffer {
+                    self.execute_command_buffer(buffer);
+                }
+        */
         self.vulkan_draw_frame(window);
         self.input_buffer.clear_discrete_inputs();
     }

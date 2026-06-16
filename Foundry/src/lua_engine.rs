@@ -1,4 +1,6 @@
 use crate::commands::*;
+use crate::components::RuntimeContext;
+use crate::delegator::InputBuffer;
 use glam::Vec3;
 use mlua::prelude::*;
 use std::collections::HashMap;
@@ -38,18 +40,22 @@ impl LuaEngine {
     ) -> Result<&'static str, mlua::Error> {
         let mut command_buffer_index = Arc::clone(command_buffer_index);
 
+        lua_instance.globals().set(
+            "Vec3",
+            lua_instance.create_function(|_, (x, y, z): (i32, i32, i32)| Ok((x, y, z)))?,
+        );
+
         let transform = lua_instance.create_table()?;
         transform.set(
-            "translate",
+            "Translate",
             lua_instance
-                .create_function_mut(move |_, id: u64| {
+                .create_function_mut(move |_, (id, x, y, z): (u64, f32, f32, f32)| {
                     let mut map = command_buffer_index.lock().unwrap();
                     let command_buffer = map.entry(id).or_insert(CommandBuffer::new());
                     command_buffer.push(Command::Entity(
                         id,
-                        EntityCommand::Translate(Vec3::new(-0.1, 0.0, 0.0)),
+                        EntityCommand::Translate(Vec3::new(x, y, z)),
                     ));
-
                     Ok(())
                 })
                 .unwrap(),
@@ -57,9 +63,18 @@ impl LuaEngine {
         lua_instance.globals().set("transform", transform)?;
         Ok("")
     }
+    pub fn batch_context(&mut self, ctx: &RuntimeContext) {}
 
-    pub fn execute_lua_behaviour(&self, id: u64, path: &Path) -> Result<&'static str, LuaError> {
+    pub fn execute_lua_behaviour(
+        &self,
+        id: u64,
+        path: &Path,
+        ctx: &Arc<InputBuffer>, // move to batch
+    ) -> Result<&'static str, LuaError> {
         let lua = &self.lua_instance;
+        let context = Arc::clone(ctx);
+
+        lua.globals().set("input", &*context);
 
         let engine = lua.create_table()?;
         engine.set(
