@@ -26,7 +26,7 @@ use crate::lua_engine::LuaEngine;
 type EntityID = u64;
 use std::any::TypeId;
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct InputBuffer {
     key_down_list: HashSet<KeyCode>,
     key_up_list: HashSet<KeyCode>,
@@ -116,11 +116,29 @@ impl FromLua for KeyCode {
 }
 */
 
-impl UserData for &InputBuffer {
+#[derive(Clone)]
+pub struct LuaInputBuffer(pub Arc<InputBuffer>);
+
+impl LuaInputBuffer {
+    fn copy_local(&mut self, other: &InputBuffer) {
+        self.0 = Arc::new(other.clone());
+    }
+    pub fn get_key(&self, code: KeyCode) -> bool {
+        self.0.keys_held.contains(&code)
+    }
+    pub fn get_key_down(&self, code: KeyCode) -> bool {
+        self.0.key_down_list.contains(&code)
+    }
+    pub fn get_key_up(&self, code: KeyCode) -> bool {
+        self.0.key_up_list.contains(&code)
+    }
+}
+
+impl UserData for LuaInputBuffer {
     fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
         methods.add_method("get_key", |lua, this, key_code_val| {
             let key_code = lua.from_value(key_code_val).expect("Uh Oh spag");
-            Ok(this.get_key(key_code))
+            Ok(this.0.get_key(key_code))
         });
     }
 }
@@ -131,11 +149,13 @@ pub struct Delagator {
     pub game_context: GameContext,
     pub ui_handler: UIHandler,
     pub ecs_world: World,
+    pub lua_engine: LuaEngine,
+    pub audio_manager: AudioManager,
+    // Context structs
     pub input_buffer: InputBuffer,
+    pub input_buffer_shared: LuaInputBuffer,
     pub id_allocator: IDAllocator,
     pub broadcaster: BroadCaster,
-    pub audio_manager: AudioManager,
-    pub lua_engine: LuaEngine,
 }
 
 impl Delagator {
@@ -149,6 +169,7 @@ impl Delagator {
             ui_handler: ui,
             ecs_world: world,
             input_buffer: InputBuffer::default(),
+            input_buffer_shared: LuaInputBuffer(Arc::new(InputBuffer::default())),
             id_allocator: IDAllocator::default(),
             broadcaster: BroadCaster::new(),
             audio_manager: audio_manager,
@@ -168,21 +189,25 @@ impl Delagator {
     pub fn run_constants(&mut self, window: &winit::window::Window) {
         //Draw call from vulkan
         //record inputs
-        let mut ctx = RuntimeContext {
-            time: &self.game_context.time,
-            input: &self.input_buffer,
-            id: &mut self.id_allocator,
-            broadcaster: &mut self.broadcaster,
-        };
+        /*
+                let mut ctx = RuntimeContext {
+                    time: &self.game_context.time,
+                    input: &self.input_buffer,
+                    id: &mut self.id_allocator,
+                    broadcaster: &mut self.broadcaster,
+                };
         let command_buffer = self
             .ecs_world
             .run_update_cycle(&mut ctx, &mut self.vulkan_context);
+        */
+        // DEVELOP SHARED REFERENCES AND COPYS
 
         //Temp for run_update_cycle
+        self.input_buffer_shared.copy_local(&self.input_buffer);
         let result = self.lua_engine.execute_lua_behaviour(
             0,
             std::path::Path::new("src/test.lua"),
-            ctx.input,
+            &self.input_buffer_shared,
         );
         match result {
             Err(error) => panic!("{}", error),
@@ -228,7 +253,10 @@ impl Delagator {
         match command {
             EntityCommand::Translate(pos) => {
                 if (entity == CAMERA) {
-                    self.vulkan_context.cam_transform.translate_local(pos);
+                    println!("Moving cam {pos}");
+
+                    //self.vulkan_context.cam_transform.translate_local(pos);
+                    self.vulkan_context.cam_transform.translate(pos);
                     return;
                 }
                 let component: &mut Transform =

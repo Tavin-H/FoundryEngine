@@ -40,7 +40,7 @@ pub fn convert_vector_to_local(
 
     //println!("rotation = {:?}", rotation);
     //let yaw = rotation.x.atan2(-rotation.y);
-    println!("yaw = {:?}", yaw);
+    //println!("yaw = {:?}", yaw);
 
     //let yaw = rotation.x;
     let identity = glm::identity::<f32, 4>();
