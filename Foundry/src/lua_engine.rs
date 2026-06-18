@@ -1,6 +1,5 @@
 use crate::commands::*;
-use crate::components::RuntimeContext;
-use crate::delegator::{InputBuffer, LuaInputBuffer};
+use crate::delegator::RuntimeContext;
 use glam::Vec3;
 use mlua::prelude::*;
 use mlua::{MetaMethod, UserData};
@@ -70,17 +69,9 @@ impl LuaEngine {
         lua_instance.globals().set("transform", transform)?;
         Ok("")
     }
-    pub fn batch_context(&mut self, ctx: &RuntimeContext) {}
-
-    pub fn execute_lua_behaviour(
-        &self,
-        id: u64,
-        path: &Path,
-        ctx: &LuaInputBuffer, // move to batch
-    ) -> Result<&'static str, LuaError> {
+    pub fn batch_context(&mut self, ctx: RuntimeContext) -> Result<(), mlua::Error> {
         let lua = &self.lua_instance;
-
-        lua.globals().set("input", ctx.clone());
+        lua.globals().set("input", ctx.input_buffer_ref.clone());
 
         let engine = lua.create_table()?;
         engine.set(
@@ -92,6 +83,11 @@ impl LuaEngine {
             .unwrap(),
         );
         lua.globals().set("engine", engine)?;
+        Ok(())
+    }
+
+    pub fn execute_lua_behaviour(&self, id: u64, path: &Path) -> Result<&'static str, LuaError> {
+        let lua = &self.lua_instance;
 
         let lua_program: String = std::fs::read_to_string(path).expect("Could not read lua file");
         lua.load(lua_program).exec()?;
@@ -99,6 +95,7 @@ impl LuaEngine {
     }
 }
 
+//Further extraction can be made into a foundry types file
 struct LuaVec3 {
     //Make this the central Vec3 for foundry?
     pub x: f32,

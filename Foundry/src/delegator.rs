@@ -103,23 +103,24 @@ impl InputBuffer {
         self.mouse_delta.1 += delta.1;
     }
 }
-//https://docs.rs/winit/latest/winit/keyboard/enum.Key.html
-//Key::Character?
-/*
-impl FromLua for KeyCode {
-    fn from_lua(value: Value, _: &Lua) -> Result<Self, &'static str> {
-        match value {
-            Value::String(s) => Ok(KeyCode::KeyA),
-            _ => panic!("Unkown value to make keycode"),
-        }
-    }
+
+pub struct RuntimeContext {
+    pub input_buffer_ref: InputBufferRef,
 }
-*/
+impl UserData for RuntimeContext {}
 
 #[derive(Clone)]
-pub struct LuaInputBuffer(pub Arc<InputBuffer>);
+pub struct InputBufferRef(pub Arc<InputBuffer>);
+impl UserData for InputBufferRef {
+    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+        methods.add_method("get_key", |lua, this, key_code_val| {
+            let key_code = lua.from_value(key_code_val).expect("Uh Oh spag");
+            Ok(this.0.get_key(key_code))
+        });
+    }
+}
 
-impl LuaInputBuffer {
+impl InputBufferRef {
     fn copy_local(&mut self, other: &InputBuffer) {
         self.0 = Arc::new(other.clone());
     }
@@ -134,15 +135,6 @@ impl LuaInputBuffer {
     }
 }
 
-impl UserData for LuaInputBuffer {
-    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
-        methods.add_method("get_key", |lua, this, key_code_val| {
-            let key_code = lua.from_value(key_code_val).expect("Uh Oh spag");
-            Ok(this.0.get_key(key_code))
-        });
-    }
-}
-
 pub struct Delagator {
     //Mutable references to other structs
     pub vulkan_context: VulkanContext,
@@ -153,7 +145,7 @@ pub struct Delagator {
     pub audio_manager: AudioManager,
     // Context structs
     pub input_buffer: InputBuffer,
-    pub input_buffer_shared: LuaInputBuffer,
+    pub input_buffer_shared: InputBufferRef,
     pub id_allocator: IDAllocator,
     pub broadcaster: BroadCaster,
 }
@@ -169,7 +161,7 @@ impl Delagator {
             ui_handler: ui,
             ecs_world: world,
             input_buffer: InputBuffer::default(),
-            input_buffer_shared: LuaInputBuffer(Arc::new(InputBuffer::default())),
+            input_buffer_shared: InputBufferRef(Arc::new(InputBuffer::default())),
             id_allocator: IDAllocator::default(),
             broadcaster: BroadCaster::new(),
             audio_manager: audio_manager,
@@ -200,25 +192,20 @@ impl Delagator {
             .ecs_world
             .run_update_cycle(&mut ctx, &mut self.vulkan_context);
         */
-        // DEVELOP SHARED REFERENCES AND COPYS
-
-        //Temp for run_update_cycle
         self.input_buffer_shared.copy_local(&self.input_buffer);
-        let result = self.lua_engine.execute_lua_behaviour(
-            0,
-            std::path::Path::new("src/test.lua"),
-            &self.input_buffer_shared,
-        );
+        let mut ctx = RuntimeContext {
+            input_buffer_ref: self.input_buffer_shared.clone(),
+        };
+        self.lua_engine.batch_context(ctx);
+
+        let result = self
+            .lua_engine
+            .execute_lua_behaviour(0, std::path::Path::new("src/test.lua"));
         match result {
             Err(error) => panic!("{}", error),
             Ok(_) => {}
         }
         self.execute_command_buffer_index();
-        /*
-                for buffer in command_buffer {
-                    self.execute_command_buffer(buffer);
-                }
-        */
         self.vulkan_draw_frame(window);
         self.input_buffer.clear_discrete_inputs();
     }
