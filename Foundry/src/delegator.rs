@@ -23,7 +23,7 @@ use mlua::{LuaSerdeExt, Result};
 
 use crate::lua_engine::LuaEngine;
 
-type EntityID = u64;
+type EntityID = uuid::Uuid;
 use std::any::TypeId;
 
 #[derive(Default, Clone)]
@@ -106,8 +106,23 @@ impl InputBuffer {
 
 pub struct RuntimeContext {
     pub input_buffer_ref: InputBufferRef,
+    pub id_allocator_ref: IDAllocatorRef,
 }
 impl UserData for RuntimeContext {}
+impl RuntimeContext {
+    pub fn new() -> Self {
+        RuntimeContext {
+            input_buffer_ref: InputBufferRef(Arc::new(InputBuffer::default())),
+            id_allocator_ref: IDAllocatorRef(Arc::new(IDAllocator::default())),
+        }
+    }
+}
+
+// TODO:
+// time
+// id
+// broadcaster
+// extract these to a separate file?
 
 #[derive(Clone)]
 pub struct InputBufferRef(pub Arc<InputBuffer>);
@@ -134,6 +149,23 @@ impl InputBufferRef {
         self.0.key_up_list.contains(&code)
     }
 }
+#[derive(Clone)]
+pub struct IDAllocatorRef(pub Arc<IDAllocator>);
+impl UserData for IDAllocatorRef {
+    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+        methods.add_method("reserve_id", |_, this, ()| {
+            let id = this.0.reserve_id();
+            Ok(id.as_u128())
+        });
+        methods.add_method("this", |_, this, ()| Ok(this.0.this_id.as_u128()));
+    }
+}
+
+impl IDAllocatorRef {
+    fn copy_local(&mut self, other: &IDAllocator) {
+        self.0 = Arc::new(other.clone());
+    }
+}
 
 pub struct Delagator {
     //Mutable references to other structs
@@ -144,8 +176,8 @@ pub struct Delagator {
     pub lua_engine: LuaEngine,
     pub audio_manager: AudioManager,
     // Context structs
+    pub runtime_context: RuntimeContext,
     pub input_buffer: InputBuffer,
-    pub input_buffer_shared: InputBufferRef,
     pub id_allocator: IDAllocator,
     pub broadcaster: BroadCaster,
 }
@@ -161,7 +193,7 @@ impl Delagator {
             ui_handler: ui,
             ecs_world: world,
             input_buffer: InputBuffer::default(),
-            input_buffer_shared: InputBufferRef(Arc::new(InputBuffer::default())),
+            runtime_context: RuntimeContext::new(),
             id_allocator: IDAllocator::default(),
             broadcaster: BroadCaster::new(),
             audio_manager: audio_manager,
@@ -178,6 +210,12 @@ impl Delagator {
         self.check_ui_state();
     }
 
+    pub fn create_runtime_context_snapshot(&mut self) {
+        self.runtime_context
+            .input_buffer_ref
+            .copy_local(&self.input_buffer);
+    }
+
     pub fn run_constants(&mut self, window: &winit::window::Window) {
         //Draw call from vulkan
         //record inputs
@@ -192,11 +230,13 @@ impl Delagator {
             .ecs_world
             .run_update_cycle(&mut ctx, &mut self.vulkan_context);
         */
-        self.input_buffer_shared.copy_local(&self.input_buffer);
-        let mut ctx = RuntimeContext {
-            input_buffer_ref: self.input_buffer_shared.clone(),
-        };
-        self.lua_engine.batch_context(ctx);
+        self.create_runtime_context_snapshot();
+        /*
+                let mut ctx = RuntimeContext {
+                    input_buffer_ref: self.input_buffer_shared.clone(),
+                };
+        */
+        self.lua_engine.batch_context(&self.runtime_context);
 
         let result = self
             .lua_engine

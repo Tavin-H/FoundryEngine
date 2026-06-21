@@ -11,7 +11,7 @@ use std::collections::HashSet;
 
 use crate::commands::*;
 
-type EntityID = u64;
+type EntityID = uuid::Uuid;
 #[derive(Default, Debug, Clone)]
 pub struct MeshAllocation {
     pub index_count: u32,
@@ -180,7 +180,7 @@ impl Script for TestScriptInstance {
         }
         self.y_velocity -= 9.8 * 4.0 * time.delta_time;
         command_buffer.push(Command::Entity(
-            1,
+            uuid::Uuid::from_u128(1),
             EntityCommand::Translate(Vec3::new(0.0, 0.0, self.y_velocity) * time.delta_time),
         ));
 
@@ -240,7 +240,7 @@ impl Script for MoveScriptInstance {
 
         //Logic
         command_buffer.push(Command::Entity(
-            id.this,
+            id.this_id,
             EntityCommand::Translate(Vec3::new(1.0, 0.0, 0.0) * time.delta_time),
         ));
 

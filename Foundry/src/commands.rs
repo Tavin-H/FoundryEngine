@@ -1,7 +1,7 @@
 use std::any::TypeId;
 
 use crate::ecs::{EntityBuilder, World};
-type EntityID = u64;
+type EntityID = uuid::Uuid;
 use glam::Vec3;
 
 pub enum Message {

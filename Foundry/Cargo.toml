@@ -24,6 +24,7 @@ cpal = "0.17.3"
 symphonia = { version = "0.6.0", features = ["mp3"] }
 ringbuf = "0.5.0"
 mlua = { version = "0.11.6", features = ["lua54", "vendored", "serde"] }
+uuid = { version = "1.23.3", features = ["v4"]}
 
 [dependencies.vulkan-headers]
 version = "0.1.1+1.4.336"

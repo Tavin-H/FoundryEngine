@@ -1,5 +1,6 @@
 use crate::commands::*;
 use crate::delegator::RuntimeContext;
+use crate::ecs::EntityBuilder;
 use glam::Vec3;
 use mlua::prelude::*;
 use mlua::{MetaMethod, UserData};
@@ -7,9 +8,12 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
+use uuid::Uuid;
+type EntityId = Uuid;
+
 pub struct LuaEngine {
     pub lua_instance: Lua,
-    pub command_buffer_index: Arc<Mutex<HashMap<u64, CommandBuffer>>>,
+    pub command_buffer_index: Arc<Mutex<HashMap<EntityId, CommandBuffer>>>,
 }
 
 impl LuaEngine {
@@ -34,11 +38,12 @@ impl LuaEngine {
         Ok("")
     }
 
+    //Run once to setup engine
     pub fn init_lua_globals(
         lua_instance: &mut Lua,
-        command_buffer_index: &Arc<Mutex<HashMap<u64, CommandBuffer>>>,
+        command_buffer_index_ref: &Arc<Mutex<HashMap<EntityId, CommandBuffer>>>,
     ) -> Result<&'static str, mlua::Error> {
-        let mut command_buffer_index = Arc::clone(command_buffer_index);
+        let mut command_buffer_index = Arc::clone(command_buffer_index_ref);
 
         lua_instance.globals().set(
             "Vec3",
@@ -50,16 +55,17 @@ impl LuaEngine {
         transform.set(
             "Translate",
             lua_instance
-                .create_function_mut(move |_, (id, lua_vec): (u64, mlua::Value)| {
+                .create_function_mut(move |_, (id, lua_vec): (u128, mlua::Value)| {
+                    let entity_id = Uuid::from_u128(id);
                     let vec = lua_vec
                         .as_userdata()
                         .ok_or_else(|| mlua::Error::runtime("Bad conversion"))?
                         .borrow::<LuaVec3>()?;
                     let mut map = command_buffer_index.lock().unwrap();
-                    let command_buffer = map.entry(id).or_insert(CommandBuffer::new());
+                    let command_buffer = map.entry(entity_id).or_insert(CommandBuffer::new());
                     println!("Moving {}, {}, {}", vec.x, vec.y, vec.z);
                     command_buffer.push(Command::Entity(
-                        id,
+                        entity_id,
                         EntityCommand::Translate(Vec3::new(vec.x, vec.y, vec.z)),
                     ));
                     Ok(())
@@ -67,11 +73,34 @@ impl LuaEngine {
                 .unwrap(),
         );
         lua_instance.globals().set("transform", transform)?;
+
+        //Redefine command_buffer_index because rust moved it
+        let mut command_buffer_index = Arc::clone(command_buffer_index_ref);
+        let world = lua_instance.create_table()?;
+        world.set(
+            "spawn",
+            lua_instance
+                .create_function_mut(move |_, (id, lua_vec): (u128, mlua::Value)| {
+                    let entity_id = Uuid::from_u128(id);
+                    let mut map = command_buffer_index.lock().unwrap();
+                    let command_buffer = map.entry(entity_id).or_insert(CommandBuffer::new());
+
+                    let entity_builder = EntityBuilder::spawn(entity_id);
+                    command_buffer.push(Command::World(WorldCommand::Instantiate(entity_builder)));
+                    Ok(())
+                })
+                .unwrap(),
+        );
+
+        lua_instance.globals().set("world", world)?;
         Ok("")
     }
-    pub fn batch_context(&mut self, ctx: RuntimeContext) -> Result<(), mlua::Error> {
+
+    //Run once at the start of every frame
+    pub fn batch_context(&mut self, ctx: &RuntimeContext) -> Result<(), mlua::Error> {
         let lua = &self.lua_instance;
         lua.globals().set("input", ctx.input_buffer_ref.clone());
+        lua.globals().set("id", ctx.id_allocator_ref.clone());
 
         let engine = lua.create_table()?;
         engine.set(
