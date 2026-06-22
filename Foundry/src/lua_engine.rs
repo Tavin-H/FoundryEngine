@@ -76,6 +76,26 @@ impl LuaEngine {
 
         //Redefine command_buffer_index because rust moved it
         let mut command_buffer_index = Arc::clone(command_buffer_index_ref);
+        let broadcaster = lua_instance.create_table()?;
+        broadcaster.set(
+            "BroadcastMessage",
+            lua_instance
+                .create_function_mut(move |lua, (message): (String)| {
+                    let index_id: u128 = lua.globals().get("index_id").expect("No index_id set");
+                    let mut map = command_buffer_index.lock().unwrap();
+                    let command_buffer = map
+                        .entry(Uuid::from_u128(index_id))
+                        .or_insert(CommandBuffer::new());
+                    command_buffer
+                        .push(Command::Message(MessageCommand::BroadcastMessage(message)));
+                    Ok(())
+                })
+                .unwrap(),
+        );
+        lua_instance.globals().set("broadcaster", broadcaster)?;
+
+        //Redefine command_buffer_index because rust moved it
+        let mut command_buffer_index = Arc::clone(command_buffer_index_ref);
         let world = lua_instance.create_table()?;
         world.set(
             "spawn",

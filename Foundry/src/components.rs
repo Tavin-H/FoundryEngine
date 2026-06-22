@@ -63,6 +63,7 @@ pub struct TimeData {
 
 //Types used for broadcaster
 pub type BroadCasterListenerHash = HashMap<&'static str, Box<dyn Fn() -> CommandBuffer>>;
+
 pub type BroadCasterListenerHashCollection =
     HashMap<&'static str, Vec<Box<dyn Fn() -> CommandBuffer>>>;
 
@@ -143,7 +144,7 @@ impl Script for TestScriptInstance {
             ));
         }
         if input.get_key_up(KeyCode::KeyC) {
-            command_buffer.push(Command::Message(MessageCommand::BroadcastMessage("Test")));
+            //command_buffer.push(Command::Message(MessageCommand::BroadcastMessage("Test")));
         }
         command_buffer.push(Command::Entity(
             id.camera,

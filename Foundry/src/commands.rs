@@ -45,7 +45,7 @@ pub enum UICommand {
 }
 
 pub enum MessageCommand {
-    BroadcastMessage(&'static str),
+    BroadcastMessage(String),
     BroadcastMessages(Vec<&'static str>),
 }
 

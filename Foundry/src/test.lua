@@ -1,4 +1,6 @@
 local speed = 0.001
+local id = id:this()
+
 if input:get_key("KeyW") then
 	transform.Translate(0, Vec3(-1, -1, 0) * speed)
 end
@@ -11,6 +13,3 @@ end
 if input:get_key("KeyD") then
 	transform.Translate(0, Vec3(-1, 1, 0.0) * speed)
 end
-
-local id = id:this
-print(id)

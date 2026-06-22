@@ -167,19 +167,24 @@ impl IDAllocatorRef {
     }
 }
 
+//Mutable references to other structs
 pub struct Delagator {
-    //Mutable references to other structs
+    //Top level structs
     pub vulkan_context: VulkanContext,
     pub game_context: GameContext,
+
+    //Structs for excecuting commands
     pub ui_handler: UIHandler,
     pub ecs_world: World,
     pub lua_engine: LuaEngine,
     pub audio_manager: AudioManager,
+    pub broadcaster: BroadCaster,
+
     // Context structs
     pub runtime_context: RuntimeContext,
     pub input_buffer: InputBuffer,
     pub id_allocator: IDAllocator,
-    pub broadcaster: BroadCaster,
+    //pub world (Access other things in the world e.g. search for named object)
 }
 
 impl Delagator {
@@ -351,14 +356,16 @@ impl Delagator {
                 if self
                     .broadcaster
                     .broadcast_listener_collection
-                    .contains_key(message)
+                    .contains_key(message.as_str())
                 {
                     println!(
                         "Calling message {} affecting {} listeners",
                         message,
-                        &self.broadcaster.broadcast_listener_collection[message].len()
+                        &self.broadcaster.broadcast_listener_collection[message.as_str()].len()
                     );
-                    for function in &self.broadcaster.broadcast_listener_collection[message] {
+                    for function in
+                        &self.broadcaster.broadcast_listener_collection[message.as_str()]
+                    {
                         function();
                     }
                 } else {
