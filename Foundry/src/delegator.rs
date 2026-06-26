@@ -153,11 +153,20 @@ impl InputBufferRef {
 pub struct IDAllocatorRef(pub Arc<IDAllocator>);
 impl UserData for IDAllocatorRef {
     fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
-        methods.add_method("reserve_id", |_, this, ()| {
+        methods.add_method("reserve_id", |_, mut this, ()| {
             let id = this.0.reserve_id();
             Ok(id.as_u128())
         });
         methods.add_method("this", |_, this, ()| Ok(this.0.this_id.as_u128()));
+    }
+}
+pub struct Test(pub u64);
+impl UserData for Test {
+    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+        methods.add_method_mut("reserve_id", |_, this, ()| {
+            let id = this.0 = 10;
+            Ok(())
+        });
     }
 }
 

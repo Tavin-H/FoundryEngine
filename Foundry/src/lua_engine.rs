@@ -7,20 +7,81 @@ use mlua::{MetaMethod, UserData};
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
+// Execution
+// Re-designing the structure...
+// Make Lua instance per thread,
+// Set lua bindings for each thread. Accessing it's own chunk
 
 use uuid::Uuid;
 type EntityId = Uuid;
 
 pub struct LuaEngine {
-    pub lua_instance: Lua,
-    pub command_buffer_index: Arc<Mutex<HashMap<EntityId, CommandBuffer>>>,
+    //pub lua_instance: Lua,
+    //pub command_buffer_index: Arc<Mutex<HashMap<EntityId, CommandBuffer>>>,
+    //pub command_buffer_index: Vec<EntityCommandBuffer>,
+    pub command_buffer_storage: Vec<CommandBuffer>,
+    pub worker_threads: Vec<LuaWorker>, // thread pool
+}
+
+pub struct LuaWorker {
+    lua_instance: Lua,
+}
+impl LuaWorker {
+    pub fn new() -> Self {
+        let lua = Lua::new();
+        let command_buffer = CommandBuffer::new();
+        lua.set_app_data(command_buffer);
+        //init bindings for lua passing in command_buffer
+        LuaWorker { lua_instance: lua }
+    }
+    pub fn init_bindings(&mut self) -> Result<(), mlua::Error> {
+        // USE MLUA APP_DATA TO FIX ISSUE
+        let lua_instance = &mut self.lua_instance;
+        let transform = lua_instance.create_table()?;
+        transform.set(
+            "Translate",
+            lua_instance
+                .create_function_mut(|lua, (id, lua_vec): (u128, mlua::Value)| {
+                    let mut app_data = lua.app_data_mut::<CommandBufferChunk>().unwrap();
+                    unsafe {
+                        let command_buffer = &mut (*app_data.0)[0];
+                        let entity_id = Uuid::from_u128(id);
+                        let vec = lua_vec
+                            .as_userdata()
+                            .ok_or_else(|| mlua::Error::runtime("Bad conversion"))?
+                            .borrow::<LuaVec3>()?;
+                        println!("Moving {}, {}, {}", vec.x, vec.y, vec.z);
+                        command_buffer.push(Command::Entity(
+                            entity_id,
+                            EntityCommand::Translate(Vec3::new(vec.x, vec.y, vec.z)),
+                        ));
+                    }
+                    Ok(())
+                })
+                .unwrap(),
+        );
+        lua_instance.globals().set("transform", transform)?;
+        Ok(())
+    }
+    pub fn run_update(&self, command_buffer_chunk: CommandBufferChunk) {
+        self.lua_instance.set_app_data(command_buffer_chunk);
+    }
+}
+
+pub struct CommandBufferChunk(*mut [CommandBuffer]);
+unsafe impl Send for CommandBufferChunk {}
+
+pub struct EntityCommandBuffer {
+    pub id: EntityId,
+    pub command_buffer: CommandBuffer,
 }
 
 impl LuaEngine {
     pub fn init() -> Result<Self, LuaError> {
         let mut lua = Lua::new();
-        let command_buffer_index = Arc::new(Mutex::new(HashMap::new()));
-        LuaEngine::init_lua_globals(&mut lua, &command_buffer_index);
+        //let command_buffer_index = Arc::new(Mutex::new(HashMap::new()));
+        let command_buffer_index: Vec<EntityCommandBuffer> = Vec::new();
+        //LuaEngine::init_lua_globals(&mut lua, &command_buffer_index);
 
         Ok(LuaEngine {
             lua_instance: lua,
@@ -41,9 +102,10 @@ impl LuaEngine {
     //Run once to setup engine
     pub fn init_lua_globals(
         lua_instance: &mut Lua,
-        command_buffer_index_ref: &Arc<Mutex<HashMap<EntityId, CommandBuffer>>>,
+        //command_buffer_index_ref: &Arc<Mutex<HashMap<EntityId, CommandBuffer>>>,
+        command_buffer_index: Vec<EntityCommandBuffer>,
     ) -> Result<&'static str, mlua::Error> {
-        let mut command_buffer_index = Arc::clone(command_buffer_index_ref);
+        //let mut command_buffer_index = Arc::clone(command_buffer_index_ref);
 
         lua_instance.globals().set(
             "Vec3",
@@ -61,7 +123,7 @@ impl LuaEngine {
                         .as_userdata()
                         .ok_or_else(|| mlua::Error::runtime("Bad conversion"))?
                         .borrow::<LuaVec3>()?;
-                    let mut map = command_buffer_index.lock().unwrap();
+                    let mut map = command_buffer_index;
                     let command_buffer = map.entry(entity_id).or_insert(CommandBuffer::new());
                     println!("Moving {}, {}, {}", vec.x, vec.y, vec.z);
                     command_buffer.push(Command::Entity(
@@ -140,6 +202,8 @@ impl LuaEngine {
 
         let lua_program: String = std::fs::read_to_string(path).expect("Could not read lua file");
         lua.load(lua_program).exec()?;
+        let update: mlua::Function = lua.globals().get("update")?;
+        update.call::<()>(())?;
         Ok("")
     }
 }

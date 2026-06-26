@@ -61,6 +61,7 @@ pub struct CommandBuffer {
     pub camera_commands: Vec<CameraCommand>,
     pub audio_commands: Vec<AudioCommand>,
 }
+unsafe impl Send for CommandBuffer {}
 
 impl CommandBuffer {
     pub fn new() -> CommandBuffer {
