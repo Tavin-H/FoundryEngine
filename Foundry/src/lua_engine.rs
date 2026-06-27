@@ -5,8 +5,10 @@ use glam::Vec3;
 use mlua::prelude::*;
 use mlua::{MetaMethod, UserData};
 use std::collections::HashMap;
+use std::iter::Zip;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
+use std::thread;
 // Execution
 // Re-designing the structure...
 // Make Lua instance per thread,
@@ -16,41 +18,46 @@ use uuid::Uuid;
 type EntityId = Uuid;
 
 pub struct LuaEngine {
-    //pub lua_instance: Lua,
-    //pub command_buffer_index: Arc<Mutex<HashMap<EntityId, CommandBuffer>>>,
-    //pub command_buffer_index: Vec<EntityCommandBuffer>,
     pub command_buffer_storage: Vec<CommandBuffer>,
     pub worker_threads: Vec<LuaWorker>, // thread pool
+    pub worker_count: usize,
 }
 
 pub struct LuaWorker {
     lua_instance: Lua,
 }
+unsafe impl Send for LuaWorker {}
 impl LuaWorker {
     pub fn new() -> Self {
         let lua = Lua::new();
         let command_buffer = CommandBuffer::new();
         lua.set_app_data(command_buffer);
         //init bindings for lua passing in command_buffer
-        LuaWorker { lua_instance: lua }
+        let mut lua_worker = LuaWorker { lua_instance: lua };
+        lua_worker.init_bindings();
+        lua_worker
     }
     pub fn init_bindings(&mut self) -> Result<(), mlua::Error> {
-        // USE MLUA APP_DATA TO FIX ISSUE
         let lua_instance = &mut self.lua_instance;
+        lua_instance.globals().set(
+            "Vec3",
+            lua_instance
+                .create_function(|_, (x, y, z): (f32, f32, f32)| Ok(LuaVec3 { x, y, z }))?,
+        );
         let transform = lua_instance.create_table()?;
         transform.set(
             "Translate",
             lua_instance
                 .create_function_mut(|lua, (id, lua_vec): (u128, mlua::Value)| {
-                    let mut app_data = lua.app_data_mut::<CommandBufferChunk>().unwrap();
+                    let mut app_data = lua.app_data_mut::<CommandBufferChunkRef>().unwrap();
+                    let entity_id = Uuid::from_u128(id);
+                    let vec = lua_vec
+                        .as_userdata()
+                        .ok_or_else(|| mlua::Error::runtime("Bad conversion"))?
+                        .borrow::<LuaVec3>()?;
+                    println!("Moving {}, {}, {}", vec.x, vec.y, vec.z);
                     unsafe {
                         let command_buffer = &mut (*app_data.0)[0];
-                        let entity_id = Uuid::from_u128(id);
-                        let vec = lua_vec
-                            .as_userdata()
-                            .ok_or_else(|| mlua::Error::runtime("Bad conversion"))?
-                            .borrow::<LuaVec3>()?;
-                        println!("Moving {}, {}, {}", vec.x, vec.y, vec.z);
                         command_buffer.push(Command::Entity(
                             entity_id,
                             EntityCommand::Translate(Vec3::new(vec.x, vec.y, vec.z)),
@@ -61,123 +68,27 @@ impl LuaWorker {
                 .unwrap(),
         );
         lua_instance.globals().set("transform", transform)?;
-        Ok(())
-    }
-    pub fn run_update(&self, command_buffer_chunk: CommandBufferChunk) {
-        self.lua_instance.set_app_data(command_buffer_chunk);
-    }
-}
 
-pub struct CommandBufferChunk(*mut [CommandBuffer]);
-unsafe impl Send for CommandBufferChunk {}
-
-pub struct EntityCommandBuffer {
-    pub id: EntityId,
-    pub command_buffer: CommandBuffer,
-}
-
-impl LuaEngine {
-    pub fn init() -> Result<Self, LuaError> {
-        let mut lua = Lua::new();
-        //let command_buffer_index = Arc::new(Mutex::new(HashMap::new()));
-        let command_buffer_index: Vec<EntityCommandBuffer> = Vec::new();
-        //LuaEngine::init_lua_globals(&mut lua, &command_buffer_index);
-
-        Ok(LuaEngine {
-            lua_instance: lua,
-            command_buffer_index,
-        })
-    }
-
-    //Give a path to a lua file and it will execute it
-    pub fn excecute_lua_old(&self, path: &Path) -> Result<&'static str, LuaError> {
-        let lua = &self.lua_instance;
-        let lua_program: String = std::fs::read_to_string(path).expect("Could not read lua file");
-        println!("EXECUTING LUA");
-        lua.load(lua_program).exec()?;
-        println!("OK");
-        Ok("")
-    }
-
-    //Run once to setup engine
-    pub fn init_lua_globals(
-        lua_instance: &mut Lua,
-        //command_buffer_index_ref: &Arc<Mutex<HashMap<EntityId, CommandBuffer>>>,
-        command_buffer_index: Vec<EntityCommandBuffer>,
-    ) -> Result<&'static str, mlua::Error> {
-        //let mut command_buffer_index = Arc::clone(command_buffer_index_ref);
-
-        lua_instance.globals().set(
-            "Vec3",
-            lua_instance
-                .create_function(|_, (x, y, z): (f32, f32, f32)| Ok(LuaVec3 { x, y, z }))?,
-        );
-
-        let transform = lua_instance.create_table()?;
-        transform.set(
-            "Translate",
-            lua_instance
-                .create_function_mut(move |_, (id, lua_vec): (u128, mlua::Value)| {
-                    let entity_id = Uuid::from_u128(id);
-                    let vec = lua_vec
-                        .as_userdata()
-                        .ok_or_else(|| mlua::Error::runtime("Bad conversion"))?
-                        .borrow::<LuaVec3>()?;
-                    let mut map = command_buffer_index;
-                    let command_buffer = map.entry(entity_id).or_insert(CommandBuffer::new());
-                    println!("Moving {}, {}, {}", vec.x, vec.y, vec.z);
-                    command_buffer.push(Command::Entity(
-                        entity_id,
-                        EntityCommand::Translate(Vec3::new(vec.x, vec.y, vec.z)),
-                    ));
-                    Ok(())
-                })
-                .unwrap(),
-        );
-        lua_instance.globals().set("transform", transform)?;
-
-        //Redefine command_buffer_index because rust moved it
-        let mut command_buffer_index = Arc::clone(command_buffer_index_ref);
         let broadcaster = lua_instance.create_table()?;
         broadcaster.set(
             "BroadcastMessage",
             lua_instance
                 .create_function_mut(move |lua, (message): (String)| {
+                    let mut app_data = lua.app_data_mut::<CommandBufferChunkRef>().unwrap();
                     let index_id: u128 = lua.globals().get("index_id").expect("No index_id set");
-                    let mut map = command_buffer_index.lock().unwrap();
-                    let command_buffer = map
-                        .entry(Uuid::from_u128(index_id))
-                        .or_insert(CommandBuffer::new());
-                    command_buffer
-                        .push(Command::Message(MessageCommand::BroadcastMessage(message)));
+                    unsafe {
+                        let command_buffer = &mut (*app_data.0)[0];
+                        command_buffer
+                            .push(Command::Message(MessageCommand::BroadcastMessage(message)));
+                    }
                     Ok(())
                 })
                 .unwrap(),
         );
         lua_instance.globals().set("broadcaster", broadcaster)?;
 
-        //Redefine command_buffer_index because rust moved it
-        let mut command_buffer_index = Arc::clone(command_buffer_index_ref);
-        let world = lua_instance.create_table()?;
-        world.set(
-            "spawn",
-            lua_instance
-                .create_function_mut(move |_, (id, lua_vec): (u128, mlua::Value)| {
-                    let entity_id = Uuid::from_u128(id);
-                    let mut map = command_buffer_index.lock().unwrap();
-                    let command_buffer = map.entry(entity_id).or_insert(CommandBuffer::new());
-
-                    let entity_builder = EntityBuilder::spawn(entity_id);
-                    command_buffer.push(Command::World(WorldCommand::Instantiate(entity_builder)));
-                    Ok(())
-                })
-                .unwrap(),
-        );
-
-        lua_instance.globals().set("world", world)?;
-        Ok("")
+        Ok(())
     }
-
     //Run once at the start of every frame
     pub fn batch_context(&mut self, ctx: &RuntimeContext) -> Result<(), mlua::Error> {
         let lua = &self.lua_instance;
@@ -197,6 +108,53 @@ impl LuaEngine {
         Ok(())
     }
 
+    pub fn run_update(&self, command_buffer_chunk: CommandBufferChunkRef) {
+        self.lua_instance.set_app_data(command_buffer_chunk);
+    }
+    pub fn test(&mut self) {}
+}
+
+pub struct CommandBufferChunkRef(*mut [CommandBuffer]);
+unsafe impl Send for CommandBufferChunkRef {}
+
+impl LuaEngine {
+    pub fn init(worker_count: usize) -> Result<Self, LuaError> {
+        let worker_thread_pool: Vec<LuaWorker> =
+            (0..worker_count).map(|_| LuaWorker::new()).collect();
+        Ok(LuaEngine {
+            worker_threads: Vec::new(),
+            command_buffer_storage: Vec::new(),
+            worker_count,
+        })
+    }
+
+    pub fn run_update_cycle(&mut self, ctx: &RuntimeContext) {
+        //Scope all threads to not outlive the function
+        thread::scope(|s| {
+            //Create an iterator of all lua instances
+            let mut workers = self.worker_threads.iter_mut();
+
+            //I will need to change this to be N amount of chunks
+            let command_buffer_chunks = self.command_buffer_storage.chunks_mut(1);
+
+            //Batch workers and their allocated command_buffer_chunk
+            let pairs = std::iter::zip(workers, command_buffer_chunks);
+
+            for (worker_chunk, command_buffer_chunk) in pairs {
+                //Make raw pointer to send across the thread
+                let command_buffer_chunk_ref = CommandBufferChunkRef(command_buffer_chunk);
+
+                //Spawn a new thread and have it capture the raw pointer
+                s.spawn(move || {
+                    worker_chunk.batch_context(ctx);
+                    //Run each respective lua script and fill the command_buffer
+                    worker_chunk.run_update(command_buffer_chunk_ref);
+                });
+            }
+        });
+    }
+
+    /*
     pub fn execute_lua_behaviour(&self, id: u64, path: &Path) -> Result<&'static str, LuaError> {
         let lua = &self.lua_instance;
 
@@ -206,6 +164,7 @@ impl LuaEngine {
         update.call::<()>(())?;
         Ok("")
     }
+    */
 }
 
 //Further extraction can be made into a foundry types file
