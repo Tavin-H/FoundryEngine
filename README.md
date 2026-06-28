@@ -9,7 +9,7 @@
   &nbsp;&nbsp;&nbsp;&nbsp;
   <img src="https://img.shields.io/badge/Version-pre--alpha-white?style=for-the-badge&logo=Git&logoColor=white&labelColor=2d3146&color=%234cb083" />
 </br>
-  <img src="https://img.shields.io/badge/Downloads-152-white?style=for-the-badge&labelColor=2d3146&color=blue" />
+  <img src="https://img.shields.io/badge/Downloads-483-white?style=for-the-badge&labelColor=2d3146&color=blue" />
    &nbsp;&nbsp;&nbsp;&nbsp;
   <img src="https://img.shields.io/badge/License-MIT-white?style=for-the-badge&labelColor=2d3146&color=yellow" />
   &nbsp;&nbsp;&nbsp;&nbsp;
@@ -19,18 +19,20 @@
 </p>
 
 
-## 📝Description
+## Description
 A lightweight, open-source game engine written in Rust and using Vulkan API. 
 
 The main goal of this project was to teach myself computer graphics and give myself a way to work on game ideas without relying on Unity/Unreal.
 
 ---
-## ⚡ Game Engine Features:
+## Game Engine Features:
 
 ### General
 * Custom 3D graphics engine
+* Custom behaviour using Lua
 * Input handling with Winit
 * UI system
+* Custom Audio Engine
 
 ### ECS (Entity Component System)
 * Data-oriented design to allow for super-fast and efficient system lookups
@@ -39,21 +41,26 @@ The main goal of this project was to teach myself computer graphics and give mys
 
 ### ECB (Entity Command Buffer)
 * Custom scripting using a command buffer
+* Lua to rust bindings for a convinient developing experience
 * 100% deterministic behaviour
-* Check the Documentation to see an example of custom scripting
+* Check the Documentation to see an example
 
 ### Scene Manager
 * Instantiate game objects
 * Set the position of game objects
 
+### Audio Engine
+* Play sounds in the game engine from an mp3 file
+* Asyncronous decoding & playing for instant playback
+
 ---
-## 🖥️ Current supported Operating Systems:
+## Current supported Operating Systems:
 - Windows 10/11
 - MacOS (only intel tested)
 > Linux support coming soon
 
 ---
-## 🚀 Usage
+## Usage
 
 Clone the repo
 ```
@@ -71,7 +78,7 @@ cargo run --release
 > Note: Foundry is still in pre-beta and isn't ready to make full games with. Check out the roadmap to see when new features are coming.
 
 ---
-## 🛠️ Tools
+## Tools
 I've chosen each of my tools for specific reasons as stated below.
 
 | Tool | Choice | Why |
@@ -80,20 +87,20 @@ I've chosen each of my tools for specific reasons as stated below.
 | **Graphics API** | Vulkan | • Newer, more modern API compared to others like OpenGLNewer, more modern API compared to others like OpenGL <br> • Platform agnostic <br> • Extremely customizable <br> • Lets me get my hands dirty and learn as much as possible|
 | **Window Manager** | Winit |• Cross platform <br> • Written in Rust <br> • Easy window events to use for input handling <br> • Easy integration with ImGUI|
 ---
-## 🗺️ Roadmap
+## Roadmap
 ### Features currently in development
-* Camera controlls with const EntityIDs
+* Parallel execution of update scripts in Lua
 
 ### Features to come
+* More robust solution for scene data
 * Drag and drop mesh files to use for game objects
 * Scene graph in scene manager
 * Adjusting game object positions from scene graph
 * Lighting engine
 * UI manager to use in scripts
-* Sound manager to use in scripts
 
 ---
-## 👷 Contributing
+## Contributing
 First off, thank you for considering contributing! I'm happy to have others involved in the project.
 
 #### How to get started
@@ -108,13 +115,13 @@ First off, thank you for considering contributing! I'm happy to have others invo
 > Small fixes (like typos or minor bugs) are always welcome as direct Pull Requests!
 
 ---
-## 🆘 Support
+## Support
 ### Options
 1. Open a Github issue and I will work to fix it as soon as possible.
 2. Use Discussions to get my attention
 
 ---
-## 📜 History
+## History
 Recent Milestone: Multiple objects in a scene as well as UI element for displaying fps (March 1)
 <img width="1000" height="1031" alt="fps counter" src="https://github.com/user-attachments/assets/1bcda4dc-9d07-4b2c-8fce-d876c8505c5f" />
 
