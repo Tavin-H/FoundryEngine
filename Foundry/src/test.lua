@@ -1,5 +1,5 @@
 local speed = 0.001
-local id = id:this()
+--local id = id:this()
 
 function update()
 	if input:get_key("KeyW") then

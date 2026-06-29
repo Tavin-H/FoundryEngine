@@ -19,12 +19,13 @@ type EntityId = Uuid;
 
 pub struct LuaEngine {
     pub command_buffer_storage: Vec<CommandBuffer>,
-    pub worker_threads: Vec<LuaWorker>, // thread pool
+    pub worker_cluster: Vec<LuaWorker>,
     pub worker_count: usize,
 }
 
 pub struct LuaWorker {
     lua_instance: Lua,
+    update_functions: Vec<mlua::Function>,
 }
 unsafe impl Send for LuaWorker {}
 impl LuaWorker {
@@ -33,10 +34,41 @@ impl LuaWorker {
         let command_buffer = CommandBuffer::new();
         lua.set_app_data(command_buffer);
         //init bindings for lua passing in command_buffer
-        let mut lua_worker = LuaWorker { lua_instance: lua };
+        let mut lua_worker = LuaWorker {
+            lua_instance: lua,
+            update_functions: Vec::new(),
+        };
         lua_worker.init_bindings();
         lua_worker
     }
+
+    pub fn bind_context(&mut self, ctx: &RuntimeContext) -> Result<(), mlua::Error> {
+        let lua = &self.lua_instance;
+        lua.globals().set("input", ctx.input_buffer_ref.clone());
+        lua.globals().set("id", ctx.id_allocator_ref.clone());
+        Ok(())
+    }
+
+    pub fn run_update_functions(
+        &self,
+        command_buffer_chunk: CommandBufferChunkRef,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        self.lua_instance.set_app_data(command_buffer_chunk);
+        for func in self.update_functions.iter() {
+            func.call::<()>(())?;
+        }
+        Ok(())
+    }
+
+    pub fn add_function(&mut self, path: &Path) -> Result<(), Box<dyn std::error::Error>> {
+        let lua_program: String = std::fs::read_to_string(path).expect("Could not read lua file");
+        self.lua_instance.load(lua_program).exec()?;
+        let update_function: mlua::Function = self.lua_instance.globals().get("update")?;
+
+        self.update_functions.push(update_function);
+        Ok(())
+    }
+
     pub fn init_bindings(&mut self) -> Result<(), mlua::Error> {
         let lua_instance = &mut self.lua_instance;
         lua_instance.globals().set(
@@ -90,27 +122,6 @@ impl LuaWorker {
         Ok(())
     }
     //Run once at the start of every frame
-    pub fn batch_context(&mut self, ctx: &RuntimeContext) -> Result<(), mlua::Error> {
-        let lua = &self.lua_instance;
-        lua.globals().set("input", ctx.input_buffer_ref.clone());
-        lua.globals().set("id", ctx.id_allocator_ref.clone());
-
-        let engine = lua.create_table()?;
-        engine.set(
-            "test",
-            lua.create_function(|_, name: String| {
-                println!("Testing rust binding");
-                Ok(())
-            })
-            .unwrap(),
-        );
-        lua.globals().set("engine", engine)?;
-        Ok(())
-    }
-
-    pub fn run_update(&self, command_buffer_chunk: CommandBufferChunkRef) {
-        self.lua_instance.set_app_data(command_buffer_chunk);
-    }
     pub fn test(&mut self) {}
 }
 
@@ -119,22 +130,33 @@ unsafe impl Send for CommandBufferChunkRef {}
 
 impl LuaEngine {
     pub fn init(worker_count: usize) -> Result<Self, LuaError> {
-        let worker_thread_pool: Vec<LuaWorker> =
-            (0..worker_count).map(|_| LuaWorker::new()).collect();
+        let worker_cluster: Vec<LuaWorker> = (0..worker_count).map(|_| LuaWorker::new()).collect();
+        let command_buffer_storage: Vec<CommandBuffer> =
+            (0..worker_count).map(|_| CommandBuffer::new()).collect();
+
         Ok(LuaEngine {
-            worker_threads: Vec::new(),
-            command_buffer_storage: Vec::new(),
+            worker_cluster,
+            command_buffer_storage,
             worker_count,
         })
+    }
+
+    pub fn add_update_function(&mut self, path: &Path) {
+        //JUST FOR TESTING, REPLACE LATER
+        let res = self.worker_cluster[0].add_function(path);
+        if let Err(e) = res {
+            panic!("{}", e);
+        }
     }
 
     pub fn run_update_cycle(&mut self, ctx: &RuntimeContext) {
         //Scope all threads to not outlive the function
         thread::scope(|s| {
             //Create an iterator of all lua instances
-            let mut workers = self.worker_threads.iter_mut();
+            let mut workers = self.worker_cluster.iter_mut();
 
             //I will need to change this to be N amount of chunks
+            println!("cmd length: {}", self.command_buffer_storage.len());
             let command_buffer_chunks = self.command_buffer_storage.chunks_mut(1);
 
             //Batch workers and their allocated command_buffer_chunk
@@ -146,9 +168,13 @@ impl LuaEngine {
 
                 //Spawn a new thread and have it capture the raw pointer
                 s.spawn(move || {
-                    worker_chunk.batch_context(ctx);
+                    println!("Spawned a thread!");
+                    worker_chunk.bind_context(ctx);
                     //Run each respective lua script and fill the command_buffer
-                    worker_chunk.run_update(command_buffer_chunk_ref);
+                    let res = worker_chunk.run_update_functions(command_buffer_chunk_ref);
+                    if let Err(e) = res {
+                        panic!("Lua script failed: {e}");
+                    }
                 });
             }
         });

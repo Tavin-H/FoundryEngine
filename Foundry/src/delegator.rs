@@ -199,7 +199,8 @@ pub struct Delagator {
 impl Delagator {
     pub fn new(vulkan: VulkanContext, game: GameContext, ui: UIHandler, world: World) -> Self {
         let mut audio_manager = AudioManager::new();
-        let mut lua = LuaEngine::init().unwrap();
+        let mut lua = LuaEngine::init(4).unwrap();
+        lua.add_update_function(std::path::Path::new("src/test.lua"));
         //audio_manager.play("");
         Self {
             vulkan_context: vulkan,
@@ -211,7 +212,7 @@ impl Delagator {
             id_allocator: IDAllocator::default(),
             broadcaster: BroadCaster::new(),
             audio_manager: audio_manager,
-            lua_engine: LuaEngine::init().unwrap(),
+            lua_engine: lua,
         }
     }
 
@@ -245,29 +246,33 @@ impl Delagator {
             .run_update_cycle(&mut ctx, &mut self.vulkan_context);
         */
         self.create_runtime_context_snapshot();
+        self.lua_engine.run_update_cycle(&self.runtime_context);
         /*
                 let mut ctx = RuntimeContext {
                     input_buffer_ref: self.input_buffer_shared.clone(),
                 };
-        */
         self.lua_engine.batch_context(&self.runtime_context);
-
         let result = self
             .lua_engine
-            .execute_lua_behaviour(0, std::path::Path::new("src/test.lua"));
+            .execute_lua_behaviour(0, );
         match result {
             Err(error) => panic!("{}", error),
             Ok(_) => {}
         }
+        */
         self.execute_command_buffer_index();
         self.vulkan_draw_frame(window);
         self.input_buffer.clear_discrete_inputs();
     }
 
     pub fn execute_command_buffer_index(&mut self) {
-        let command_buffer_index = Arc::clone(&self.lua_engine.command_buffer_index);
-        let mut map = command_buffer_index.lock().unwrap();
-        for (index, buffer) in map.drain() {
+        /*
+                let command_buffer_index = Arc::clone(&self.lua_engine.command_buffer_index);
+                let mut map = command_buffer_index.lock().unwrap();
+        */
+        let buffers: Vec<CommandBuffer> =
+            self.lua_engine.command_buffer_storage.drain(..).collect();
+        for buffer in buffers {
             self.execute_command_buffer(buffer);
         }
     }
