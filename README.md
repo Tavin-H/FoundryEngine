@@ -41,7 +41,7 @@ The main goal of this project was to teach myself computer graphics and give mys
 
 ### ECB (Entity Command Buffer)
 * Custom scripting using a command buffer
-* Lua to rust bindings for a convinient developing experience
+* Lua to rust bindings for a convenient developing experience
 * 100% deterministic behaviour
 * Check the Documentation to see an example
 
@@ -54,7 +54,7 @@ The main goal of this project was to teach myself computer graphics and give mys
 * Asyncronous decoding & playing for instant playback
 
 ---
-## Current supported Operating Systems:
+## Currently supported Operating Systems:
 - Windows 10/11
 - MacOS (only intel tested)
 > Linux support coming soon
@@ -75,7 +75,7 @@ Run the demo scene
 ```
 cargo run --release
 ```
-> Note: Foundry is still in pre-beta and isn't ready to make full games with. Check out the roadmap to see when new features are coming.
+> Note: Foundry is still in pre-alpha and isn't ready to make full games with. Check out the roadmap to see when new features are coming.
 
 ---
 ## Tools
