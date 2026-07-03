@@ -72,6 +72,17 @@ impl CommandBuffer {
             audio_commands: Vec::new(),
         }
     }
+
+    pub fn drain(&mut self) -> CommandBuffer {
+        CommandBuffer {
+            entity_commands: self.entity_commands.drain(..).collect(),
+            world_commands: self.world_commands.drain(..).collect(),
+            broadcast_commands: self.broadcast_commands.drain(..).collect(),
+            camera_commands: self.camera_commands.drain(..).collect(),
+            audio_commands: self.audio_commands.drain(..).collect(),
+        }
+    }
+
     pub fn push(&mut self, command: Command) {
         match command {
             Command::Entity(target, command) => self.entity_commands.push((target, command)),

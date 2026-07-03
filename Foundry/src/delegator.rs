@@ -270,27 +270,32 @@ impl Delagator {
                 let command_buffer_index = Arc::clone(&self.lua_engine.command_buffer_index);
                 let mut map = command_buffer_index.lock().unwrap();
         */
-        let buffers: Vec<CommandBuffer> =
-            self.lua_engine.command_buffer_storage.drain(..).collect();
-        for buffer in buffers {
-            self.execute_command_buffer(buffer);
+        let buffers: Vec<CommandBuffer> = self
+            .lua_engine
+            .command_buffer_storage
+            .iter_mut()
+            .map(|buffer| buffer.drain())
+            .collect();
+
+        for mut buffer in buffers {
+            self.execute_command_buffer(&mut buffer);
         }
     }
 
-    pub fn execute_command_buffer(&mut self, buffer: CommandBuffer) {
-        for (entity, command) in buffer.entity_commands {
+    pub fn execute_command_buffer(&mut self, buffer: &mut CommandBuffer) {
+        for (entity, command) in buffer.entity_commands.drain(..) {
             self.handle_entity_command(entity, command);
         }
-        for command in buffer.world_commands {
+        for command in buffer.world_commands.drain(..) {
             self.handle_world_command(command);
         }
-        for command in buffer.broadcast_commands {
+        for command in buffer.broadcast_commands.drain(..) {
             self.handle_message_command(command);
         }
-        for command in buffer.camera_commands {
+        for command in buffer.camera_commands.drain(..) {
             self.handle_camera_command(command);
         }
-        for command in buffer.audio_commands {
+        for command in buffer.audio_commands.drain(..) {
             self.handle_audio_command(command);
         }
     }
