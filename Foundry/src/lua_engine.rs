@@ -9,10 +9,6 @@ use std::iter::Zip;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::thread;
-// Execution
-// Re-designing the structure...
-// Make Lua instance per thread,
-// Set lua bindings for each thread. Accessing it's own chunk
 
 use uuid::Uuid;
 type EntityId = Uuid;
@@ -87,7 +83,6 @@ impl LuaWorker {
                         .as_userdata()
                         .ok_or_else(|| mlua::Error::runtime("Bad conversion"))?
                         .borrow::<LuaVec3>()?;
-                    println!("Moving {}, {}, {}", vec.x, vec.y, vec.z);
                     unsafe {
                         let command_buffer = &mut (*app_data.0)[0];
                         command_buffer.push(Command::Entity(
@@ -121,8 +116,6 @@ impl LuaWorker {
 
         Ok(())
     }
-    //Run once at the start of every frame
-    pub fn test(&mut self) {}
 }
 
 pub struct CommandBufferChunkRef(*mut [CommandBuffer]);
@@ -156,7 +149,6 @@ impl LuaEngine {
             let mut workers = self.worker_cluster.iter_mut();
 
             //I will need to change this to be N amount of chunks
-            println!("cmd length: {}", self.command_buffer_storage.len());
             let command_buffer_chunks = self.command_buffer_storage.chunks_mut(1);
 
             //Batch workers and their allocated command_buffer_chunk
@@ -168,7 +160,6 @@ impl LuaEngine {
 
                 //Spawn a new thread and have it capture the raw pointer
                 s.spawn(move || {
-                    println!("Spawned a thread!");
                     worker_chunk.bind_context(ctx);
                     //Run each respective lua script and fill the command_buffer
                     let res = worker_chunk.run_update_functions(command_buffer_chunk_ref);

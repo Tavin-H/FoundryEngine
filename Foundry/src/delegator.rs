@@ -19,7 +19,6 @@ use winit::event;
 use winit::keyboard::{KeyCode, PhysicalKey};
 
 use mlua::{LuaSerdeExt, Result};
-//use serde::Deserialize;
 
 use crate::lua_engine::LuaEngine;
 
@@ -57,7 +56,6 @@ impl InputBuffer {
     }
     pub fn get_mouse_axis(&self, axis: MouseAxis) -> f64 {
         match axis {
-            // Rust has no ternary operator :(
             MouseAxis::X => {
                 if (self.mouse_moved) {
                     return self.mouse_delta.0;
@@ -118,12 +116,7 @@ impl RuntimeContext {
     }
 }
 
-// TODO:
-// time
-// id
-// broadcaster
-// extract these to a separate file?
-
+//Move to separate file?
 #[derive(Clone)]
 pub struct InputBufferRef(pub Arc<InputBuffer>);
 impl UserData for InputBufferRef {
@@ -158,15 +151,6 @@ impl UserData for IDAllocatorRef {
             Ok(id.as_u128())
         });
         methods.add_method("this", |_, this, ()| Ok(this.0.this_id.as_u128()));
-    }
-}
-pub struct Test(pub u64);
-impl UserData for Test {
-    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
-        methods.add_method_mut("reserve_id", |_, this, ()| {
-            let id = this.0 = 10;
-            Ok(())
-        });
     }
 }
 
@@ -232,44 +216,14 @@ impl Delagator {
     }
 
     pub fn run_constants(&mut self, window: &winit::window::Window) {
-        //Draw call from vulkan
-        //record inputs
-        /*
-                let mut ctx = RuntimeContext {
-                    time: &self.game_context.time,
-                    input: &self.input_buffer,
-                    id: &mut self.id_allocator,
-                    broadcaster: &mut self.broadcaster,
-                };
-        let command_buffer = self
-            .ecs_world
-            .run_update_cycle(&mut ctx, &mut self.vulkan_context);
-        */
         self.create_runtime_context_snapshot();
         self.lua_engine.run_update_cycle(&self.runtime_context);
-        /*
-                let mut ctx = RuntimeContext {
-                    input_buffer_ref: self.input_buffer_shared.clone(),
-                };
-        self.lua_engine.batch_context(&self.runtime_context);
-        let result = self
-            .lua_engine
-            .execute_lua_behaviour(0, );
-        match result {
-            Err(error) => panic!("{}", error),
-            Ok(_) => {}
-        }
-        */
         self.execute_command_buffer_index();
         self.vulkan_draw_frame(window);
         self.input_buffer.clear_discrete_inputs();
     }
 
     pub fn execute_command_buffer_index(&mut self) {
-        /*
-                let command_buffer_index = Arc::clone(&self.lua_engine.command_buffer_index);
-                let mut map = command_buffer_index.lock().unwrap();
-        */
         let buffers: Vec<CommandBuffer> = self
             .lua_engine
             .command_buffer_storage
@@ -304,8 +258,6 @@ impl Delagator {
         match command {
             EntityCommand::Translate(pos) => {
                 if (entity == CAMERA) {
-                    println!("Moving cam {pos}");
-
                     //self.vulkan_context.cam_transform.translate_local(pos);
                     self.vulkan_context.cam_transform.translate(pos);
                     return;
@@ -405,16 +357,11 @@ impl Delagator {
     }
 
     pub fn vulkan_draw_frame(&mut self, window: &winit::window::Window) {
-        //Get the UI data
-        //
         let fps = 1.0 / self.game_context.calculate_delta_time();
         self.ui_handler.record_ui_data(window, fps);
         let Some(ui_context) = &mut self.ui_handler.context else {
             panic!();
         };
-        //Get transform component data
-        //
-        //Draw the frame
         let render_batches = self.ecs_world.get_render_batches();
         self.vulkan_context.draw_frame(
             &self.game_context.game_objects,
@@ -422,7 +369,6 @@ impl Delagator {
             ui_context,
             window,
         );
-        //Reduce game_objects to just uh idk
     }
 
     pub fn check_ui_state(&mut self) {

@@ -251,7 +251,6 @@ impl IDAllocator {
 #[derive(Default)]
 pub struct World {
     //Used to create a new entity
-    next_available_entity_id: EntityID,
     next_available_archtype_id: ArchetypeID,
 
     pub archetype_index: HashMap<ArchetypeSignature, Archetype>,
@@ -384,7 +383,6 @@ impl World {
         let mut command_buffer_queue: Vec<CommandBuffer> = Vec::new();
         let mut archetypes =
             self.get_mut_archetypes_by_ids(&mut vec![TypeId::of::<ScriptComponent>()]);
-        //println!("Update archetypes");
         for archetype in archetypes.iter_mut() {
             let mut counter = 0;
             let entity_ids = archetype.entity_ids.clone();

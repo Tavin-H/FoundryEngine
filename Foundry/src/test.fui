@@ -1,8 +1,0 @@
-MainPage; UI, (
-	Conatiner: [
-			ClassName; Text, "Hi there"
-			ClassName; Image, "url"
-	]
-)
-
-
