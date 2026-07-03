@@ -1,2 +1,3 @@
+use uuid::Uuid;
 // Player?
-pub const CAMERA: u64 = 0;
+pub const CAMERA: Uuid = Uuid::from_u128(0);

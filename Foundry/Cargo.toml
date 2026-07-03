@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-winit = "0.30"
+winit = { version = "0.30", features = ["serde"]}
 ash = "0.38.0"
 ash-window = "0.13.0"
 nalgebra-glm = "0.19"
@@ -22,6 +22,9 @@ imgui-rs-vulkan-renderer = "1.16.0"
 rand = "0.10.0"
 cpal = "0.17.3"
 symphonia = { version = "0.6.0", features = ["mp3"] }
+ringbuf = "0.5.0"
+mlua = { version = "0.11.6", features = ["lua54", "vendored", "serde"] }
+uuid = { version = "1.23.3", features = ["v4"]}
 
 [dependencies.vulkan-headers]
 version = "0.1.1+1.4.336"

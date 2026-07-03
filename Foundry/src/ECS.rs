@@ -4,6 +4,8 @@ use std::any::TypeId;
 use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
 
+use uuid::Uuid;
+
 //Built-in Components
 use crate::commands::*;
 use crate::components::BroadCasterListenerHash;
@@ -19,7 +21,7 @@ use crate::vulkan_data::VulkanContext;
 use ash::vk::PipelineLayout;
 
 //Type Aliases
-type EntityID = u64;
+type EntityID = Uuid;
 type ComponentID = u64;
 type ArchetypeID = usize;
 type ArchetypeSet = Vec<ArchetypeID>;
@@ -201,7 +203,7 @@ impl Archetype {
             push_fn(self);
         }
         let row_index = self.entity_ids.len() as usize;
-        self.entity_ids.push(id as u64);
+        self.entity_ids.push(id);
         row_index
     }
 }
@@ -222,27 +224,25 @@ impl TypeRegister {
     }
 }
 
+#[derive(Clone)]
 pub struct IDAllocator {
     //Change to ID pool
-    next_available_entity_id: EntityID,
-    pub this: EntityID,
+    pub this_id: EntityID, // The id of the entity running the script
     pub camera: EntityID,
 }
 
 impl Default for IDAllocator {
     fn default() -> Self {
         IDAllocator {
-            next_available_entity_id: 1,
-            this: 0,
+            this_id: Uuid::from_u128(1),
             camera: CAMERA,
         }
     }
 }
 
 impl IDAllocator {
-    pub fn reserve_id(&mut self) -> EntityID {
-        let id = self.next_available_entity_id;
-        self.next_available_entity_id += 1;
+    pub fn reserve_id(&self) -> EntityID {
+        let id = Uuid::new_v4();
         id
     }
 }
@@ -273,11 +273,7 @@ impl World {
     }
 
     //FIXME - THIS WOULD BE GOOD TO MAKE
-    pub fn debug_world_data(&self) {
-        for i in 0..self.next_available_entity_id {
-            println!();
-        }
-    }
+    pub fn debug_world_data(&self) {}
 
     fn ensure_registered<T: 'static>(&mut self) {
         let id: TypeId = TypeId::of::<T>();
@@ -395,7 +391,7 @@ impl World {
             let scripts: &mut [ScriptComponent] =
                 archetype.get_components_as_mut_slice::<ScriptComponent>();
             for script in scripts.iter_mut() {
-                ctx.id.this = entity_ids[counter];
+                ctx.id.this_id = entity_ids[counter];
                 let mut commands = script.instance.update(ctx);
                 command_buffer_queue.push(commands);
                 counter += 1;

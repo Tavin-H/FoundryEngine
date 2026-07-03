@@ -11,14 +11,22 @@ use crate::ecs::{IDAllocator, World};
 use crate::game_data::GameContext;
 use crate::ui_data::UIHandler;
 use crate::vulkan_data::VulkanContext;
-use std::collections::HashSet;
+use mlua::{FromLua, Lua, UserData, Value};
+use std::collections::{HashMap, HashSet};
 use std::panic;
+use std::sync::{Arc, Mutex};
 use winit::event;
 use winit::keyboard::{KeyCode, PhysicalKey};
 
-type EntityID = u64;
+use mlua::{LuaSerdeExt, Result};
+//use serde::Deserialize;
+
+use crate::lua_engine::LuaEngine;
+
+type EntityID = uuid::Uuid;
 use std::any::TypeId;
-#[derive(Default)]
+
+#[derive(Default, Clone)]
 pub struct InputBuffer {
     key_down_list: HashSet<KeyCode>,
     key_up_list: HashSet<KeyCode>,
@@ -96,29 +104,115 @@ impl InputBuffer {
     }
 }
 
+pub struct RuntimeContext {
+    pub input_buffer_ref: InputBufferRef,
+    pub id_allocator_ref: IDAllocatorRef,
+}
+impl UserData for RuntimeContext {}
+impl RuntimeContext {
+    pub fn new() -> Self {
+        RuntimeContext {
+            input_buffer_ref: InputBufferRef(Arc::new(InputBuffer::default())),
+            id_allocator_ref: IDAllocatorRef(Arc::new(IDAllocator::default())),
+        }
+    }
+}
+
+// TODO:
+// time
+// id
+// broadcaster
+// extract these to a separate file?
+
+#[derive(Clone)]
+pub struct InputBufferRef(pub Arc<InputBuffer>);
+impl UserData for InputBufferRef {
+    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+        methods.add_method("get_key", |lua, this, key_code_val| {
+            let key_code = lua.from_value(key_code_val).expect("Uh Oh spag");
+            Ok(this.0.get_key(key_code))
+        });
+    }
+}
+
+impl InputBufferRef {
+    fn copy_local(&mut self, other: &InputBuffer) {
+        self.0 = Arc::new(other.clone());
+    }
+    pub fn get_key(&self, code: KeyCode) -> bool {
+        self.0.keys_held.contains(&code)
+    }
+    pub fn get_key_down(&self, code: KeyCode) -> bool {
+        self.0.key_down_list.contains(&code)
+    }
+    pub fn get_key_up(&self, code: KeyCode) -> bool {
+        self.0.key_up_list.contains(&code)
+    }
+}
+#[derive(Clone)]
+pub struct IDAllocatorRef(pub Arc<IDAllocator>);
+impl UserData for IDAllocatorRef {
+    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+        methods.add_method("reserve_id", |_, mut this, ()| {
+            let id = this.0.reserve_id();
+            Ok(id.as_u128())
+        });
+        methods.add_method("this", |_, this, ()| Ok(this.0.this_id.as_u128()));
+    }
+}
+pub struct Test(pub u64);
+impl UserData for Test {
+    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+        methods.add_method_mut("reserve_id", |_, this, ()| {
+            let id = this.0 = 10;
+            Ok(())
+        });
+    }
+}
+
+impl IDAllocatorRef {
+    fn copy_local(&mut self, other: &IDAllocator) {
+        self.0 = Arc::new(other.clone());
+    }
+}
+
+//Mutable references to other structs
 pub struct Delagator {
-    //Mutable references to other structs
+    //Top level structs
     pub vulkan_context: VulkanContext,
     pub game_context: GameContext,
+
+    //Structs for excecuting commands
     pub ui_handler: UIHandler,
     pub ecs_world: World,
+    pub lua_engine: LuaEngine,
+    pub audio_manager: AudioManager,
+    pub broadcaster: BroadCaster,
+
+    // Context structs
+    pub runtime_context: RuntimeContext,
     pub input_buffer: InputBuffer,
     pub id_allocator: IDAllocator,
-    pub broadcaster: BroadCaster,
-    pub audio_manager: AudioManager,
+    //pub world (Access other things in the world e.g. search for named object)
 }
 
 impl Delagator {
     pub fn new(vulkan: VulkanContext, game: GameContext, ui: UIHandler, world: World) -> Self {
+        let mut audio_manager = AudioManager::new();
+        let mut lua = LuaEngine::init(4).unwrap();
+        lua.add_update_function(std::path::Path::new("src/test.lua"));
+        //audio_manager.play("");
         Self {
             vulkan_context: vulkan,
             game_context: game,
             ui_handler: ui,
             ecs_world: world,
             input_buffer: InputBuffer::default(),
+            runtime_context: RuntimeContext::new(),
             id_allocator: IDAllocator::default(),
             broadcaster: BroadCaster::new(),
-            audio_manager: AudioManager::new(),
+            audio_manager: audio_manager,
+            lua_engine: lua,
         }
     }
 
@@ -131,40 +225,78 @@ impl Delagator {
         self.check_ui_state();
     }
 
+    pub fn create_runtime_context_snapshot(&mut self) {
+        self.runtime_context
+            .input_buffer_ref
+            .copy_local(&self.input_buffer);
+    }
+
     pub fn run_constants(&mut self, window: &winit::window::Window) {
         //Draw call from vulkan
         //record inputs
-        let mut ctx = RuntimeContext {
-            time: &self.game_context.time,
-            input: &self.input_buffer,
-            id: &mut self.id_allocator,
-            broadcaster: &mut self.broadcaster,
-        };
+        /*
+                let mut ctx = RuntimeContext {
+                    time: &self.game_context.time,
+                    input: &self.input_buffer,
+                    id: &mut self.id_allocator,
+                    broadcaster: &mut self.broadcaster,
+                };
         let command_buffer = self
             .ecs_world
             .run_update_cycle(&mut ctx, &mut self.vulkan_context);
-        self.execute_command_buffer(command_buffer);
+        */
+        self.create_runtime_context_snapshot();
+        self.lua_engine.run_update_cycle(&self.runtime_context);
+        /*
+                let mut ctx = RuntimeContext {
+                    input_buffer_ref: self.input_buffer_shared.clone(),
+                };
+        self.lua_engine.batch_context(&self.runtime_context);
+        let result = self
+            .lua_engine
+            .execute_lua_behaviour(0, );
+        match result {
+            Err(error) => panic!("{}", error),
+            Ok(_) => {}
+        }
+        */
+        self.execute_command_buffer_index();
         self.vulkan_draw_frame(window);
         self.input_buffer.clear_discrete_inputs();
     }
 
-    pub fn execute_command_buffer(&mut self, command_buffer_queue: Vec<CommandBuffer>) {
-        for buffer in command_buffer_queue {
-            for (entity, command) in buffer.entity_commands {
-                self.handle_entity_command(entity, command);
-            }
-            for command in buffer.world_commands {
-                self.handle_world_command(command);
-            }
-            for command in buffer.broadcast_commands {
-                self.handle_message_command(command);
-            }
-            for command in buffer.camera_commands {
-                self.handle_camera_command(command);
-            }
-            for command in buffer.audio_commands {
-                self.handle_audio_command(command);
-            }
+    pub fn execute_command_buffer_index(&mut self) {
+        /*
+                let command_buffer_index = Arc::clone(&self.lua_engine.command_buffer_index);
+                let mut map = command_buffer_index.lock().unwrap();
+        */
+        let buffers: Vec<CommandBuffer> = self
+            .lua_engine
+            .command_buffer_storage
+            .iter_mut()
+            .map(|buffer| buffer.drain())
+            .collect();
+
+        for mut buffer in buffers {
+            self.execute_command_buffer(&mut buffer);
+        }
+    }
+
+    pub fn execute_command_buffer(&mut self, buffer: &mut CommandBuffer) {
+        for (entity, command) in buffer.entity_commands.drain(..) {
+            self.handle_entity_command(entity, command);
+        }
+        for command in buffer.world_commands.drain(..) {
+            self.handle_world_command(command);
+        }
+        for command in buffer.broadcast_commands.drain(..) {
+            self.handle_message_command(command);
+        }
+        for command in buffer.camera_commands.drain(..) {
+            self.handle_camera_command(command);
+        }
+        for command in buffer.audio_commands.drain(..) {
+            self.handle_audio_command(command);
         }
     }
 
@@ -172,6 +304,9 @@ impl Delagator {
         match command {
             EntityCommand::Translate(pos) => {
                 if (entity == CAMERA) {
+                    println!("Moving cam {pos}");
+
+                    //self.vulkan_context.cam_transform.translate_local(pos);
                     self.vulkan_context.cam_transform.translate(pos);
                     return;
                 }
@@ -240,14 +375,16 @@ impl Delagator {
                 if self
                     .broadcaster
                     .broadcast_listener_collection
-                    .contains_key(message)
+                    .contains_key(message.as_str())
                 {
                     println!(
                         "Calling message {} affecting {} listeners",
                         message,
-                        &self.broadcaster.broadcast_listener_collection[message].len()
+                        &self.broadcaster.broadcast_listener_collection[message.as_str()].len()
                     );
-                    for function in &self.broadcaster.broadcast_listener_collection[message] {
+                    for function in
+                        &self.broadcaster.broadcast_listener_collection[message.as_str()]
+                    {
                         function();
                     }
                 } else {

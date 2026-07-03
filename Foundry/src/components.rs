@@ -11,7 +11,7 @@ use std::collections::HashSet;
 
 use crate::commands::*;
 
-type EntityID = u64;
+type EntityID = uuid::Uuid;
 #[derive(Default, Debug, Clone)]
 pub struct MeshAllocation {
     pub index_count: u32,
@@ -63,6 +63,7 @@ pub struct TimeData {
 
 //Types used for broadcaster
 pub type BroadCasterListenerHash = HashMap<&'static str, Box<dyn Fn() -> CommandBuffer>>;
+
 pub type BroadCasterListenerHashCollection =
     HashMap<&'static str, Vec<Box<dyn Fn() -> CommandBuffer>>>;
 
@@ -121,29 +122,29 @@ impl Script for TestScriptInstance {
         if input.get_key(KeyCode::KeyS) {
             command_buffer.push(Command::Entity(
                 id.camera,
-                EntityCommand::Translate(Vec3::new(1.0, 1.0, 0.0) * time.delta_time),
+                EntityCommand::Translate(Vec3::new(-1.0, 0.0, 0.0) * time.delta_time),
             ));
         }
         if input.get_key(KeyCode::KeyW) {
             command_buffer.push(Command::Entity(
                 id.camera,
-                EntityCommand::Translate(Vec3::new(-1.0, -1.0, 0.0) * time.delta_time),
+                EntityCommand::Translate(Vec3::new(1.0, 0.0, 0.0) * time.delta_time),
             ));
         }
         if input.get_key(KeyCode::KeyD) {
             command_buffer.push(Command::Entity(
                 id.camera,
-                EntityCommand::Translate(Vec3::new(-1.0, 1.0, 0.0) * time.delta_time),
+                EntityCommand::Translate(Vec3::new(0.0, 1.0, 0.0) * time.delta_time),
             ));
         }
         if input.get_key(KeyCode::KeyA) {
             command_buffer.push(Command::Entity(
                 id.camera,
-                EntityCommand::Translate(Vec3::new(1.0, -1.0, 0.0) * time.delta_time),
+                EntityCommand::Translate(Vec3::new(0.0, -1.0, 0.0) * time.delta_time),
             ));
         }
         if input.get_key_up(KeyCode::KeyC) {
-            command_buffer.push(Command::Message(MessageCommand::BroadcastMessage("Test")));
+            //command_buffer.push(Command::Message(MessageCommand::BroadcastMessage("Test")));
         }
         command_buffer.push(Command::Entity(
             id.camera,
@@ -180,7 +181,7 @@ impl Script for TestScriptInstance {
         }
         self.y_velocity -= 9.8 * 4.0 * time.delta_time;
         command_buffer.push(Command::Entity(
-            1,
+            uuid::Uuid::from_u128(1),
             EntityCommand::Translate(Vec3::new(0.0, 0.0, self.y_velocity) * time.delta_time),
         ));
 
@@ -240,7 +241,7 @@ impl Script for MoveScriptInstance {
 
         //Logic
         command_buffer.push(Command::Entity(
-            id.this,
+            id.this_id,
             EntityCommand::Translate(Vec3::new(1.0, 0.0, 0.0) * time.delta_time),
         ));
 
