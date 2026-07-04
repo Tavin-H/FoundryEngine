@@ -217,21 +217,25 @@ impl Delagator {
 
     pub fn run_constants(&mut self, window: &winit::window::Window) {
         self.create_runtime_context_snapshot();
+        let owned_buffers = self.drain_command_buffer_storage();
         self.lua_engine.run_update_cycle(&self.runtime_context);
-        self.execute_command_buffer_index();
+        self.execute_command_buffers(owned_buffers);
         self.vulkan_draw_frame(window);
         self.input_buffer.clear_discrete_inputs();
     }
 
-    pub fn execute_command_buffer_index(&mut self) {
+    fn drain_command_buffer_storage(&mut self) -> Vec<CommandBuffer> {
         let buffers: Vec<CommandBuffer> = self
             .lua_engine
             .command_buffer_storage
             .iter_mut()
             .map(|buffer| buffer.drain())
             .collect();
+        buffers
+    }
 
-        for mut buffer in buffers {
+    pub fn execute_command_buffers(&mut self, command_buffers: Vec<CommandBuffer>) {
+        for mut buffer in command_buffers {
             self.execute_command_buffer(&mut buffer);
         }
     }
