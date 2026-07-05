@@ -34,6 +34,10 @@ The main goal of this project was to teach myself computer graphics and give mys
 * UI system
 * Custom Audio Engine
 
+### Lua Engine scripting
+* Lua -> Rust bindings for quick and easy game development
+* Multiple Lua VM instances for running scripts in parallel
+
 ### ECS (Entity Component System)
 * Data-oriented design to allow for super-fast and efficient system lookups
 * Add components to game objects (represented as 'Game Entities')
@@ -89,7 +93,7 @@ I've chosen each of my tools for specific reasons as stated below.
 ---
 ## Roadmap
 ### Features currently in development
-* Parallel execution of update scripts in Lua
+* Extended runtime context to query world data
 
 ### Features to come
 * More robust solution for scene data
