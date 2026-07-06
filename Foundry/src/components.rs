@@ -57,6 +57,7 @@ pub struct WorldView {
 
 //Context struct
 
+#[derive(Default, Clone)]
 pub struct TimeData {
     pub delta_time: f32,
 }
