@@ -42,6 +42,7 @@ impl LuaWorker {
         let lua = &self.lua_instance;
         lua.globals().set("input", ctx.input_buffer_ref.clone());
         lua.globals().set("id", ctx.id_allocator_ref.clone());
+        lua.globals().set("time", ctx.time_ref.clone());
         Ok(())
     }
 

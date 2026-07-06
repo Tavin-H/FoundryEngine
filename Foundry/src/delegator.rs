@@ -105,6 +105,7 @@ impl InputBuffer {
 pub struct RuntimeContext {
     pub input_buffer_ref: InputBufferRef,
     pub id_allocator_ref: IDAllocatorRef,
+    pub time_ref: TimeRef,
 }
 impl UserData for RuntimeContext {}
 impl RuntimeContext {
@@ -112,7 +113,21 @@ impl RuntimeContext {
         RuntimeContext {
             input_buffer_ref: InputBufferRef(Arc::new(InputBuffer::default())),
             id_allocator_ref: IDAllocatorRef(Arc::new(IDAllocator::default())),
+            time_ref: TimeRef(Arc::new(TimeData::default())),
         }
+    }
+}
+
+#[derive(Clone)]
+pub struct TimeRef(pub Arc<TimeData>);
+impl UserData for TimeRef {
+    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+        methods.add_method("delta_time", |lua, this, ()| Ok(this.0.delta_time));
+    }
+}
+impl TimeRef {
+    fn copy_local(&mut self, other: &TimeData) {
+        self.0 = Arc::new(other.clone());
     }
 }
 
@@ -213,6 +228,9 @@ impl Delagator {
         self.runtime_context
             .input_buffer_ref
             .copy_local(&self.input_buffer);
+        self.runtime_context
+            .time_ref
+            .copy_local(&self.game_context.time);
     }
 
     pub fn run_constants(&mut self, window: &winit::window::Window) {

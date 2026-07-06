@@ -2,6 +2,8 @@ local speed = 0.001
 --local id = id:this()
 
 function update()
+	local speed = time:delta_time()
+
 	if input:get_key("KeyW") then
 		transform.Translate(0, Vec3(-1, -1, 0) * speed)
 	end
