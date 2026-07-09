@@ -119,6 +119,27 @@ impl RuntimeContext {
 }
 
 #[derive(Clone)]
+pub struct WorldRef(pub Arc<TimeData>);
+impl UserData for WorldRef {
+    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+        //Returns one game object id
+        methods.add_method("collect_by_name", |lua, this, name: mlua::String| {
+            Ok(this.0.delta_time)
+        });
+
+        //Returns one entity id
+        methods.add_method("collect_by_id", |lua, this, id: mlua::Number| {
+            Ok(this.0.delta_time)
+        });
+
+        //Returns a list of entity ids
+        methods.add_method("collect_with_tag", |lua, this, tag: mlua::String| {
+            Ok(this.0.delta_time)
+        });
+    }
+}
+
+#[derive(Clone)]
 pub struct TimeDataRef(pub Arc<TimeData>);
 impl UserData for TimeDataRef {
     fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {

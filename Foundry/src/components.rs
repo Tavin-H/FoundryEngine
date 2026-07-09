@@ -29,7 +29,6 @@ impl Component for Transform {}
 
 #[derive(Default, Debug, Clone)]
 pub struct GameObject {
-    pub entity_id: u32,
     pub name: String,
     pub tags: Vec<String>,
 }

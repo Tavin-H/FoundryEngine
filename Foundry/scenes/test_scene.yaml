@@ -1,0 +1,14 @@
+# Experimenting with scene structures
+
+---
+Entity:
+  id: 1
+  components:
+    id: 1
+
+---
+Component:
+  id: 1
+  type: GameObject
+  data:
+    name: "TestObj"

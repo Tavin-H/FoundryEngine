@@ -17,6 +17,11 @@ pub enum Command {
     Audio(AudioCommand),
 }
 
+//Maybe?
+pub enum TimeCommand {
+    SetTimeScale(i32), // Unsupported
+}
+
 pub enum WorldCommand {
     Instantiate(EntityBuilder),
     Delete(), //Unsupported
@@ -29,19 +34,26 @@ pub enum EntityCommand {
     Translate(Vec3),
     SetPos(Vec3),
     Rotate(Vec3),
-    LookAt(),       //Unsupported
-    RotateAround(), //Unsupported
-    SetRotation(),  //Unsupported
+    LookAt(),       // Unsupported
+    RotateAround(), // Unsupported
+    SetRotation(),  // Unsupported
 }
 
 pub enum CameraCommand {
-    SetFov(u32), //Unsupported
+    SetFov(u32), // Unsupported
     Custom(),
 }
 
+// WIP
+pub enum SceneCommand {
+    LoadScene(), // Clears the stack, adds the chosen scene
+    PushScene(), // Pushes a scene to the top of the stack
+    PopScene(),  // Removes the scene at the top of the stack
+}
+
 pub enum UICommand {
-    ShowUI(), //Unsupported
-    HideUI(), //Unsupported
+    ShowUI(), // Unsupported
+    HideUI(), // Unsupported
 }
 
 pub enum MessageCommand {

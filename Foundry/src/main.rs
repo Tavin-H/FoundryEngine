@@ -17,6 +17,10 @@
 mod delegator;
 use crate::delegator::Delagator;
 
+//Serializer
+mod serializer;
+use crate::serializer::Serialize;
+
 //LUA
 mod lua_engine;
 
