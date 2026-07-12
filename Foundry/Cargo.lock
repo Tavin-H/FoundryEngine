@@ -19,6 +19,7 @@ dependencies = [
  "mlua",
  "nalgebra-glm",
  "num",
+ "num-traits",
  "rand 0.10.1",
  "raw-window-handle",
  "ringbuf",
