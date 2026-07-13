@@ -21,16 +21,19 @@ pub fn serialize_macro(input: TokenStream) -> TokenStream {
 
         let field_vals = fields.named.iter().map(|field| {
             // grab the name of the field
-            let name = &field.ident;
-            quote!(self.#name.serialize(serializer))
+            let name = &field.ident.as_ref();
+            let name_str: &str = &name.unwrap().to_string();
+            quote!(self.#name.serialize(#name_str, serializer))
         });
 
-        let name = input.ident;
+        let struct_name = &input.ident;
+        let name_str: &str = &struct_name.to_string();
 
         return quote!(
-        impl Serialize for #name {
-            fn serialize(&self, serializer: &mut impl Serializer) -> SerializerNode {
+        impl Serialize for #struct_name {
+            fn serialize(&self, _name: &'static str, serializer: &mut impl Serializer) -> SerializerNode {
                 SerializerNode::Struct{
+                    f_name: #name_str,
                     data: vec![#(#field_vals),*]
                 }
             }

@@ -44,7 +44,7 @@ impl Serializer for YamlSerializer {
 }
 
 pub trait Serialize {
-    fn serialize(&self, serializer: &mut impl Serializer) -> SerializerNode;
+    fn serialize(&self, name: &'static str, serializer: &mut impl Serializer) -> SerializerNode;
 }
 
 pub trait DeSerialize {}
@@ -62,49 +62,66 @@ pub enum SerializerNode {
     Component {
         foundry_type_id: u64,
         local_file_id: Uuid,
-        name: String, // Mainly for manual scene file editing
-        data_fields: Vec<SerializerNode>,
+        name: String,                     // Mainly for manual scene file editing
+        data_fields: Vec<SerializerNode>, // A Struct node
     },
 
     // Custom data types
     Struct {
+        f_name: &'static str,
         data: Vec<SerializerNode>,
     },
 
     // Primatives
-    Float(f64),
-    Integer(i64),
-    String(String),
-    Bool(bool),
+    Float(&'static str, f64),
+    Integer(&'static str, i64),
+    String(&'static str, String),
+    Bool(&'static str, bool),
 }
 
 // Serialize Macros
 macro_rules! impl_serialize {
     ($base_type: ty, int) => {
         impl Serialize for $base_type {
-            fn serialize(&self, serializer: &mut impl Serializer) -> SerializerNode {
-                SerializerNode::Integer(*self as i64)
+            fn serialize(
+                &self,
+                name: &'static str,
+                serializer: &mut impl Serializer,
+            ) -> SerializerNode {
+                SerializerNode::Integer(name, *self as i64)
             }
         }
     };
     ($base_type: ty, float) => {
         impl Serialize for $base_type {
-            fn serialize(&self, serializer: &mut impl Serializer) -> SerializerNode {
-                SerializerNode::Float(*self as f64)
+            fn serialize(
+                &self,
+                name: &'static str,
+                serializer: &mut impl Serializer,
+            ) -> SerializerNode {
+                SerializerNode::Float(name, *self as f64)
             }
         }
     };
     ($base_type: ty, string) => {
         impl Serialize for $base_type {
-            fn serialize(&self, serializer: &mut impl Serializer) -> SerializerNode {
-                SerializerNode::String(self.clone() as String)
+            fn serialize(
+                &self,
+                name: &'static str,
+                serializer: &mut impl Serializer,
+            ) -> SerializerNode {
+                SerializerNode::String(name, self.clone() as String)
             }
         }
     };
     ($base_type: ty, bool) => {
         impl Serialize for $base_type {
-            fn serialize(&self, serializer: &mut impl Serializer) -> SerializerNode {
-                SerializerNode::Bool(self.clone() as bool)
+            fn serialize(
+                &self,
+                name: &'static str,
+                serializer: &mut impl Serializer,
+            ) -> SerializerNode {
+                SerializerNode::Bool(name, self.clone() as bool)
             }
         }
     };
@@ -132,7 +149,7 @@ pub struct TestStruct {
 pub fn test() {
     let test = TestStruct { thing: 1.0 };
     let mut yaml_serializer = YamlSerializer::new();
-    let result = test.serialize(&mut yaml_serializer);
+    let result = test.serialize("", &mut yaml_serializer);
     println!("{:?}", result)
 
     //let test: SerializerNode = 4.0.serialize(&mut yaml_serializer);
