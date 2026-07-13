@@ -1,3 +1,4 @@
+use foundry_derive::Serialize;
 use num::{Float, PrimInt};
 use uuid::Uuid;
 
@@ -48,21 +49,36 @@ pub trait Serialize {
 
 pub trait DeSerialize {}
 // Serializer AST
+#[derive(Debug)]
 pub enum SerializerNode {
-    Entity {
-        serialized_name: String,
-        id: Uuid,
-        parent: Uuid,
-        components: Vec<SerializerNode>,
+    // Documents
+    Object {
+        foundry_type_id: u64,
+        local_file_id: Uuid,
+        name: String,
+        tags: Vec<String>,
+        components: Vec<uuid::Uuid>,
     },
-    Component(),
-    Struct(),
+    Component {
+        foundry_type_id: u64,
+        local_file_id: Uuid,
+        name: String, // Mainly for manual scene file editing
+        data_fields: Vec<SerializerNode>,
+    },
+
+    // Custom data types
+    Struct {
+        data: Vec<SerializerNode>,
+    },
+
+    // Primatives
     Float(f64),
     Integer(i64),
     String(String),
     Bool(bool),
 }
 
+// Serialize Macros
 macro_rules! impl_serialize {
     ($base_type: ty, int) => {
         impl Serialize for $base_type {
@@ -93,6 +109,7 @@ macro_rules! impl_serialize {
         }
     };
 }
+
 // Integers
 impl_serialize!(i8, int);
 impl_serialize!(i16, int);
@@ -107,7 +124,16 @@ impl_serialize!(f64, float);
 impl_serialize!(String, string);
 impl_serialize!(bool, bool);
 
+#[derive(Serialize)]
+pub struct TestStruct {
+    thing: f32,
+}
+
 pub fn test() {
+    let test = TestStruct { thing: 1.0 };
     let mut yaml_serializer = YamlSerializer::new();
+    let result = test.serialize(&mut yaml_serializer);
+    println!("{:?}", result)
+
     //let test: SerializerNode = 4.0.serialize(&mut yaml_serializer);
 }
