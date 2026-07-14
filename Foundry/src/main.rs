@@ -19,7 +19,7 @@ use crate::delegator::Delagator;
 
 //Serializer
 mod serializer;
-use crate::serializer::Serialize;
+use crate::serializer::{Serialize, test};
 
 //LUA
 mod lua_engine;
@@ -397,6 +397,8 @@ impl HelloTriangleApp {
     }
 }
 fn main() {
+    test();
+
     let start_time = std::time::Instant::now();
     let mut test_position = glm::Mat4::identity();
     test_position[(0, 3)] = 1.0;

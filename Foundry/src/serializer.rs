@@ -21,7 +21,7 @@ pub trait Serializer {
     fn serialize_int(&mut self, val: i64);
     fn serialize_float(&mut self, val: f64);
     fn serialize_string(&mut self, val: String);
-    fn serialize_struct(&mut self);
+    fn serialize_struct(&mut self, node: &SerializerNode);
 }
 
 pub struct YamlSerializer {
@@ -35,12 +35,43 @@ impl YamlSerializer {
             output_buffer: String::new(),
         }
     }
+    fn write(&self, write_path: &'static str) {
+        let raw_path = format!("scenes/{write_path}.yaml");
+        let full_path = std::path::Path::new(&raw_path);
+        println!("writing: {}", self.output_buffer);
+        std::fs::write(&full_path, &self.output_buffer);
+    }
 }
 impl Serializer for YamlSerializer {
     fn serialize_int(&mut self, val: i64) {}
     fn serialize_float(&mut self, val: f64) {}
     fn serialize_string(&mut self, val: String) {}
-    fn serialize_struct(&mut self) {}
+    fn serialize_struct(&mut self, node: &SerializerNode) {
+        let SerializerNode::Struct { f_name, data } = node else {
+            panic!("");
+        };
+        //self.output_buffer += "\n";
+        self.output_buffer.push_str(&format!(
+            "
+Component: 
+    id: 1
+    type: {f_name}
+    data:
+"
+        ));
+        for (field_name, node) in data {
+            let value = match node {
+                SerializerNode::Float(name, val) => format!("{:.4}", val),
+                SerializerNode::Integer(name, val) => val.to_string(),
+                SerializerNode::String(name, val) => val.to_string(),
+                SerializerNode::Bool(name, val) => val.to_string(),
+                _ => panic!("Node not supported as data field"),
+            };
+            self.output_buffer
+                .push_str(&format!("        {}, {}\n", field_name, value));
+        }
+        println!("Serializing struct {}", self.output_buffer.len())
+    }
 }
 
 pub trait Serialize {
@@ -69,7 +100,7 @@ pub enum SerializerNode {
     // Custom data types
     Struct {
         f_name: &'static str,
-        data: Vec<SerializerNode>,
+        data: Vec<(&'static str, SerializerNode)>,
     },
 
     // Primatives
@@ -144,13 +175,24 @@ impl_serialize!(bool, bool);
 #[derive(Serialize)]
 pub struct TestStruct {
     thing: f32,
+    test: i32,
+}
+
+#[derive(Serialize)]
+struct Transform {
+    parent_id: i32,
 }
 
 pub fn test() {
-    let test = TestStruct { thing: 1.0 };
+    let test = TestStruct {
+        thing: 1.111,
+        test: 3,
+    };
+    let transform = Transform { parent_id: 1 };
     let mut yaml_serializer = YamlSerializer::new();
-    let result = test.serialize("", &mut yaml_serializer);
-    println!("{:?}", result)
+    test.serialize("", &mut yaml_serializer);
+    transform.serialize("", &mut yaml_serializer);
+    yaml_serializer.write("test_scene");
 
     //let test: SerializerNode = 4.0.serialize(&mut yaml_serializer);
 }

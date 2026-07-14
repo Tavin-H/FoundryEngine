@@ -23,7 +23,7 @@ pub fn serialize_macro(input: TokenStream) -> TokenStream {
             // grab the name of the field
             let name = &field.ident.as_ref();
             let name_str: &str = &name.unwrap().to_string();
-            quote!(self.#name.serialize(#name_str, serializer))
+            quote!((#name_str, self.#name.serialize(#name_str, serializer)))
         });
 
         let struct_name = &input.ident;
@@ -32,10 +32,12 @@ pub fn serialize_macro(input: TokenStream) -> TokenStream {
         return quote!(
         impl Serialize for #struct_name {
             fn serialize(&self, _name: &'static str, serializer: &mut impl Serializer) -> SerializerNode {
-                SerializerNode::Struct{
+                let node = SerializerNode::Struct{
                     f_name: #name_str,
                     data: vec![#(#field_vals),*]
-                }
+                };
+                serializer.serialize_struct(&node);
+                node
             }
         })
         .into();
