@@ -5,9 +5,3 @@ Component:
     data:
         thing, 1.1110
         test, 3
-
-Component: 
-    id: 1
-    type: Transform
-    data:
-        parent_id, 1

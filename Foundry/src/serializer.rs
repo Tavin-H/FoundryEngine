@@ -1,6 +1,8 @@
-use foundry_derive::Serialize;
+use foundry_derive::SerializeComponent;
 use num::{Float, PrimInt};
 use uuid::Uuid;
+
+use crate::commands::UICommand::ShowUI;
 
 //----Logic outline----
 // 1. Serialize is implemented for types either by default or through a macro
@@ -21,13 +23,14 @@ pub trait Serializer {
     fn serialize_int(&mut self, val: i64);
     fn serialize_float(&mut self, val: f64);
     fn serialize_string(&mut self, val: String);
-    fn serialize_struct(&mut self, node: &SerializerNode);
+    fn serialize_component(&mut self, node: &SerializerNode);
 }
 
 pub struct YamlSerializer {
     ast_roots: Vec<SerializerNode>,
     output_buffer: String, //Later change to a data structure that represents fscn files as an AST?
 }
+
 impl YamlSerializer {
     fn new() -> Self {
         YamlSerializer {
@@ -42,12 +45,18 @@ impl YamlSerializer {
         std::fs::write(&full_path, &self.output_buffer);
     }
 }
+
 impl Serializer for YamlSerializer {
     fn serialize_int(&mut self, val: i64) {}
     fn serialize_float(&mut self, val: f64) {}
     fn serialize_string(&mut self, val: String) {}
-    fn serialize_struct(&mut self, node: &SerializerNode) {
-        let SerializerNode::Struct { f_name, data } = node else {
+    fn serialize_component(&mut self, node: &SerializerNode) {
+        let SerializerNode::Component { 
+            f_name, 
+            foundry_type_id,
+            local_file_id,
+            data_fields
+        } = node else {
             panic!("");
         };
         //self.output_buffer += "\n";
@@ -59,12 +68,12 @@ Component:
     data:
 "
         ));
-        for (field_name, node) in data {
+        for (field_name, node) in data_fields {
             let value = match node {
-                SerializerNode::Float(name, val) => format!("{:.4}", val),
-                SerializerNode::Integer(name, val) => val.to_string(),
-                SerializerNode::String(name, val) => val.to_string(),
-                SerializerNode::Bool(name, val) => val.to_string(),
+                SerializerNode::Float(val) => format!("{:.4}", val),
+                SerializerNode::Integer(val) => val.to_string(),
+                SerializerNode::String(val) => val.to_string(),
+                SerializerNode::Bool(val) => val.to_string(),
                 _ => panic!("Node not supported as data field"),
             };
             self.output_buffer
@@ -75,7 +84,7 @@ Component:
 }
 
 pub trait Serialize {
-    fn serialize(&self, name: &'static str, serializer: &mut impl Serializer) -> SerializerNode;
+    fn serialize(&self, serializer: &mut impl Serializer) -> SerializerNode;
 }
 
 pub trait DeSerialize {}
@@ -90,11 +99,12 @@ pub enum SerializerNode {
         tags: Vec<String>,
         components: Vec<uuid::Uuid>,
     },
+
     Component {
         foundry_type_id: u64,
         local_file_id: Uuid,
-        name: String,                     // Mainly for manual scene file editing
-        data_fields: Vec<SerializerNode>, // A Struct node
+        f_name: &'static str,                     // Mainly for manual scene file editing
+        data_fields: Vec<(&'static str, SerializerNode)>, // A Struct node
     },
 
     // Custom data types
@@ -104,10 +114,10 @@ pub enum SerializerNode {
     },
 
     // Primatives
-    Float(&'static str, f64),
-    Integer(&'static str, i64),
-    String(&'static str, String),
-    Bool(&'static str, bool),
+    Float(f64),
+    Integer(i64),
+    String(String),
+    Bool(bool),
 }
 
 // Serialize Macros
@@ -116,10 +126,9 @@ macro_rules! impl_serialize {
         impl Serialize for $base_type {
             fn serialize(
                 &self,
-                name: &'static str,
                 serializer: &mut impl Serializer,
             ) -> SerializerNode {
-                SerializerNode::Integer(name, *self as i64)
+                SerializerNode::Integer( *self as i64)
             }
         }
     };
@@ -127,10 +136,9 @@ macro_rules! impl_serialize {
         impl Serialize for $base_type {
             fn serialize(
                 &self,
-                name: &'static str,
                 serializer: &mut impl Serializer,
             ) -> SerializerNode {
-                SerializerNode::Float(name, *self as f64)
+                SerializerNode::Float( *self as f64)
             }
         }
     };
@@ -138,10 +146,9 @@ macro_rules! impl_serialize {
         impl Serialize for $base_type {
             fn serialize(
                 &self,
-                name: &'static str,
                 serializer: &mut impl Serializer,
             ) -> SerializerNode {
-                SerializerNode::String(name, self.clone() as String)
+                SerializerNode::String( self.clone() as String)
             }
         }
     };
@@ -149,10 +156,9 @@ macro_rules! impl_serialize {
         impl Serialize for $base_type {
             fn serialize(
                 &self,
-                name: &'static str,
                 serializer: &mut impl Serializer,
             ) -> SerializerNode {
-                SerializerNode::Bool(name, self.clone() as bool)
+                SerializerNode::Bool( self.clone() as bool)
             }
         }
     };
@@ -162,7 +168,7 @@ macro_rules! impl_serialize {
 impl_serialize!(i8, int);
 impl_serialize!(i16, int);
 impl_serialize!(i32, int);
-impl_serialize!(i128, int);
+impl_serialize!(i64, int);
 
 // Floats
 impl_serialize!(f32, float);
@@ -172,15 +178,10 @@ impl_serialize!(f64, float);
 impl_serialize!(String, string);
 impl_serialize!(bool, bool);
 
-#[derive(Serialize)]
+#[derive(SerializeComponent)]
 pub struct TestStruct {
     thing: f32,
     test: i32,
-}
-
-#[derive(Serialize)]
-struct Transform {
-    parent_id: i32,
 }
 
 pub fn test() {
@@ -188,10 +189,8 @@ pub fn test() {
         thing: 1.111,
         test: 3,
     };
-    let transform = Transform { parent_id: 1 };
     let mut yaml_serializer = YamlSerializer::new();
-    test.serialize("", &mut yaml_serializer);
-    transform.serialize("", &mut yaml_serializer);
+    test.serialize(&mut yaml_serializer);
     yaml_serializer.write("test_scene");
 
     //let test: SerializerNode = 4.0.serialize(&mut yaml_serializer);

@@ -3,6 +3,12 @@ name = "Foundry"
 version = "0.1.0"
 edition = "2024"
 
+[workspace]
+members = [
+    ".",
+    "foundry_derive",
+]
+
 [dependencies]
 winit = { version = "0.30", features = ["serde"]}
 ash = "0.38.0"
