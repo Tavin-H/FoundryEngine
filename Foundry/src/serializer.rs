@@ -2,7 +2,7 @@ use foundry_derive::SerializeComponent;
 use num::{Float, PrimInt};
 use uuid::Uuid;
 
-use crate::commands::UICommand::ShowUI;
+use crate::{commands::UICommand::ShowUI, components::Component};
 
 //----Logic outline----
 // 1. Serialize is implemented for types either by default or through a macro
@@ -51,12 +51,13 @@ impl Serializer for YamlSerializer {
     fn serialize_float(&mut self, val: f64) {}
     fn serialize_string(&mut self, val: String) {}
     fn serialize_component(&mut self, node: &SerializerNode) {
-        let SerializerNode::Component { 
-            f_name, 
+        let SerializerNode::Component {
+            f_name,
             foundry_type_id,
             local_file_id,
-            data_fields
-        } = node else {
+            data_fields,
+        } = node
+        else {
             panic!("");
         };
         //self.output_buffer += "\n";
@@ -95,7 +96,7 @@ pub enum SerializerNode {
     Object {
         foundry_type_id: u64,
         local_file_id: Uuid,
-        name: String,
+        f_name: String,
         tags: Vec<String>,
         components: Vec<uuid::Uuid>,
     },
@@ -103,7 +104,7 @@ pub enum SerializerNode {
     Component {
         foundry_type_id: u64,
         local_file_id: Uuid,
-        f_name: &'static str,                     // Mainly for manual scene file editing
+        f_name: &'static str, // Mainly for manual scene file editing
         data_fields: Vec<(&'static str, SerializerNode)>, // A Struct node
     },
 
@@ -124,41 +125,29 @@ pub enum SerializerNode {
 macro_rules! impl_serialize {
     ($base_type: ty, int) => {
         impl Serialize for $base_type {
-            fn serialize(
-                &self,
-                serializer: &mut impl Serializer,
-            ) -> SerializerNode {
-                SerializerNode::Integer( *self as i64)
+            fn serialize(&self, serializer: &mut impl Serializer) -> SerializerNode {
+                SerializerNode::Integer(*self as i64)
             }
         }
     };
     ($base_type: ty, float) => {
         impl Serialize for $base_type {
-            fn serialize(
-                &self,
-                serializer: &mut impl Serializer,
-            ) -> SerializerNode {
-                SerializerNode::Float( *self as f64)
+            fn serialize(&self, serializer: &mut impl Serializer) -> SerializerNode {
+                SerializerNode::Float(*self as f64)
             }
         }
     };
     ($base_type: ty, string) => {
         impl Serialize for $base_type {
-            fn serialize(
-                &self,
-                serializer: &mut impl Serializer,
-            ) -> SerializerNode {
-                SerializerNode::String( self.clone() as String)
+            fn serialize(&self, serializer: &mut impl Serializer) -> SerializerNode {
+                SerializerNode::String(self.clone() as String)
             }
         }
     };
     ($base_type: ty, bool) => {
         impl Serialize for $base_type {
-            fn serialize(
-                &self,
-                serializer: &mut impl Serializer,
-            ) -> SerializerNode {
-                SerializerNode::Bool( self.clone() as bool)
+            fn serialize(&self, serializer: &mut impl Serializer) -> SerializerNode {
+                SerializerNode::Bool(self.clone() as bool)
             }
         }
     };
@@ -194,4 +183,22 @@ pub fn test() {
     yaml_serializer.write("test_scene");
 
     //let test: SerializerNode = 4.0.serialize(&mut yaml_serializer);
+}
+
+pub struct GameObject {
+    name: String,
+    tags: Vec<String>,
+    components: Vec<Box<dyn Component>>,
+}
+
+impl Serialize for GameObject {
+    fn serialize(&self, serializer: &mut impl Serializer) -> SerializerNode {
+        SerializerNode::Object {
+            foundry_type_id: 1,
+            local_file_id: uuid::Uuid::new_v4(),
+            f_name: self.name.clone(),
+            tags: self.tags.clone(),
+            components: Vec::new(),
+        }
+    }
 }

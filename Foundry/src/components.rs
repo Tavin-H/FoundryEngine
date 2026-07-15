@@ -3,34 +3,28 @@ use crate::{
     delegator::InputBuffer,
     ecs::{EntityBuilder, IDAllocator, World},
 };
+use foundry_derive::{Component, SerializeComponent};
 use std::{any::Any, collections::HashMap};
 use winit::keyboard::KeyCode;
 pub trait Component {}
+use crate::commands::*;
 use glam::Vec3;
 use std::collections::HashSet;
-
-use crate::commands::*;
-
 type EntityID = uuid::Uuid;
-#[derive(Default, Debug, Clone)]
+use crate::serializer;
+
+//---------Built in Components------------
+#[derive(Default, Debug, Clone, Component, SerializeComponent)]
 pub struct MeshAllocation {
     pub index_count: u32,
     pub first_index: u32,
     pub first_vertex: i32,
 }
-impl Component for MeshAllocation {}
 
-#[derive(Default, Clone, Copy, Debug)]
+#[derive(Default, Clone, Copy, Debug, Component, SerializeComponent)]
 pub struct Transform {
     pub position: [f32; 3],
     pub scale: [f32; 3],
-}
-impl Component for Transform {}
-
-#[derive(Default, Debug, Clone)]
-pub struct GameObject {
-    pub name: String,
-    pub tags: Vec<String>,
 }
 
 //--------Custom scripting-----------
