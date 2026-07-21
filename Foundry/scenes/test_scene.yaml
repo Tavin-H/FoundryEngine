@@ -1,7 +1,12 @@
-
-Component: 
+---
+Component: !comp1
     id: 1
     type: TestStruct
     data:
-        thing, 1.1110
-        test, 3
+      test: 3
+---
+Component: !uuid
+    id:
+    type:
+    data:
+      test: 3

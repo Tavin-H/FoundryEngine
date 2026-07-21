@@ -22,18 +22,18 @@ pub fn serialize_component_macro(input: TokenStream) -> TokenStream {
         let field_vals = fields.named.iter().map(|field| {
             // grab the name of the field
             let name = &field.ident.as_ref();
-            let name_str: &str = &name.unwrap().to_string();
-            quote!((#name_str, self.#name.serialize(serializer)))
+            let name_string: String = name.unwrap().to_string();
+            quote!((#name_string.to_string(), self.#name.serialize(serializer)))
         });
 
         let struct_name = &input.ident;
-        let name_str: &str = &struct_name.to_string();
+        let name_str: String = struct_name.to_string();
 
         return quote!(
         impl serializer::Serialize for #struct_name {
             fn serialize(&self, serializer: &mut impl serializer::Serializer) -> serializer::SerializerNode {
                 let node = serializer::SerializerNode::Component{
-                    f_name: #name_str,
+                    f_name: #name_str.to_string(),
                     foundry_type_id: 1,
                     local_file_id: uuid::Uuid::new_v4(),
                     data_fields: vec![#(#field_vals),*],

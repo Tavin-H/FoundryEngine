@@ -21,7 +21,7 @@ pub struct MeshAllocation {
     pub first_vertex: i32,
 }
 
-#[derive(Default, Clone, Copy, Debug, Component, SerializeComponent)]
+#[derive(Default, Clone, Copy, Debug, Component)]
 pub struct Transform {
     pub position: [f32; 3],
     pub scale: [f32; 3],
