@@ -20,6 +20,12 @@ use yaml_rust2::{Event, parser::Parser};
 // - It calls the appropriate serialize method for the object / component
 // - This builds a Serializer tree
 // - Serializer tree then gets parsed and turned into a yaml file for the scene
+//
+//
+// ---- Other outline?
+// 2 functions for deserializing and serializing:
+// Serialize / Deserialize -> Converts structs into Tree / Converts Tree into structs
+// Read / Write -> Converts Tree into file (YAML) / Converts file into Tree
 
 // How to turn Nodes into text in a file
 pub trait Serializer {
@@ -31,7 +37,8 @@ pub trait Serializer {
 }
 
 pub trait Deserializer {
-    fn deserialize(&mut self, read_path: &'static str) {}
+    fn deserialize(&mut self, read_path: &'static str) {} // Change
+    fn read(&mut self, read_path: &'static str) {}
 }
 
 pub struct YamlSerializer {
@@ -39,14 +46,11 @@ pub struct YamlSerializer {
     output_buffer: String, //Later change to a data structure that represents fscn files as an AST?
 }
 
+#[derive(Default)]
 enum DocumentType {
+    #[default]
     GameObject,
     Component,
-}
-impl Default for DocumentType {
-    fn default() -> Self {
-        Self::GameObject
-    }
 }
 
 #[derive(Default)]
@@ -94,36 +98,56 @@ impl DocumentBuilder {
 }
 
 impl Deserializer for YamlSerializer {
-    fn deserialize(&mut self, read_path: &'static str) {
+    // Logic:
+    // Loop through and make builders for each document
+    // Push to list of builders
+    // At the end of a loop, build all in list and create tree
+    fn read(&mut self, read_path: &'static str) {
         let raw_path = format!("scenes/{read_path}.yaml");
         let full_path = std::path::Path::new(&raw_path);
+        let mut builders: Vec<DocumentBuilder> = Vec::new();
+        let mut builder_index = 0;
+
         let Ok(contents) = fs::read_to_string(full_path) else {
-            panic!("Uh oh")
+            panic!("Uh oh");
         };
         let mut parser = Parser::new(contents.chars());
-        let mut parsing_object: Option<SerializerNode> = None;
+        let mut parsing_object: Option<DocumentBuilder> = None;
         while let Ok((event, marker)) = parser.next_token() {
             if event == Event::StreamEnd {
                 panic!("end of file");
+                // Build all documents in builders to form a Scene Tree
                 break;
             }
             if event == Event::DocumentStart {
                 println!("Found doc start");
+                let Some(builder) = parsing_object else {
+                    // first doc, ignore
+                    continue;
+                };
+                // prev doc is a builder
+                builders.push(builder);
+
                 parsing_object = None;
+
                 //Start component / Object
                 //break;
                 continue;
-            }
-            if let Event::Scalar(name, style, _, optional_tag) = event {
+            } else if event == Event::DocumentEnd {
+                builder_index += 1;
+            } else if let Event::Scalar(name, style, _, optional_tag) = event {
+                let Some(ref mut builder) = parsing_object else {
+                    // feild
+                    continue;
+                };
                 println!("{}", name);
             } else if let Event::MappingStart(anchor_id, optional_tag) = event {
                 if let Some(tag) = optional_tag {
-                    parsing_object = Some(SerializerNode::Component {
-                        foundry_type_id: 0,
-                        local_file_id: Uuid::nil(),
-                        f_name: "".to_string(),
-                        data_fields: Vec::new(),
-                    });
+                    let Some(ref mut builder) = parsing_object else {
+                        // feild
+                        continue;
+                    };
+                    builder.set_local_file_id(Uuid::parse_str(&format!("{:?}", tag)).unwrap());
                     //Component
                     println!("Found object mapping");
                     println!("found tag: {}", tag.suffix);
@@ -145,7 +169,7 @@ impl YamlSerializer {
         let raw_path = format!("scenes/{write_path}.yaml");
         let full_path = std::path::Path::new(&raw_path);
         println!("writing: {}", self.output_buffer);
-        std::fs::write(&full_path, &self.output_buffer);
+        std::fs::write(full_path, &self.output_buffer);
     }
 }
 
@@ -289,7 +313,7 @@ pub fn test() {
     let mut yaml_serializer = YamlSerializer::new();
     test.serialize(&mut yaml_serializer);
     //yaml_serializer.write("test_scene");
-    yaml_serializer.deserialize("test_scene");
+    yaml_serializer.read("test_scene");
 
     //let test: SerializerNode = 4.0.serialize(&mut yaml_serializer);
 }

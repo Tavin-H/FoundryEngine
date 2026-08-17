@@ -1,12 +1,12 @@
 ---
 Component: !comp1
     id: 1
-    type: TestStruct
+    type: Transform
     data:
       test: 3
 ---
 Component: !uuid
-    id:
-    type:
+    id: 2
+    type: Rigidbody
     data:
-      test: 3
+      test: 4
